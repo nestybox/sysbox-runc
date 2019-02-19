@@ -5,7 +5,7 @@
 //
 // Change Log:
 //
-// * Modified usage message for sysvisor-runc.
+// * Modified usage message for syscont-runc.
 //
 
 package main
@@ -32,9 +32,9 @@ var gitCommit = ""
 
 const (
 	specConfig = "config.json"
-	usage      = `sysvisor-runc
+	usage      = `syscont-runc
 
-sysvisor-runc is a command line client for running system containers.
+syscont-runc is a command line client for running system containers.
 
 A system container is a Linux container whose main purpose is to
 provide a secure and isolated Linux run-time environment resembling a
@@ -45,19 +45,19 @@ application micro-services, system containers package and deploy
 virtual Linux host images (inside of which application containers may
 be deployed).
 
-sysvisor-runc is a fork of the Open Container Initiative (OCI)
-runc. As such, it runs system containers that are packaged according
-to the OCI format. However, sysvisor-runc overrides OCI configurations
-that are incompatible with the system container abstraction or reduce
-it's security. Thus sysvisor-runc is not fully OCI compliant.
+syscont-runc is a fork of the Open Container Initiative (OCI) runc. As
+such, it runs system containers that are packaged according to the OCI
+format. However, syscont-runc overrides OCI configurations that are
+incompatible with the system container abstraction. Thus syscont-runc
+is not fully OCI compliant.
 
-sysvisor-runc is configured using OCI bundles (i.e., a directory that
+syscont-runc is configured using OCI bundles (i.e., a directory that
 includes a specification file named "` + specConfig + `" and a root
 filesystem containing the contents of the system container).
 
 To start a new instance of a system container:
 
-    # sysvisor-runc run [ -b bundle ] <container-id>
+    # syscont-runc run [ -b bundle ] <container-id>
 
 Where "<container-id>" is your name for the instance of the system
 container that you are starting (which must be unique on the host).
@@ -65,7 +65,7 @@ container that you are starting (which must be unique on the host).
 
 func main() {
 	app := cli.NewApp()
-	app.Name = "sysvisor-runc"
+	app.Name = "syscont-runc"
 	app.Usage = usage
 
 	var v []string
@@ -78,10 +78,10 @@ func main() {
 	v = append(v, fmt.Sprintf("spec: %s", specs.Version))
 	app.Version = strings.Join(v, "\n")
 
-	root := "/run/sysvisor-runc"
+	root := "/run/syscont-runc"
 	if shouldHonorXDGRuntimeDir() {
 		if runtimeDir := os.Getenv("XDG_RUNTIME_DIR"); runtimeDir != "" {
-			root = runtimeDir + "/sysvisor-runc"
+			root = runtimeDir + "/syscont-runc"
 			// According to the XDG specification, we need to set anything in
 			// XDG_RUNTIME_DIR to have a sticky bit if we don't want it to get
 			// auto-pruned.
@@ -121,7 +121,7 @@ func main() {
 		},
 		cli.BoolFlag{
 			Name:  "systemd-cgroup",
-			Usage: "enable systemd cgroup support, expects cgroupsPath to be of form \"slice:prefix:name\" for e.g. \"system.slice:sysvisor-runc:434234\"",
+			Usage: "enable systemd cgroup support, expects cgroupsPath to be of form \"slice:prefix:name\" for e.g. \"system.slice:syscont-runc:434234\"",
 		},
 		cli.StringFlag{
 			Name:  "rootless",
