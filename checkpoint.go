@@ -49,7 +49,7 @@ checkpointed.`,
 		}
 		// XXX: Currently this is untested with rootless containers.
 		if os.Geteuid() != 0 || system.RunningInUserNS() {
-			logrus.Warn("runc checkpoint is untested with rootless containers")
+			logrus.Warn("sysbox-runc checkpoint is untested with system containers")
 		}
 
 		container, err := getContainer(context)
@@ -126,7 +126,7 @@ var namespaceMapping = map[specs.LinuxNamespaceType]int{
 }
 
 func setEmptyNsMask(context *cli.Context, options *libcontainer.CriuOpts) error {
-	/* Runc doesn't manage network devices and their configuration */
+	/* sysbox-runc doesn't manage network devices and their configuration */
 	nsmask := unix.CLONE_NEWNET
 
 	for _, ns := range context.StringSlice("empty-ns") {

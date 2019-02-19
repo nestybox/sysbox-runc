@@ -54,7 +54,7 @@ jobs:
   allow_failures:
     - go: tip
 
-go_import_path: github.com/opencontainers/runc
+go_import_path: nestybox/sysbox-runc
 
 # `make ci` uses Docker.
 services:

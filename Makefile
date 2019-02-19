@@ -1,6 +1,8 @@
 CONTAINER_ENGINE := docker
 GO := go
 
+RUNC_TARGET := sysbox-runc
+
 PREFIX ?= /usr/local
 BINDIR := $(PREFIX)/sbin
 MANDIR := $(PREFIX)/share/man
@@ -8,7 +10,7 @@ MANDIR := $(PREFIX)/share/man
 GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null)
 GIT_BRANCH_CLEAN := $(shell echo $(GIT_BRANCH) | sed -e "s/[^[:alnum:]]/-/g")
 RUNC_IMAGE := runc_dev$(if $(GIT_BRANCH_CLEAN),:$(GIT_BRANCH_CLEAN))
-PROJECT := github.com/opencontainers/runc
+PROJECT := nestybox/sysbox-runc
 BUILDTAGS ?= seccomp selinux apparmor
 COMMIT_NO := $(shell git rev-parse HEAD 2> /dev/null || true)
 COMMIT ?= $(if $(shell git status --porcelain --untracked-files=no),"$(COMMIT_NO)-dirty","$(COMMIT_NO)")
@@ -26,18 +28,18 @@ GO_BUILD_STATIC := CGO_ENABLED=1 $(GO) build $(EXTRA_FLAGS) -tags "$(BUILDTAGS) 
 GO_BUILD_DEBUG := $(GO) build --buildmode=exe $(EXTRA_FLAGS) -tags "$(BUILDTAGS)" \
 	-ldflags "$(LDFLAGS) $(EXTRA_LDFLAGS)" -gcflags="all=-N -l"
 
-.DEFAULT: runc
+.DEFAULT: $(RUNC_TARGET)
 
-runc:
-	$(GO_BUILD) -o runc .
+$(RUNC_TARGET):
+	$(GO_BUILD) -o $(RUNC_TARGET) .
 
-all: runc recvtty
+all: $(RUNC_TARGET) recvtty
 
 recvtty:
 	$(GO_BUILD) -o contrib/cmd/recvtty/recvtty ./contrib/cmd/recvtty
 
 static:
-	$(GO_BUILD_STATIC) -o runc .
+	$(GO_BUILD_STATIC) -o $(RUNC_TARGET) .
 	$(GO_BUILD_STATIC) -o contrib/cmd/recvtty/recvtty ./contrib/cmd/recvtty
 
 release:
@@ -100,7 +102,7 @@ shell: runcimage
 		$(RUNC_IMAGE) bash
 
 install:
-	install -D -m0755 runc $(DESTDIR)$(BINDIR)/runc
+	install -D -m0755 runc $(DESTDIR)$(BINDIR)/$(RUNC_TARGET)
 
 install-bash:
 	install -D -m0644 contrib/completions/bash/runc $(DESTDIR)$(PREFIX)/share/bash-completion/completions/runc
@@ -110,7 +112,7 @@ install-man: man
 	install -D -m 644 man/man8/*.8 $(DESTDIR)$(MANDIR)/man8
 
 clean:
-	rm -f runc runc-*
+	rm -f $(RUNC_TARGET) $(RUNC_TARGET)-*
 	rm -f contrib/cmd/recvtty/recvtty
 	rm -rf release
 	rm -rf man/man8

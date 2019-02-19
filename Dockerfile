@@ -81,7 +81,7 @@ RUN curl -o /usr/local/bin/umoci -fsSL https://github.com/opencontainers/umoci/r
     && chmod +x /usr/local/bin/umoci
 
 COPY script/tmpmount /
-WORKDIR /go/src/github.com/opencontainers/runc
+WORKDIR /go/src/nestybox/sysbox-runc
 ENTRYPOINT ["/tmpmount"]
 
 # setup a playground for us to spawn containers in
