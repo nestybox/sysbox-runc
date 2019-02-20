@@ -19,7 +19,7 @@ var restoreCommand = cli.Command{
 Where "<container-id>" is the name for the instance of the container to be
 restored.`,
 	Description: `Restores the saved state of the container instance that was previously saved
-using the runc checkpoint command.`,
+using the syscont-runc checkpoint command.`,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:  "console-socket",
