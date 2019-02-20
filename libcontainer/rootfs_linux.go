@@ -15,11 +15,11 @@ import (
 
 	"github.com/cyphar/filepath-securejoin"
 	"github.com/mrunalp/fileutils"
-	"nestybox/syscont-runc/libcontainer/cgroups"
-	"nestybox/syscont-runc/libcontainer/configs"
-	"nestybox/syscont-runc/libcontainer/mount"
-	"nestybox/syscont-runc/libcontainer/system"
-	libcontainerUtils "nestybox/syscont-runc/libcontainer/utils"
+	"nestybox/sysvisor-runc/libcontainer/cgroups"
+	"nestybox/sysvisor-runc/libcontainer/configs"
+	"nestybox/sysvisor-runc/libcontainer/mount"
+	"nestybox/sysvisor-runc/libcontainer/system"
+	libcontainerUtils "nestybox/sysvisor-runc/libcontainer/utils"
 	"github.com/opencontainers/selinux/go-selinux/label"
 
 	"golang.org/x/sys/unix"

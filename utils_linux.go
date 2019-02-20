@@ -10,12 +10,12 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"nestybox/syscont-runc/libcontainer"
-	"nestybox/syscont-runc/libcontainer/cgroups/systemd"
-	"nestybox/syscont-runc/libcontainer/configs"
-	"nestybox/syscont-runc/libcontainer/intelrdt"
-	"nestybox/syscont-runc/libcontainer/specconv"
-	"nestybox/syscont-runc/libcontainer/utils"
+	"nestybox/sysvisor-runc/libcontainer"
+	"nestybox/sysvisor-runc/libcontainer/cgroups/systemd"
+	"nestybox/sysvisor-runc/libcontainer/configs"
+	"nestybox/sysvisor-runc/libcontainer/intelrdt"
+	"nestybox/sysvisor-runc/libcontainer/specconv"
+	"nestybox/sysvisor-runc/libcontainer/utils"
 	"github.com/opencontainers/runtime-spec/specs-go"
 
 	"github.com/coreos/go-systemd/activation"

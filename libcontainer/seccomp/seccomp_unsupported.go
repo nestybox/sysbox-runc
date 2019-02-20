@@ -5,7 +5,7 @@ package seccomp
 import (
 	"errors"
 
-	"nestybox/syscont-runc/libcontainer/configs"
+	"nestybox/sysvisor-runc/libcontainer/configs"
 )
 
 var ErrSeccompNotEnabled = errors.New("seccomp: config provided but seccomp not supported")

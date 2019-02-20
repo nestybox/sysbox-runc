@@ -20,7 +20,7 @@ the `nsexec()` constructor, which means that the re-exec will not cause
 the namespaces to be joined. You can import it like this:
 
 ```go
-import _ "nestybox/syscont-runc/libcontainer/nsenter"
+import _ "nestybox/sysvisor-runc/libcontainer/nsenter"
 ```
 
 `nsexec()` will first get the file descriptor number for the init pipe

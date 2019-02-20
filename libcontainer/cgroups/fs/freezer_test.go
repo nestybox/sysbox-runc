@@ -5,7 +5,7 @@ package fs
 import (
 	"testing"
 
-	"nestybox/syscont-runc/libcontainer/configs"
+	"nestybox/sysvisor-runc/libcontainer/configs"
 )
 
 func TestFreezerSetState(t *testing.T) {

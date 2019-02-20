@@ -1,6 +1,6 @@
-# syscont-runc Integration Tests
+# sysvisor-runc Integration Tests
 
-Integration tests provide end-to-end testing of syscont-runc.
+Integration tests provide end-to-end testing of sysvisor-runc.
 
 Note that integration tests do **not** replace unit tests.
 
@@ -47,7 +47,7 @@ $ ./install.sh /usr/local
 
 ## Writing integration tests
 
-Helper functions (nestybox/syscont-runc/integration/helpers.bash) are
+Helper functions (nestybox/sysvisor-runc/integration/helpers.bash) are
 provided in order to facilitate writing tests.
 
 ```sh
@@ -70,8 +70,8 @@ function teardown() {
 }
 
 @test "this is a simple test" {
-  syscont-runc run containerid
-  # "The syscont-runc macro" automatically populates $status, $output and $lines.
+  sysvisor-runc run containerid
+  # "The sysvisor-runc macro" automatically populates $status, $output and $lines.
   # Please refer to bats documentation to find out more.
   [ "$status" -eq 0 ]
 

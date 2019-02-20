@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	"nestybox/syscont-runc/libcontainer/cgroups"
-	"nestybox/syscont-runc/libcontainer/configs"
-	"nestybox/syscont-runc/libcontainer/system"
+	"nestybox/sysvisor-runc/libcontainer/cgroups"
+	"nestybox/sysvisor-runc/libcontainer/configs"
+	"nestybox/sysvisor-runc/libcontainer/system"
 )
 
 const (

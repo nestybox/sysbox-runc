@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"nestybox/syscont-runc/libcontainer"
-	"nestybox/syscont-runc/libcontainer/system"
+	"nestybox/sysvisor-runc/libcontainer"
+	"nestybox/sysvisor-runc/libcontainer/system"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
@@ -48,7 +48,7 @@ checkpointed.`,
 		}
 		// XXX: Currently this is untested with rootless containers.
 		if os.Geteuid() != 0 || system.RunningInUserNS() {
-			logrus.Warn("syscont-runc checkpoint is untested with system containers")
+			logrus.Warn("sysvisor-runc checkpoint is untested with system containers")
 		}
 
 		container, err := getContainer(context)
@@ -121,7 +121,7 @@ var namespaceMapping = map[specs.LinuxNamespaceType]int{
 }
 
 func setEmptyNsMask(context *cli.Context, options *libcontainer.CriuOpts) error {
-	/* syscont-runc doesn't manage network devices and their configuration */
+	/* sysvisor-runc doesn't manage network devices and their configuration */
 	nsmask := unix.CLONE_NEWNET
 
 	for _, ns := range context.StringSlice("empty-ns") {

@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"nestybox/syscont-runc/libcontainer/configs"
+	"nestybox/sysvisor-runc/libcontainer/configs"
 	libseccomp "github.com/seccomp/libseccomp-golang"
 
 	"golang.org/x/sys/unix"

@@ -12,14 +12,14 @@ import (
 	"strconv"
 
 	"github.com/cyphar/filepath-securejoin"
-	"nestybox/syscont-runc/libcontainer/cgroups"
-	"nestybox/syscont-runc/libcontainer/cgroups/fs"
-	"nestybox/syscont-runc/libcontainer/cgroups/systemd"
-	"nestybox/syscont-runc/libcontainer/configs"
-	"nestybox/syscont-runc/libcontainer/configs/validate"
-	"nestybox/syscont-runc/libcontainer/intelrdt"
-	"nestybox/syscont-runc/libcontainer/mount"
-	"nestybox/syscont-runc/libcontainer/utils"
+	"nestybox/sysvisor-runc/libcontainer/cgroups"
+	"nestybox/sysvisor-runc/libcontainer/cgroups/fs"
+	"nestybox/sysvisor-runc/libcontainer/cgroups/systemd"
+	"nestybox/sysvisor-runc/libcontainer/configs"
+	"nestybox/sysvisor-runc/libcontainer/configs/validate"
+	"nestybox/sysvisor-runc/libcontainer/intelrdt"
+	"nestybox/sysvisor-runc/libcontainer/mount"
+	"nestybox/sysvisor-runc/libcontainer/utils"
 
 	"golang.org/x/sys/unix"
 )

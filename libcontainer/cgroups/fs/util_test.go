@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"nestybox/syscont-runc/libcontainer/configs"
+	"nestybox/sysvisor-runc/libcontainer/configs"
 )
 
 type cgroupTestUtil struct {

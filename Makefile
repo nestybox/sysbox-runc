@@ -5,7 +5,7 @@
 
 GO := go
 
-RUNC_TARGET := syscont-runc
+RUNC_TARGET := sysvisor-runc
 
 SOURCES := $(shell find . 2>&1 | grep -E '.*\.(c|h|go)$$')
 PREFIX := $(DESTDIR)/usr/local
@@ -13,7 +13,7 @@ BINDIR := $(PREFIX)/sbin
 GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null)
 GIT_BRANCH_CLEAN := $(shell echo $(GIT_BRANCH) | sed -e "s/[^[:alnum:]]/-/g")
 RUNC_IMAGE := runc_dev$(if $(GIT_BRANCH_CLEAN),:$(GIT_BRANCH_CLEAN))
-PROJECT := nestybox/syscont-runc
+PROJECT := nestybox/sysvisor-runc
 BUILDTAGS ?= seccomp
 COMMIT_NO := $(shell git rev-parse HEAD 2> /dev/null || true)
 COMMIT := $(if $(shell git status --porcelain --untracked-files=no),"${COMMIT_NO}-dirty","${COMMIT_NO}")

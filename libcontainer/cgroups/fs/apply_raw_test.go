@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"nestybox/syscont-runc/libcontainer/configs"
+	"nestybox/sysvisor-runc/libcontainer/configs"
 )
 
 func TestInvalidCgroupPath(t *testing.T) {

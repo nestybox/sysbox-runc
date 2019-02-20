@@ -1,7 +1,7 @@
 package integration
 
 import (
-	"nestybox/syscont-runc/libcontainer/configs"
+	"nestybox/sysvisor-runc/libcontainer/configs"
 
 	"golang.org/x/sys/unix"
 )

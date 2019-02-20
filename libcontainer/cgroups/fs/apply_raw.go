@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"sync"
 
-	"nestybox/syscont-runc/libcontainer/cgroups"
-	"nestybox/syscont-runc/libcontainer/configs"
-	libcontainerUtils "nestybox/syscont-runc/libcontainer/utils"
+	"nestybox/sysvisor-runc/libcontainer/cgroups"
+	"nestybox/sysvisor-runc/libcontainer/configs"
+	libcontainerUtils "nestybox/sysvisor-runc/libcontainer/utils"
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 )

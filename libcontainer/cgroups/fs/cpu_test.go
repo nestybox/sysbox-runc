@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"testing"
 
-	"nestybox/syscont-runc/libcontainer/cgroups"
+	"nestybox/sysvisor-runc/libcontainer/cgroups"
 )
 
 func TestCpuSetShares(t *testing.T) {

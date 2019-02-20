@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"nestybox/syscont-runc/libcontainer"
-	"nestybox/syscont-runc/libcontainer/configs"
+	"nestybox/sysvisor-runc/libcontainer"
+	"nestybox/sysvisor-runc/libcontainer/configs"
 
 	"golang.org/x/sys/unix"
 )

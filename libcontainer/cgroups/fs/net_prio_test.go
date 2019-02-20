@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"nestybox/syscont-runc/libcontainer/configs"
+	"nestybox/sysvisor-runc/libcontainer/configs"
 )
 
 var (

@@ -6,7 +6,7 @@ import (
 	"math"
 	"os"
 
-	"nestybox/syscont-runc/libcontainer/configs"
+	"nestybox/sysvisor-runc/libcontainer/configs"
 )
 
 type processOperations interface {

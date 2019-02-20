@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"nestybox/syscont-runc/libcontainer/configs"
+	"nestybox/sysvisor-runc/libcontainer/configs"
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
 

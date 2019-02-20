@@ -7,8 +7,8 @@ import (
 	"syscall"
 	"testing"
 
-	"nestybox/syscont-runc/libcontainer"
-	"nestybox/syscont-runc/libcontainer/configs"
+	"nestybox/sysvisor-runc/libcontainer"
+	"nestybox/sysvisor-runc/libcontainer/configs"
 	libseccomp "github.com/seccomp/libseccomp-golang"
 )
 

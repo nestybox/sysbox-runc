@@ -12,7 +12,7 @@ import (
 	"strings"
 	"sync"
 
-	"nestybox/syscont-runc/libcontainer/configs"
+	"nestybox/sysvisor-runc/libcontainer/configs"
 )
 
 /*

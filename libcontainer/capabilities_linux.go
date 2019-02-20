@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"nestybox/syscont-runc/libcontainer/configs"
+	"nestybox/sysvisor-runc/libcontainer/configs"
 	"github.com/syndtr/gocapability/capability"
 )
 

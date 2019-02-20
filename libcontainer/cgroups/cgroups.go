@@ -5,7 +5,7 @@ package cgroups
 import (
 	"fmt"
 
-	"nestybox/syscont-runc/libcontainer/configs"
+	"nestybox/sysvisor-runc/libcontainer/configs"
 )
 
 type Manager interface {

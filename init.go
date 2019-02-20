@@ -4,8 +4,8 @@ import (
 	"os"
 	"runtime"
 
-	"nestybox/syscont-runc/libcontainer"
-	_ "nestybox/syscont-runc/libcontainer/nsenter"
+	"nestybox/sysvisor-runc/libcontainer"
+	_ "nestybox/sysvisor-runc/libcontainer/nsenter"
 	"github.com/urfave/cli"
 )
 
@@ -18,7 +18,7 @@ func init() {
 
 var initCommand = cli.Command{
 	Name:  "init",
-	Usage: `initialize the namespaces and launch the process (do not call it outside of syscont-runc)`,
+	Usage: `initialize the namespaces and launch the process (do not call it outside of sysvisor-runc)`,
 	Action: func(context *cli.Context) error {
 		factory, _ := libcontainer.New("")
 		if err := factory.StartInitialization(); err != nil {

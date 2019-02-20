@@ -61,10 +61,10 @@ ENV ROOTFS /busybox
 RUN mkdir -p ${ROOTFS}
 
 COPY script/tmpmount /
-WORKDIR /go/src/nestybox/syscont-runc
+WORKDIR /go/src/nestybox/sysvisor-runc
 ENTRYPOINT ["/tmpmount"]
 
-ADD . /go/src/nestybox/syscont-runc
+ADD . /go/src/nestybox/sysvisor-runc
 
 RUN . tests/integration/multi-arch.bash \
     && curl -o- -sSL `get_busybox` | tar xfJC - ${ROOTFS}

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"testing"
 
-	"nestybox/syscont-runc/libcontainer/cgroups"
+	"nestybox/sysvisor-runc/libcontainer/cgroups"
 
 	"github.com/sirupsen/logrus"
 )

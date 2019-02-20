@@ -13,9 +13,9 @@ import (
 
 	"encoding/json"
 
-	"nestybox/syscont-runc/libcontainer"
-	"nestybox/syscont-runc/libcontainer/user"
-	"nestybox/syscont-runc/libcontainer/utils"
+	"nestybox/sysvisor-runc/libcontainer"
+	"nestybox/sysvisor-runc/libcontainer/user"
+	"nestybox/sysvisor-runc/libcontainer/utils"
 	"github.com/urfave/cli"
 )
 
@@ -46,7 +46,7 @@ type containerState struct {
 
 var listCommand = cli.Command{
 	Name:  "list",
-	Usage: "lists containers started by syscont-runc with the given root",
+	Usage: "lists containers started by sysvisor-runc with the given root",
 	ArgsUsage: `
 
 Where the given root is specified via the global option "--root"
@@ -54,11 +54,11 @@ Where the given root is specified via the global option "--root"
 
 EXAMPLE 1:
 To list containers created via the default "--root":
-       # syscont-runc list
+       # sysvisor-runc list
 
 EXAMPLE 2:
 To list containers created using a non-default value for "--root":
-       # syscont-runc --root value list`,
+       # sysvisor-runc --root value list`,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:  "format, f",

@@ -13,9 +13,9 @@ import (
 	"strings"
 	"testing"
 
-	"nestybox/syscont-runc/libcontainer"
-	"nestybox/syscont-runc/libcontainer/cgroups/systemd"
-	"nestybox/syscont-runc/libcontainer/configs"
+	"nestybox/sysvisor-runc/libcontainer"
+	"nestybox/sysvisor-runc/libcontainer/cgroups/systemd"
+	"nestybox/sysvisor-runc/libcontainer/configs"
 	"github.com/opencontainers/runtime-spec/specs-go"
 
 	"golang.org/x/sys/unix"

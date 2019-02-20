@@ -5,8 +5,8 @@ import (
 	"runtime"
 	"testing"
 
-	"nestybox/syscont-runc/libcontainer"
-	_ "nestybox/syscont-runc/libcontainer/nsenter"
+	"nestybox/sysvisor-runc/libcontainer"
+	_ "nestybox/sysvisor-runc/libcontainer/nsenter"
 
 	"github.com/sirupsen/logrus"
 )

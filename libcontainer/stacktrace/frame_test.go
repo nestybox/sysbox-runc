@@ -4,8 +4,8 @@ import "testing"
 
 func TestParsePackageName(t *testing.T) {
 	var (
-		name             = "nestybox/syscont-runc/libcontainer/stacktrace.captureFunc"
-		expectedPackage  = "nestybox/syscont-runc/libcontainer/stacktrace"
+		name             = "nestybox/sysvisor-runc/libcontainer/stacktrace.captureFunc"
+		expectedPackage  = "nestybox/sysvisor-runc/libcontainer/stacktrace"
 		expectedFunction = "captureFunc"
 	)
 

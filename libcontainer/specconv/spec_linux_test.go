@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"nestybox/syscont-runc/libcontainer/configs"
-	"nestybox/syscont-runc/libcontainer/configs/validate"
+	"nestybox/sysvisor-runc/libcontainer/configs"
+	"nestybox/sysvisor-runc/libcontainer/configs/validate"
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
 

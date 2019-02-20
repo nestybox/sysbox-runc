@@ -8,7 +8,7 @@ import (
 	"syscall" // only for exec
 	"unsafe"
 
-	"nestybox/syscont-runc/libcontainer/user"
+	"nestybox/sysvisor-runc/libcontainer/user"
 	"golang.org/x/sys/unix"
 )
 

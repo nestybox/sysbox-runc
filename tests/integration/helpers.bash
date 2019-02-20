@@ -5,7 +5,7 @@ INTEGRATION_ROOT=$(dirname "$(readlink -f "$BASH_SOURCE")")
 
 . ${INTEGRATION_ROOT}/multi-arch.bash
 
-RUNC="${INTEGRATION_ROOT}/../../syscont-runc"
+RUNC="${INTEGRATION_ROOT}/../../sysvisor-runc"
 RECVTTY="${INTEGRATION_ROOT}/../../contrib/cmd/recvtty/recvtty"
 GOPATH="$(mktemp -d --tmpdir runc-integration-gopath.XXXXXX)"
 

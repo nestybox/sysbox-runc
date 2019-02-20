@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"nestybox/syscont-runc/libcontainer/configs"
+	"nestybox/sysvisor-runc/libcontainer/configs"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"

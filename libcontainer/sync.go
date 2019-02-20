@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"nestybox/syscont-runc/libcontainer/utils"
+	"nestybox/sysvisor-runc/libcontainer/utils"
 )
 
 type syncType string

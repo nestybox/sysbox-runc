@@ -6,7 +6,7 @@ import (
 	"text/template"
 	"time"
 
-	"nestybox/syscont-runc/libcontainer/stacktrace"
+	"nestybox/sysvisor-runc/libcontainer/stacktrace"
 )
 
 var errorTemplate = template.Must(template.New("error").Parse(`Timestamp: {{.Timestamp}}

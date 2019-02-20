@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"nestybox/syscont-runc/libcontainer"
+	"nestybox/sysvisor-runc/libcontainer"
 	"github.com/vishvananda/netlink/nl"
 
 	"golang.org/x/sys/unix"

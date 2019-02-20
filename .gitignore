@@ -1,6 +1,9 @@
 vendor/pkg
-/syscont-runc
-/syscont-runc-*
+sysvisor-runc
+sysvisor-runc-*
 contrib/cmd/recvtty/recvtty
 man/man8
 release
+GPATH
+GRTAGS
+GTAGS

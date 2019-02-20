@@ -13,11 +13,11 @@ import (
 	"strconv"
 	"syscall" // only for Signal
 
-	"nestybox/syscont-runc/libcontainer/cgroups"
-	"nestybox/syscont-runc/libcontainer/configs"
-	"nestybox/syscont-runc/libcontainer/intelrdt"
-	"nestybox/syscont-runc/libcontainer/system"
-	"nestybox/syscont-runc/libcontainer/utils"
+	"nestybox/sysvisor-runc/libcontainer/cgroups"
+	"nestybox/sysvisor-runc/libcontainer/configs"
+	"nestybox/sysvisor-runc/libcontainer/intelrdt"
+	"nestybox/sysvisor-runc/libcontainer/system"
+	"nestybox/sysvisor-runc/libcontainer/utils"
 
 	"golang.org/x/sys/unix"
 )

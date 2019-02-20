@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"nestybox/syscont-runc/libcontainer"
-	"nestybox/syscont-runc/libcontainer/utils"
+	"nestybox/sysvisor-runc/libcontainer"
+	"nestybox/sysvisor-runc/libcontainer/utils"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"
 )
@@ -28,7 +28,7 @@ EXAMPLE:
 For example, if the container is configured to run the linux ps command the
 following will output a list of processes running in the container:
 
-       # syscont-runc exec <container-id> ps`,
+       # sysvisor-runc exec <container-id> ps`,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:  "console-socket",

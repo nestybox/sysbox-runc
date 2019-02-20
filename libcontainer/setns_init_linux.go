@@ -7,10 +7,10 @@ import (
 	"os"
 	"runtime"
 
-	"nestybox/syscont-runc/libcontainer/apparmor"
-	"nestybox/syscont-runc/libcontainer/keys"
-	"nestybox/syscont-runc/libcontainer/seccomp"
-	"nestybox/syscont-runc/libcontainer/system"
+	"nestybox/sysvisor-runc/libcontainer/apparmor"
+	"nestybox/sysvisor-runc/libcontainer/keys"
+	"nestybox/sysvisor-runc/libcontainer/seccomp"
+	"nestybox/sysvisor-runc/libcontainer/system"
 	"github.com/opencontainers/selinux/go-selinux/label"
 	"github.com/pkg/errors"
 
