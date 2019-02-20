@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/containerd/console"
-	"github.com/opencontainers/runc/libcontainer"
-	"github.com/opencontainers/runc/libcontainer/configs"
-	"github.com/opencontainers/runc/libcontainer/utils"
+	"nestybox/syscont-runc/libcontainer"
+	"nestybox/syscont-runc/libcontainer/configs"
+	"nestybox/syscont-runc/libcontainer/utils"
 
 	"golang.org/x/sys/unix"
 )

@@ -1,6 +1,6 @@
-# runc Integration Tests
+# syscont-runc Integration Tests
 
-Integration tests provide end-to-end testing of runc.
+Integration tests provide end-to-end testing of syscont-runc.
 
 Note that integration tests do **not** replace unit tests.
 
@@ -47,9 +47,8 @@ $ ./install.sh /usr/local
 
 ## Writing integration tests
 
-[helper functions]
-(https://github.com/opencontainers/runc/blob/master/test/integration/helpers.bash)
-are provided in order to facilitate writing tests.
+Helper functions (nestybox/syscont-runc/integration/helpers.bash) are
+provided in order to facilitate writing tests.
 
 ```sh
 #!/usr/bin/env bats
@@ -71,8 +70,8 @@ function teardown() {
 }
 
 @test "this is a simple test" {
-  runc run containerid
-  # "The runc macro" automatically populates $status, $output and $lines.
+  syscont-runc run containerid
+  # "The syscont-runc macro" automatically populates $status, $output and $lines.
   # Please refer to bats documentation to find out more.
   [ "$status" -eq 0 ]
 

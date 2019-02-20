@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/opencontainers/runc/libcontainer/configs"
-	"github.com/opencontainers/runc/libcontainer/seccomp"
-	libcontainerUtils "github.com/opencontainers/runc/libcontainer/utils"
+	"nestybox/syscont-runc/libcontainer/configs"
+	"nestybox/syscont-runc/libcontainer/seccomp"
+	libcontainerUtils "nestybox/syscont-runc/libcontainer/utils"
 	"github.com/opencontainers/runtime-spec/specs-go"
 
 	"golang.org/x/sys/unix"

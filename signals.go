@@ -7,9 +7,9 @@ import (
 	"os/signal"
 	"syscall" // only for Signal
 
-	"github.com/opencontainers/runc/libcontainer"
-	"github.com/opencontainers/runc/libcontainer/system"
-	"github.com/opencontainers/runc/libcontainer/utils"
+	"nestybox/syscont-runc/libcontainer"
+	"nestybox/syscont-runc/libcontainer/system"
+	"nestybox/syscont-runc/libcontainer/utils"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"

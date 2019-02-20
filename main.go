@@ -32,7 +32,7 @@ var gitCommit = ""
 
 const (
 	specConfig = "config.json"
-	usage      = `syscont-runc
+	usage      = `system container runc
 
 syscont-runc is a command line client for running system containers.
 
@@ -48,8 +48,8 @@ be deployed).
 syscont-runc is a fork of the Open Container Initiative (OCI) runc. As
 such, it runs system containers that are packaged according to the OCI
 format. However, syscont-runc overrides OCI configurations that are
-incompatible with the system container abstraction. Thus syscont-runc
-is not fully OCI compliant.
+incompatible with the system container abstraction (i.e., syscont-runc
+is mostly but not fully OCI compliant).
 
 syscont-runc is configured using OCI bundles (i.e., a directory that
 includes a specification file named "` + specConfig + `" and a root

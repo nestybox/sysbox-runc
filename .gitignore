@@ -1,6 +1,6 @@
 vendor/pkg
-/runc
-/runc-*
+/syscont-runc
+/syscont-runc-*
 contrib/cmd/recvtty/recvtty
 man/man8
 release

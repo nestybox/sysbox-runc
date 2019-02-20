@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/opencontainers/runc/libcontainer/configs"
+	"nestybox/syscont-runc/libcontainer/configs"
 	"github.com/vishvananda/netlink"
 )
 

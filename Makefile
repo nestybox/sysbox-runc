@@ -5,13 +5,15 @@
 
 GO := go
 
+RUNC_TARGET := syscont-runc
+
 SOURCES := $(shell find . 2>&1 | grep -E '.*\.(c|h|go)$$')
 PREFIX := $(DESTDIR)/usr/local
 BINDIR := $(PREFIX)/sbin
 GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null)
 GIT_BRANCH_CLEAN := $(shell echo $(GIT_BRANCH) | sed -e "s/[^[:alnum:]]/-/g")
 RUNC_IMAGE := runc_dev$(if $(GIT_BRANCH_CLEAN),:$(GIT_BRANCH_CLEAN))
-PROJECT := github.com/opencontainers/runc
+PROJECT := nestybox/syscont-runc
 BUILDTAGS ?= seccomp
 COMMIT_NO := $(shell git rev-parse HEAD 2> /dev/null || true)
 COMMIT := $(if $(shell git status --porcelain --untracked-files=no),"${COMMIT_NO}-dirty","${COMMIT_NO}")
@@ -27,12 +29,12 @@ VERSION := ${shell cat ./VERSION}
 
 SHELL := $(shell command -v bash 2>/dev/null)
 
-.DEFAULT: runc
+.DEFAULT: $(RUNC_TARGET)
 
-runc: $(SOURCES)
-	$(GO) build -buildmode=pie $(EXTRA_FLAGS) -ldflags "-X main.gitCommit=${COMMIT} -X main.version=${VERSION} $(EXTRA_LDFLAGS)" -tags "$(BUILDTAGS)" -o runc .
+$(RUNC_TARGET): $(SOURCES)
+	$(GO) build -buildmode=pie $(EXTRA_FLAGS) -ldflags "-X main.gitCommit=${COMMIT} -X main.version=${VERSION} $(EXTRA_LDFLAGS)" -tags "$(BUILDTAGS)" -o $(RUNC_TARGET) .
 
-all: runc recvtty
+all: $(RUNC_TARGET) recvtty
 
 recvtty: contrib/cmd/recvtty/recvtty
 
@@ -40,7 +42,7 @@ contrib/cmd/recvtty/recvtty: $(SOURCES)
 	$(GO) build -buildmode=pie $(EXTRA_FLAGS) -ldflags "-X main.gitCommit=${COMMIT} -X main.version=${VERSION} $(EXTRA_LDFLAGS)" -tags "$(BUILDTAGS)" -o contrib/cmd/recvtty/recvtty ./contrib/cmd/recvtty
 
 static: $(SOURCES)
-	CGO_ENABLED=1 $(GO) build $(EXTRA_FLAGS) -tags "$(BUILDTAGS) netgo osusergo static_build" -installsuffix netgo -ldflags "-w -extldflags -static -X main.gitCommit=${COMMIT} -X main.version=${VERSION} $(EXTRA_LDFLAGS)" -o runc .
+	CGO_ENABLED=1 $(GO) build $(EXTRA_FLAGS) -tags "$(BUILDTAGS) netgo osusergo static_build" -installsuffix netgo -ldflags "-w -extldflags -static -X main.gitCommit=${COMMIT} -X main.version=${VERSION} $(EXTRA_LDFLAGS)" -o $(RUNC_TARGET) .
 	CGO_ENABLED=1 $(GO) build $(EXTRA_FLAGS) -tags "$(BUILDTAGS) netgo osusergo static_build" -installsuffix netgo -ldflags "-w -extldflags -static -X main.gitCommit=${COMMIT} -X main.version=${VERSION} $(EXTRA_LDFLAGS)" -o contrib/cmd/recvtty/recvtty ./contrib/cmd/recvtty
 
 release:
@@ -87,26 +89,26 @@ shell: runcimage
 	docker run ${DOCKER_RUN_PROXY} -ti --privileged --rm -v $(CURDIR):/go/src/$(PROJECT) $(RUNC_IMAGE) bash
 
 install:
-	install -D -m0755 runc $(BINDIR)/runc
+	install -D -m0755 $(RUNC_TARGET) $(BINDIR)/$(RUNC_TARGET)
 
 install-bash:
-	install -D -m0644 contrib/completions/bash/runc $(PREFIX)/share/bash-completion/completions/runc
+	install -D -m0644 contrib/completions/bash/$(RUNC_TARGET) $(PREFIX)/share/bash-completion/completions/$(RUNC_TARGET)
 
 install-man:
 	install -d -m 755 $(MAN_INSTALL_PATH)
 	install -m 644 $(MAN_PAGES) $(MAN_INSTALL_PATH)
 
 uninstall:
-	rm -f $(BINDIR)/runc
+	rm -f $(BINDIR)/$(RUNC_TARGET)
 
 uninstall-bash:
-	rm -f $(PREFIX)/share/bash-completion/completions/runc
+	rm -f $(PREFIX)/share/bash-completion/completions/$(RUNC_TARGET)
 
 uninstall-man:
 	rm -f $(addprefix $(MAN_INSTALL_PATH),$(MAN_PAGES_BASE))
 
 clean:
-	rm -f runc runc-*
+	rm -f $(RUNC_TARGET) $(RUNC_TARGET)-*
 	rm -f contrib/cmd/recvtty/recvtty
 	rm -rf $(RELEASE_DIR)
 	rm -rf $(MAN_DIR)
@@ -117,6 +119,9 @@ validate:
 	$(GO) vet $(allpackages)
 
 ci: validate test release
+
+listpackages:
+	@echo $(allpackages)
 
 cross: runcimage
 	docker run ${DOCKER_RUN_PROXY} -e BUILDTAGS="$(BUILDTAGS)" --rm -v $(CURDIR):/go/src/$(PROJECT) $(RUNC_IMAGE) make localcross

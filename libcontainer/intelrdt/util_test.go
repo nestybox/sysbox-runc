@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/opencontainers/runc/libcontainer/configs"
+	"nestybox/syscont-runc/libcontainer/configs"
 )
 
 type intelRdtTestUtil struct {

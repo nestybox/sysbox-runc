@@ -4,8 +4,8 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/opencontainers/runc/libcontainer"
-	_ "github.com/opencontainers/runc/libcontainer/nsenter"
+	"nestybox/syscont-runc/libcontainer"
+	_ "nestybox/syscont-runc/libcontainer/nsenter"
 	"github.com/urfave/cli"
 )
 

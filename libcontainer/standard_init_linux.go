@@ -9,11 +9,11 @@ import (
 	"runtime"
 	"syscall" //only for Exec
 
-	"github.com/opencontainers/runc/libcontainer/apparmor"
-	"github.com/opencontainers/runc/libcontainer/configs"
-	"github.com/opencontainers/runc/libcontainer/keys"
-	"github.com/opencontainers/runc/libcontainer/seccomp"
-	"github.com/opencontainers/runc/libcontainer/system"
+	"nestybox/syscont-runc/libcontainer/apparmor"
+	"nestybox/syscont-runc/libcontainer/configs"
+	"nestybox/syscont-runc/libcontainer/keys"
+	"nestybox/syscont-runc/libcontainer/seccomp"
+	"nestybox/syscont-runc/libcontainer/system"
 	"github.com/opencontainers/selinux/go-selinux/label"
 	"github.com/pkg/errors"
 

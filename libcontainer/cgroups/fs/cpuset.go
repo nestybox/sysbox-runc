@@ -9,9 +9,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/opencontainers/runc/libcontainer/cgroups"
-	"github.com/opencontainers/runc/libcontainer/configs"
-	libcontainerUtils "github.com/opencontainers/runc/libcontainer/utils"
+	"nestybox/syscont-runc/libcontainer/cgroups"
+	"nestybox/syscont-runc/libcontainer/configs"
+	libcontainerUtils "nestybox/syscont-runc/libcontainer/utils"
 )
 
 type CpusetGroup struct {

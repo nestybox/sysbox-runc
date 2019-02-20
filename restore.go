@@ -5,8 +5,8 @@ package main
 import (
 	"os"
 
-	"github.com/opencontainers/runc/libcontainer"
-	"github.com/opencontainers/runc/libcontainer/system"
+	"nestybox/syscont-runc/libcontainer"
+	"nestybox/syscont-runc/libcontainer/system"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
