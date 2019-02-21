@@ -5,6 +5,7 @@ package fs
 import (
 	"bufio"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -36,6 +37,8 @@ var (
 	HugePageSizes, _ = cgroups.GetHugePageSize()
 )
 
+var syscontCgroupRoot string = "syscont-cgroup-root"
+
 var errSubsystemDoesNotExist = errors.New("cgroup: subsystem does not exist")
 
 type subsystem interface {
@@ -50,17 +53,19 @@ type subsystem interface {
 }
 
 type manager struct {
-	mu       sync.Mutex
-	cgroups  *configs.Cgroup
-	rootless bool // ignore permission-related errors
-	paths    map[string]string
+	mu                 sync.Mutex
+	cgroups            *configs.Cgroup
+	rootless           bool // ignore permission-related errors
+	paths              map[string]string
+	childCgroupCreated bool
 }
 
 func NewManager(cg *configs.Cgroup, paths map[string]string, rootless bool) cgroups.Manager {
 	return &manager{
-		cgroups:  cg,
-		paths:    paths,
-		rootless: rootless,
+		cgroups:            cg,
+		paths:              paths,
+		rootless:           rootless,
+		childCgroupCreated: false,
 	}
 }
 
@@ -211,6 +216,60 @@ func isIgnorableError(rootless bool, err error) bool {
 	return false
 }
 
+// sysbox-runc:
+//
+// CreateChildCgroup creates a sub directory under the cgroup directory for the system
+// container; this child cgroup will serve as the system container's cgroup root. The
+// purpose of this child cgroup is to allow a system container root process to allocate
+// cgroup resources within the system container without affecting the resources assigned
+// to the system container itself.
+func (m *manager) CreateChildCgroup(container *configs.Config) error {
+	paths := m.GetPaths()
+	for _, sys := range subsystems {
+		if paths[sys.Name()] != "" {
+			// The sub-cgroup inherits the system container's cgroup settings (which are
+			// assumed to be set at this point)
+			if err := writeFile(paths[sys.Name()], "cgroup.clone_children", "1"); err != nil {
+				return err
+			}
+
+			path := filepath.Join(paths[sys.Name()], syscontCgroupRoot)
+
+			if err := os.MkdirAll(path, 0755); err != nil {
+				return fmt.Errorf("Failed to create sub cgroup %s", path)
+			}
+
+			// Change sub-cgroup ownership to root user in the system container
+			rootuid, err := container.HostRootUID()
+			if err != nil {
+				return err
+			}
+			rootgid, err := container.HostRootGID()
+			if err != nil {
+				return err
+			}
+			if err := os.Chown(path, rootuid, rootgid); err != nil {
+				return fmt.Errorf("Failed to change owner of sub cgroup %s", path)
+			}
+
+			// Change ownership of the files inside the sub-cgroup
+			files, err := ioutil.ReadDir(path)
+			if err != nil {
+				return err
+			}
+			for _, file := range files {
+				absFileName := filepath.Join(path, file.Name())
+				if err := os.Chown(absFileName, rootuid, rootgid); err != nil {
+					return fmt.Errorf("Failed to change owner for file %s", absFileName)
+				}
+			}
+		}
+	}
+
+	m.childCgroupCreated = true
+	return nil
+}
+
 func (m *manager) Apply(pid int) (err error) {
 	if m.cgroups == nil {
 		return nil
@@ -260,6 +319,56 @@ func (m *manager) Apply(pid int) (err error) {
 			// explicit cgroup path hasn't been set, we don't bail on error in
 			// case of permission problems. Cases where limits have been set
 			// (and we couldn't create our own cgroup) are handled by Set.
+			if isIgnorableError(m.rootless, err) && m.cgroups.Path == "" {
+				delete(m.paths, sys.Name())
+				continue
+			}
+			return err
+		}
+
+	}
+	return nil
+}
+
+func (m *manager) ApplyChildCgroup(pid int) (err error) {
+	if m.cgroups == nil {
+		return nil
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if !m.childCgroupCreated {
+		return fmt.Errorf("can't place process in child cgroup because child cgroup has not been created")
+	}
+
+	var c = m.cgroups
+
+	d, err := getCgroupData(m.cgroups, pid)
+	if err != nil {
+		return err
+	}
+
+	d.innerPath = filepath.Join(d.innerPath, syscontCgroupRoot)
+
+	// The following code executes on container restore (i.e., after checkpoint); it places
+	// the pid in the cgroup paths obtained from the container's state file.
+	if c.Paths != nil {
+		var childCgroupPaths map[string]string
+		for name, path := range c.Paths {
+			childCgroupPaths[name] = filepath.Join(path, syscontCgroupRoot)
+		}
+		return cgroups.EnterPid(childCgroupPaths, pid)
+	}
+
+	// The following code executes on container start (i.e., not restore); it creates
+	// cgroups as needed and places the container's init process in them.
+	for _, sys := range subsystems {
+		p, _ := d.path(sys.Name())
+		if err := sys.Apply(p, d); err != nil {
+			// In the case of rootless (including euid=0 in userns), where an explicit cgroup path hasn't
+			// been set, we don't bail on error in case of permission problems.
+			// Cases where limits have been set (and we couldn't create our own
+			// cgroup) are handled by Set.
 			if isIgnorableError(m.rootless, err) && m.cgroups.Path == "" {
 				delete(m.paths, sys.Name())
 				continue
@@ -358,11 +467,17 @@ func (m *manager) Freeze(state configs.FreezerState) error {
 }
 
 func (m *manager) GetPids() ([]int, error) {
-	return cgroups.GetPids(m.Path("devices"))
+	// sysbox-runc: return the pids starting from the system container root
+	// (all sys container pids start at this level)
+	paths := m.GetChildCgroupPaths()
+	return cgroups.GetPids(paths["devices"])
 }
 
 func (m *manager) GetAllPids() ([]int, error) {
-	return cgroups.GetAllPids(m.Path("devices"))
+	// sysbox-runc: return the pids starting from the system container root
+	// (all sys container pids start at this level)
+	paths := m.GetChildCgroupPaths()
+	return cgroups.GetAllPids(paths["devices"])
 }
 
 func getCgroupData(c *configs.Cgroup, pid int) (*cgroupData, error) {
@@ -433,6 +548,17 @@ func (m *manager) GetPaths() map[string]string {
 	return m.paths
 }
 
+// sysbox-runc
+func (m *manager) GetChildCgroupPaths() map[string]string {
+	m.mu.Lock()
+	childCgroupPaths := make(map[string]string)
+	for k, v := range m.paths {
+		childCgroupPaths[k] = filepath.Join(v, syscontCgroupRoot)
+	}
+	m.mu.Unlock()
+	return childCgroupPaths
+}
+
 func (m *manager) GetCgroups() (*configs.Cgroup, error) {
 	return m.cgroups, nil
 }
@@ -449,4 +575,21 @@ func (m *manager) GetFreezerState() (configs.FreezerState, error) {
 
 func (m *manager) Exists() bool {
 	return cgroups.PathExists(m.Path("devices"))
+}
+
+func writeFile(dir, file, data string) error {
+	// Normally dir should not be empty, one case is that cgroup subsystem
+	// is not mounted, we will get empty dir, and we want it fail here.
+	if dir == "" {
+		return fmt.Errorf("no such directory for %s", file)
+	}
+	if err := ioutil.WriteFile(filepath.Join(dir, file), []byte(data), 0700); err != nil {
+		return fmt.Errorf("failed to write %v to %v: %v", data, file, err)
+	}
+	return nil
+}
+
+func readFile(dir, file string) (string, error) {
+	data, err := ioutil.ReadFile(filepath.Join(dir, file))
+	return string(data), err
 }

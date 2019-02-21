@@ -38,6 +38,9 @@ func showFile(t *testing.T, fname string) error {
 }
 
 func TestUsernsCheckpoint(t *testing.T) {
+
+	t.Skip("UNSUPPORTED")
+
 	if _, err := os.Stat("/proc/self/ns/user"); os.IsNotExist(err) {
 		t.Skip("userns is unsupported")
 	}
@@ -49,6 +52,9 @@ func TestUsernsCheckpoint(t *testing.T) {
 }
 
 func TestCheckpoint(t *testing.T) {
+
+	t.Skip("UNSUPPORTED")
+
 	testCheckpoint(t, false)
 }
 

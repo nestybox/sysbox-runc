@@ -75,6 +75,18 @@ func (m *mockCgroupManager) GetFreezerState() (configs.FreezerState, error) {
 	return configs.Thawed, nil
 }
 
+func (m *mockCgroupManager) CreateChildCgroup(container *configs.Config) error {
+	return nil
+}
+
+func (m *mockCgroupManager) ApplyChildCgroup(pid int) error {
+	return nil
+}
+
+func (m *mockCgroupManager) GetChildCgroupPaths() map[string]string {
+	return m.paths
+}
+
 func (m *mockIntelRdtManager) Apply(pid int) error {
 	return nil
 }

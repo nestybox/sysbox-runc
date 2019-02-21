@@ -563,6 +563,8 @@ func (c *linuxContainer) newSetnsProcess(p *Process, cmd *exec.Cmd, messageSockP
 	if err != nil {
 		return nil, err
 	}
+	// sysbox-runc: setns processes enter the child cgroup (i.e., the system container's
+	// cgroup root)
 	return &setnsProcess{
 		cmd:             cmd,
 		cgroupPaths:     state.CgroupPaths,
@@ -1424,6 +1426,12 @@ func (c *linuxContainer) criuApplyCgroups(pid int, req *criurpc.CriuReq) error {
 	if err := c.cgroupManager.Apply(pid); err != nil {
 		return err
 	}
+	// sysbox-runc: place the pid in the sys container's cgroup root. The prior call to
+	// Apply(pid) is necessary because Apply() populates the cgroup manager's internal
+	// state.
+	if err := c.cgroupManager.ApplyChildCgroup(pid); err != nil {
+		return err
+	}
 
 	if err := c.cgroupManager.Set(c.config); err != nil {
 		return newSystemError(err)
@@ -1895,7 +1903,7 @@ func (c *linuxContainer) currentState() (*State, error) {
 			Created:              c.created,
 		},
 		Rootless:            c.config.RootlessEUID && c.config.RootlessCgroups,
-		CgroupPaths:         c.cgroupManager.GetPaths(),
+		CgroupPaths:         c.cgroupManager.GetChildCgroupPaths(),
 		IntelRdtPath:        intelRdtPath,
 		NamespacePaths:      make(map[configs.NamespaceType]string),
 		ExternalDescriptors: externalDescriptors,

@@ -257,3 +257,18 @@ func (m *manager) GetFreezerState() (configs.FreezerState, error) {
 func (m *manager) Exists() bool {
 	return cgroups.PathExists(m.dirPath)
 }
+
+func (m *manager) CreateChildCgroup(container *configs.Config) error {
+	// sysbox-runc: implement this function
+	return fmt.Errorf("Systemd not supported")
+}
+
+func (m *manager) ApplyChildCgroup(pid int) error {
+	// sysbox-runc: implement this function
+	return fmt.Errorf("Systemd not supported")
+}
+
+func (m *manager) GetChildCgroupPaths() map[string]string {
+	// sysbox-runc: implement this function
+	return nil
+}

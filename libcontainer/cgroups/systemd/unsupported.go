@@ -4,6 +4,7 @@ package systemd
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
@@ -68,4 +69,16 @@ func (m *Manager) GetCgroups() (*configs.Cgroup, error) {
 
 func (m *Manager) Exists() bool {
 	return false
+}
+
+func (m *Manager) CreateChildCgroup(container *configs.Config) error {
+	return fmt.Errorf("Systemd not supported")
+}
+
+func (m *Manager) ApplyChildCgroup(pid int) error {
+	return fmt.Errorf("Systemd not supported")
+}
+
+func (m *Manager) GetChildCgroupPaths() map[string]string {
+	return nil
 }

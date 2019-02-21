@@ -22,7 +22,7 @@ type Manager interface {
 	// Toggles the freezer cgroup according with specified state
 	Freeze(state configs.FreezerState) error
 
-	// Destroys the cgroup set
+	// Destroys the cgroup set & all sub-cgroups
 	Destroy() error
 
 	// Path returns a cgroup path to the specified controller/subsystem.
@@ -31,6 +31,21 @@ type Manager interface {
 
 	// Sets the cgroup as configured.
 	Set(container *configs.Config) error
+
+	// sysbox-runc: creates a child cgroup for the system container's cgroup root;
+	// we don't need a corresponding destroy method because the existing Destroy()
+	// method will destroy the child cgroup.
+	CreateChildCgroup(container *configs.Config) error
+
+	// sysbox-runc: applies child cgroup configuration to the process with the specified
+	// pid. Must be called after Apply() has been called because Apply() configures
+	// internal state in the cgroup manager that ApplyChildCgroup() does not. This
+	// awkwardness could be avoided if this interface had a separate Create() method as
+	// currently Apply() serves as both create and apply.
+	ApplyChildCgroup(pid int) error
+
+	// sysbox-runc: same as GetPaths(), but returns child cgroup paths
+	GetChildCgroupPaths() map[string]string
 
 	// GetPaths returns cgroup path(s) to save in a state file in order to restore later.
 	//

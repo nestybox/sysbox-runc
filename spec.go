@@ -8,8 +8,11 @@ import (
 	"io/ioutil"
 	"os"
 
+	"github.com/opencontainers/runc/libsyscontainer"
+
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/specconv"
+
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"
 )
@@ -115,7 +118,8 @@ created by an unprivileged user.
 	},
 }
 
-// loadSpec loads the specification from the provided path.
+// loadSpec loads the specification from the provided path
+// and converts it (if necessary) to a system container spec.
 func loadSpec(cPath string) (spec *specs.Spec, err error) {
 	cf, err := os.Open(cPath)
 	if err != nil {
@@ -129,6 +133,12 @@ func loadSpec(cPath string) (spec *specs.Spec, err error) {
 	if err = json.NewDecoder(cf).Decode(&spec); err != nil {
 		return nil, err
 	}
+
+	err = libsyscontainer.ConvertSpec(spec, false)
+	if err != nil {
+		return nil, fmt.Errorf("error in system container spec: %v", err)
+	}
+
 	return spec, validateProcessSpec(spec.Process)
 }
 

@@ -339,6 +339,21 @@ func (p *initProcess) start() (retErr error) {
 	if err := p.manager.Apply(p.pid()); err != nil {
 		return newSystemErrorWithCause(err, "applying cgroup configuration for process")
 	}
+
+	// sysbox-runc: set the cgroup resources before creating a child cgroup for
+	// the system container's cgroup root. This way the child cgroup will inherit
+	// the cgroup resources. Also, do this before the prestart hook so that the
+	// prestart hook may apply cgroup permissions.
+	if err := p.manager.Set(p.config.Config); err != nil {
+		return newSystemErrorWithCause(err, "setting cgroup config for ready process")
+	}
+
+	// sysbox-runc: create a child cgroup that will serve as the system container's
+	// cgroup root.
+	if err := p.manager.CreateChildCgroup(p.config.Config); err != nil {
+		return newSystemErrorWithCause(err, "creating system container child cgroup")
+	}
+
 	if p.intelRdtManager != nil {
 		if err := p.intelRdtManager.Apply(p.pid()); err != nil {
 			return newSystemErrorWithCause(err, "applying Intel RDT configuration for process")
@@ -360,6 +375,17 @@ func (p *initProcess) start() (retErr error) {
 		return newSystemErrorWithCausef(err, "getting pipe fds for pid %d", childPid)
 	}
 	p.setExternalDescriptors(fds)
+
+	// sysbox-runc: place the system container's init process in the child cgroup. Do
+	// this before syncing with child so that no children can escape the cgroup
+	if err := p.manager.ApplyChildCgroup(childPid); err != nil {
+		return newSystemErrorWithCause(err, "applying cgroup configuration for process")
+	}
+	if p.intelRdtManager != nil {
+		if err := p.intelRdtManager.Apply(childPid); err != nil {
+			return newSystemErrorWithCause(err, "applying Intel RDT configuration for process")
+		}
+	}
 
 	// Now it's time to setup cgroup namesapce
 	if p.config.Config.Namespaces.Contains(configs.NEWCGROUP) && p.config.Config.Namespaces.PathOf(configs.NEWCGROUP) == "" {
@@ -397,10 +423,6 @@ func (p *initProcess) start() (retErr error) {
 			}
 			// call prestart and CreateRuntime hooks
 			if !p.config.Config.Namespaces.Contains(configs.NEWNS) {
-				// Setup cgroup before the hook, so that the prestart and CreateRuntime hook could apply cgroup permissions.
-				if err := p.manager.Set(p.config.Config); err != nil {
-					return newSystemErrorWithCause(err, "setting cgroup config for ready process")
-				}
 				if p.intelRdtManager != nil {
 					if err := p.intelRdtManager.Set(p.config.Config); err != nil {
 						return newSystemErrorWithCause(err, "setting Intel RDT config for ready process")
@@ -453,10 +475,6 @@ func (p *initProcess) start() (retErr error) {
 			}
 			sentRun = true
 		case procHooks:
-			// Setup cgroup before prestart hook, so that the prestart hook could apply cgroup permissions.
-			if err := p.manager.Set(p.config.Config); err != nil {
-				return newSystemErrorWithCause(err, "setting cgroup config for procHooks process")
-			}
 			if p.intelRdtManager != nil {
 				if err := p.intelRdtManager.Set(p.config.Config); err != nil {
 					return newSystemErrorWithCause(err, "setting Intel RDT config for procHooks process")

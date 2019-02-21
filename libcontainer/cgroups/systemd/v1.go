@@ -4,6 +4,7 @@ package systemd
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -449,4 +450,19 @@ func (m *legacyManager) GetFreezerState() (configs.FreezerState, error) {
 
 func (m *legacyManager) Exists() bool {
 	return cgroups.PathExists(m.Path("devices"))
+}
+
+func (m *legacyManager) CreateChildCgroup(container *configs.Config) error {
+	// sysbox-runc: implement this function
+	return fmt.Errorf("Systemd not supported")
+}
+
+func (m *legacyManager) ApplyChildCgroup(pid int) error {
+	// sysbox-runc: implement this function
+	return fmt.Errorf("Systemd not supported")
+}
+
+func (m *legacyManager) GetChildCgroupPaths() map[string]string {
+	// sysbox-runc: implement this function
+	return nil
 }
