@@ -522,6 +522,21 @@ func (m *Manager) Set(container *configs.Config) error {
 	return nil
 }
 
+func (m *Manager) CreateChildCgroup(container *configs.Config) error {
+	// TODO: implement this function
+	return fmt.Errorf("Systemd not supported")
+}
+
+func (m *Manager) ApplyChildCgroup(pid int) error {
+	// TODO: implement this function
+	return fmt.Errorf("Systemd not supported")
+}
+
+func (m *Manager) GetChildCgroupPaths() map[string]string {
+	return nil
+}
+
+
 func getUnitName(c *configs.Cgroup) string {
 	// by default, we create a scope unless the user explicitly asks for a slice.
 	if !strings.HasSuffix(c.Name, ".slice") {

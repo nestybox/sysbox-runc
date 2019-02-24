@@ -24,7 +24,7 @@ type Manager interface {
 	// Toggles the freezer cgroup according with specified state
 	Freeze(state configs.FreezerState) error
 
-	// Destroys the cgroup set
+	// Destroys the cgroup set & all sub-cgroups
 	Destroy() error
 
 	// The option func SystemdCgroups() and Cgroupfs() require following attributes:
@@ -39,6 +39,15 @@ type Manager interface {
 
 	// Sets the cgroup as configured.
 	Set(container *configs.Config) error
+
+	// sysvisor-runc: creates a child cgroup for the system container's cgroup root
+	CreateChildCgroup(container *configs.Config) error
+
+	// sysvisor-runc: applies child cgroup configuration to the process with the specified pid
+	ApplyChildCgroup(pid int) error
+
+	// sysvisor-runc: same as GetPaths(), but returns child cgroup paths
+	GetChildCgroupPaths() map[string]string
 }
 
 type NotFoundError struct {
