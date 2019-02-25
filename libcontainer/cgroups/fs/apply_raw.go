@@ -256,7 +256,7 @@ func (m *Manager) ApplyChildCgroup(pid int) (err error) {
 		return fmt.Errorf("can't place process in child cgroup because child cgroup has not been created")
 	}
 
-	//var c = m.Cgroups
+	var c = m.Cgroups
 
 	d, err := getCgroupData(m.Cgroups, pid)
 	if err != nil {
@@ -265,34 +265,20 @@ func (m *Manager) ApplyChildCgroup(pid int) (err error) {
 
 	d.innerPath = filepath.Join(d.innerPath, syscontCgroupRoot)
 
-	// TODO: understand and fix this code block for sysvisor-runc
-	// m.Paths = make(map[string]string)
-	// if c.Paths != nil {
-	// 	for name, path := range c.Paths {
-	// 		_, err := d.path(name)
-	// 		if err != nil {
-	// 			if cgroups.IsNotFound(err) {
-	// 				continue
-	// 			}
-	// 			return err
-	// 		}
-	// 		m.Paths[name] = path
-	// 	}
-	// 	return cgroups.EnterPid(m.Paths, pid)
-	// }
+	// The following code executes on container restore (i.e., after checkpoint); it places
+	// the pid in the cgroup paths obtained from the container's state file.
+	if c.Paths != nil {
+		var childCgroupPaths map[string]string
+		for name, path := range c.Paths {
+			childCgroupPaths[name] = filepath.Join(path, syscontCgroupRoot)
+		}
+		return cgroups.EnterPid(childCgroupPaths, pid)
+	}
 
+	// The following code executes on container start (i.e., not restore); it creates
+	// cgroups as needed and places the container's init process in them.
 	for _, sys := range subsystems {
 		if err := sys.Apply(d); err != nil {
-			// TODO: understand and fix this code block for sysvisor-runc
-			//
-			// In the case of rootless (including euid=0 in userns), where an explicit cgroup path hasn't
-			// been set, we don't bail on error in case of permission problems.
-			// Cases where limits have been set (and we couldn't create our own
-			// cgroup) are handled by Set.
-			if isIgnorableError(m.Rootless, err) && m.Cgroups.Path == "" {
-				delete(m.Paths, sys.Name())
-				continue
-			}
 			return err
 		}
 
@@ -402,12 +388,14 @@ func (m *Manager) Freeze(state configs.FreezerState) error {
 
 func (m *Manager) GetPids() ([]int, error) {
 	// sysvisor-runc: return the pids starting from the system container root
+   // (all sys container pids start at this level)
 	paths := m.GetChildCgroupPaths()
 	return cgroups.GetPids(paths["devices"])
 }
 
 func (m *Manager) GetAllPids() ([]int, error) {
 	// sysvisor-runc: return the pids starting from the system container root
+   // (all sys container pids start at this level)
 	paths := m.GetChildCgroupPaths()
 	return cgroups.GetAllPids(paths["devices"])
 }
