@@ -136,7 +136,7 @@ func loadSpec(cPath string) (spec *specs.Spec, err error) {
 
 	err = libsyscontainer.ConvertSpec(spec, false)
 	if err != nil {
-		return nil, fmt.Errorf("error converting container spec to system container spec: %v", err)
+		return nil, fmt.Errorf("error in system container spec: %v", err)
 	}
 
 	return spec, validateProcessSpec(spec.Process)

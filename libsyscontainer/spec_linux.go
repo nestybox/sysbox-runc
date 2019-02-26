@@ -91,123 +91,140 @@ var sysvisorfsMounts = []specs.Mount{
 	},
 }
 
-// cfgNamespaces adds any missing Linux namespace to the system container config
-func cfgNamespaces(spec *specs.Spec) {
-	nsTypes := []specs.LinuxNamespaceType{"user", "pid", "ipc", "uts", "mount", "network", "cgroup"}
+var linuxCaps = []string{
+	"CAP_CHOWN",
+	"CAP_DAC_OVERRIDE",
+	"CAP_FSETID",
+	"CAP_FOWNER",
+	"CAP_MKNOD",
+	"CAP_NET_RAW",
+	"CAP_SETGID",
+	"CAP_SETUID",
+	"CAP_SETFCAP",
+	"CAP_SETPCAP",
+	"CAP_NET_BIND_SERVICE",
+	"CAP_SYS_CHROOT",
+	"CAP_KILL",
+	"CAP_AUDIT_WRITE",
+	"CAP_DAC_READ_SEARCH",
+	"CAP_LINUX_IMMUTABLE",
+	"CAP_NET_BROADCAST",
+	"CAP_NET_ADMIN",
+	"CAP_IPC_LOCK",
+	"CAP_IPC_OWNER",
+	"CAP_SYS_MODULE",
+	"CAP_SYS_RAWIO",
+	"CAP_SYS_PTRACE",
+	"CAP_SYS_PACCT",
+	"CAP_SYS_ADMIN",
+	"CAP_SYS_BOOT",
+	"CAP_SYS_NICE",
+	"CAP_SYS_RESOURCE",
+	"CAP_SYS_TIME",
+	"CAP_SYS_TTY_CONFIG",
+	"CAP_LEASE",
+	"CAP_AUDIT_CONTROL",
+	"CAP_MAC_OVERRIDE",
+	"CAP_MAC_ADMIN",
+	"CAP_SYSLOG",
+	"CAP_WAKE_ALARM",
+	"CAP_BLOCK_SUSPEND",
+	"CAP_AUDIT_READ",
+}
 
-	for _, nsType := range nsTypes {
+// idRangeMin represents the minimum uid/gid range required by a sys container instance
+var idRangeMin uint32 = 65536
+
+// cfgNamespaces checks that the namespace config is valid and adds any missing Linux
+// namespaces to the system container config
+func cfgNamespaces(spec *specs.Spec) error {
+
+	reqNs := []specs.LinuxNamespaceType{"user", "pid", "ipc", "uts", "mount", "network"}
+
+	// Ensure that the config has all the required namespaces
+	for _, ns := range reqNs {
 		found := false
-		for _, ns := range spec.Linux.Namespaces {
-			if ns.Type == nsType {
+		for _, cfgNs := range spec.Linux.Namespaces {
+			if cfgNs.Type == ns {
 				found = true
 			}
 		}
 		if !found {
-			newns := specs.LinuxNamespace{
-				Type: nsType,
-				Path: "",
-			}
-			spec.Linux.Namespaces = append(spec.Linux.Namespaces, newns)
+			return fmt.Errorf("container spec missing the %s namespace", ns)
 		}
 	}
+
+	// Add any missing namespaces (currently the cgroup namespace only)
+	found := false
+	for _, cfgNs := range spec.Linux.Namespaces {
+		if cfgNs.Type == "cgroup" {
+			found = true
+		}
+	}
+
+	if !found {
+		newns := specs.LinuxNamespace{
+			Type: "cgroup",
+			Path: "",
+		}
+		spec.Linux.Namespaces = append(spec.Linux.Namespaces, newns)
+	}
+
+	return nil
 }
 
-// cfgUidMappings sets up uid mappings in the system container config
-func cfgUidMappings(spec *specs.Spec) {
+// cfgIDMappings checks that the uid and gid configs are valid
+func cfgIDMappings(spec *specs.Spec) error {
 
-	// TODO: each sys container should get a unique uid range from sysvisor's subuid range
-	// For now we just use the entire sysvisor's subuid range for all sys containers (this
-	// is not secure as it does not isolate sys container users in case a process escapes
-	// the sys container).
-
-	// Remove any existing uid mappings
-	spec.Linux.UIDMappings = spec.Linux.UIDMappings[:0]
-
-	// Set the new uid mappings
-	uidMap := specs.LinuxIDMapping{
-		ContainerID: 0,  // root
-		HostID: 231072,  // fixme
-		Size: 65536,     // fixme
+	if len(spec.Linux.UIDMappings) == 0 {
+		return fmt.Errorf("container spec missing uid mappings")
 	}
-	spec.Linux.UIDMappings = append(spec.Linux.UIDMappings, uidMap)
-}
 
-// cfgGidMappings sets up gid mappings in the system container config
-func cfgGidMappings(spec *specs.Spec) {
-
-	// TODO: each sys container should get a unique gid range from sysvisor's subgid range
-	// For now we just use the entire sysvisor's subgid range for all sys containers (this
-	// is not secure as it does not isolate sys container users in case a process escapes
-	// the sys container).
-
-	// Remove any existing gid mappings
-	spec.Linux.GIDMappings = spec.Linux.GIDMappings[:0]
-
-	// Set the new gid mappings
-	gidMap := specs.LinuxIDMapping{
-		ContainerID: 0,  // root
-		HostID: 231072,  // fixme
-		Size: 65536,     // fixme
+	if len(spec.Linux.GIDMappings) == 0 {
+		return fmt.Errorf("container spec missing gid mappings")
 	}
-	spec.Linux.GIDMappings = append(spec.Linux.GIDMappings, gidMap)
+
+	// Verify the mapping is valid. Note that we don't disallow mappings that map to the host
+	// root UID (i.e., we honor the ID config). Some runc tests use such mappings.
+
+	validMapFound := false
+	for _, mapping := range spec.Linux.UIDMappings {
+		if mapping.ContainerID == 0 && mapping.Size >= idRangeMin {
+			validMapFound = true
+		}
+	}
+
+	if !validMapFound {
+		return fmt.Errorf("container spec uid mapping does not map %d uids starting at container uid 0", idRangeMin)
+	}
+
+	validMapFound = false
+	for _, mapping := range spec.Linux.GIDMappings {
+		if mapping.ContainerID == 0 && mapping.Size >= idRangeMin {
+			validMapFound = true
+		}
+	}
+
+	if !validMapFound {
+		return fmt.Errorf("container spec gid mapping does not map %d gids starting at container gid 0", idRangeMin)
+	}
+
+	return nil
 }
 
 // cfgCapabilities sets the capabilities for the root process in the system container
 func cfgCapabilities(spec *specs.Spec) {
 
 	// In a system container, root has all capabilities within the container's user
-	// namespace; but note that the kernel will only allow privileged access to namespaced
-	// resources and restrict access to non-namespaced resources.
+	// namespace; note however that the kernel will only allow privileged access to
+	// namespaced resources and restrict access to non-namespaced resources.
 	caps := spec.Process.Capabilities
-	setAllCaps(&caps.Bounding)
-	setAllCaps(&caps.Effective)
-	setAllCaps(&caps.Inheritable)
-	setAllCaps(&caps.Permitted)
-	setAllCaps(&caps.Ambient)
-}
 
-// setAllCaps sets all capabilities in the given capability set
-func setAllCaps(capSet *[]string) {
-	*capSet = []string{
-		"CAP_CHOWN",
-		"CAP_DAC_OVERRIDE",
-		"CAP_FSETID",
-		"CAP_FOWNER",
-		"CAP_MKNOD",
-		"CAP_NET_RAW",
-		"CAP_SETGID",
-		"CAP_SETUID",
-		"CAP_SETFCAP",
-		"CAP_SETPCAP",
-		"CAP_NET_BIND_SERVICE",
-		"CAP_SYS_CHROOT",
-		"CAP_KILL",
-		"CAP_AUDIT_WRITE",
-		"CAP_DAC_READ_SEARCH",
-		"CAP_LINUX_IMMUTABLE",
-		"CAP_NET_BROADCAST",
-		"CAP_NET_ADMIN",
-		"CAP_IPC_LOCK",
-		"CAP_IPC_OWNER",
-		"CAP_SYS_MODULE",
-		"CAP_SYS_RAWIO",
-		"CAP_SYS_PTRACE",
-		"CAP_SYS_PACCT",
-		"CAP_SYS_ADMIN",
-		"CAP_SYS_BOOT",
-		"CAP_SYS_NICE",
-		"CAP_SYS_RESOURCE",
-		"CAP_SYS_TIME",
-		"CAP_SYS_TTY_CONFIG",
-		"CAP_LEASE",
-		"CAP_AUDIT_CONTROL",
-		"CAP_MAC_OVERRIDE",
-		"CAP_MAC_ADMIN",
-		"CAP_SYSLOG",
-		"CAP_WAKE_ALARM",
-		"CAP_BLOCK_SUSPEND",
-		"CAP_AUDIT_READ",
-	}
+	caps.Bounding = linuxCaps;
+	caps.Effective = linuxCaps;
+	caps.Inheritable = linuxCaps;
+	caps.Permitted = linuxCaps;
+	caps.Ambient = linuxCaps;
 }
 
 // cfgMaskedPaths removes from the container's config any masked paths for which
@@ -265,13 +282,16 @@ func cfgSysvisorfsMounts(spec *specs.Spec) {
 // cfgCgroupPath configures the system container's cgroupPath.
 func cfgCgroupPath(spec *specs.Spec) (error) {
 
-	// System container specs require a cgroupsPath that contains the
-	// cgroup resources assigned to the system container.
+	// System container specs require a cgroupsPath
 	if spec.Linux.CgroupsPath == "" {
 		return fmt.Errorf("cgroupsPath not found in spec")
 	}
 
-	// Remove the read-only attribute from the cgroup mount
+	// Remove the read-only attribute from the cgroup mount; this is fine because the sys
+	// container's cgroup root will be in a child cgroup of the cgroup that controls the
+	// sys container's resources; thus, root processes inside the sys container will be
+	// able to allocate cgroup resources yet not modify the resources allocated to the sys
+	// container itself.
 	for i, mount := range spec.Mounts {
 		if mount.Type == "cgroup" {
 			for j := 0; j < len(mount.Options); j++ {
@@ -284,13 +304,6 @@ func cfgCgroupPath(spec *specs.Spec) (error) {
 		}
 	}
 
-	// Add a new sub-dir to the cgroupsPath; this sub-dir will be chowned to the sys
-	// container's root process and bind-mounted read-write to the system container's
-	// cgroupfs (i.e., /sys/fs/cgroup) when the sys container is initialized. This way, a
-	// root process in the system container can create sub cgroups, while unable to modify
-	// the cgroup resources assigned to the system container itself.
-	// spec.Linux.CgroupsPath = filepath.Join(spec.Linux.CgroupsPath, "syscont")
-
 	return nil
 }
 
@@ -302,18 +315,24 @@ func ConvertSpec(spec *specs.Spec, strict bool) (error) {
 	// config for sys containers. Log messages when performing conversions.
 	// If comparison should be strict, report errors on incompatible configs.
 
-	cfgNamespaces(spec)
-	cfgUidMappings(spec)
-	cfgGidMappings(spec)
+	if err := cfgNamespaces(spec); err != nil {
+		return fmt.Errorf("invalid namespace config: %v", err)
+	}
+
+	if err := cfgIDMappings(spec); err != nil {
+		return fmt.Errorf("invalid user/group ID config: %v", err)
+	}
+
 	cfgCapabilities(spec)
 	cfgMaskedPaths(spec)
 	cfgReadonlyPaths(spec)
 	cfgSysvisorfsMounts(spec)
 
-	err := cfgCgroupPath(spec)
-	if err != nil {
+	if err := cfgCgroupPath(spec); err != nil {
 		return fmt.Errorf("failed to configure cgroup mounts: %v", err)
 	}
+
+	// Verify rootfs has uid/gid ownership matching the uid/gid config
 
 	// Remove readonly root filesystem config (spec.Root.Readonly)
 
