@@ -48,7 +48,7 @@ checkpointed.`,
 		}
 		// XXX: Currently this is untested with rootless containers.
 		if os.Geteuid() != 0 || system.RunningInUserNS() {
-			logrus.Warn("sysvisor-runc checkpoint is untested with system containers")
+			logrus.Warn("runc checkpoint is untested with rootless containers")
 		}
 
 		container, err := getContainer(context)

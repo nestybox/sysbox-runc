@@ -98,7 +98,7 @@ using the sysvisor-runc checkpoint command.`,
 		}
 		// XXX: Currently this is untested with rootless containers.
 		if os.Geteuid() != 0 || system.RunningInUserNS() {
-			logrus.Warn("runc checkpoint is untested with rootless containers")
+			logrus.Warn("runc restore is untested with rootless containers")
 		}
 
 		spec, err := setupSpec(context)
