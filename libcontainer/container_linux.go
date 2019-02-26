@@ -1396,15 +1396,8 @@ func (c *linuxContainer) criuApplyCgroups(pid int, req *criurpc.CriuReq) error {
 	if err := c.cgroupManager.Apply(pid); err != nil {
 		return err
 	}
-	// sysvisor-runc: place the pid in the sys container's cgroup root. The prior call to
-	// Apply(pid) is necessary because Apply() populates the cgroup manager's internal
-	// state.
-	if err := c.cgroupManager.ApplyChildCgroup(pid); err != nil {
-		return err
-	}
-
 	if err := c.cgroupManager.Set(c.config); err != nil {
-		return newSystemError(err)
+	 	return newSystemError(err)
 	}
 
 	path := fmt.Sprintf("/proc/%d/cgroup", pid)
