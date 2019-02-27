@@ -43,13 +43,10 @@ bare-metal host.
 Unlike application containers which are used to package and deploy
 application micro-services, system containers package and deploy
 virtual Linux host images (inside of which application containers may
-be deployed).
+be deployed, e.g., using Docker or Kubernetes).
 
-sysvisor-runc is a fork of the Open Container Initiative (OCI) runc. As
-such, it runs system containers that are packaged according to the OCI
-format. However, sysvisor-runc overrides OCI configurations that are
-incompatible with the system container abstraction (i.e., sysvisor-runc
-is mostly but not fully OCI compliant).
+sysvisor-runc is a fork of the Open Container Initiative (OCI) runc
+that has been customized for system containers.
 
 sysvisor-runc is configured using OCI bundles (i.e., a directory that
 includes a specification file named "` + specConfig + `" and a root
@@ -82,7 +79,7 @@ func main() {
 	if shouldHonorXDGRuntimeDir() {
 		if runtimeDir := os.Getenv("XDG_RUNTIME_DIR"); runtimeDir != "" {
 			root = runtimeDir + "/sysvisor-runc"
-			// According to the XDG specification, we need to set anything in
+ 			// According to the XDG specification, we need to set anything in
 			// XDG_RUNTIME_DIR to have a sticky bit if we don't want it to get
 			// auto-pruned.
 			if err := os.MkdirAll(root, 0700); err != nil {
