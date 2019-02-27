@@ -10,13 +10,17 @@ import (
 // Example returns an example OCI spec file for a system container
 func Example(bundle string) (*specs.Spec, error) {
 
-	fi, err := os.Stat(bundle)
-	if err != nil {
-		return nil, err
-	}
+	var uid uint32 = uint32(os.Geteuid())
+	var gid uint32 = uint32(os.Getegid())
 
-	uid := fi.Sys().(*syscall.Stat_t).Uid
-	gid := fi.Sys().(*syscall.Stat_t).Gid
+	if bundle != "" {
+		fi, err := os.Stat(bundle)
+		if err != nil {
+			return nil, err
+		}
+		uid = fi.Sys().(*syscall.Stat_t).Uid
+		gid = fi.Sys().(*syscall.Stat_t).Gid
+	}
 
 	return &specs.Spec{
 		Version: specs.Version,
