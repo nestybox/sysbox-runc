@@ -132,8 +132,8 @@ var linuxCaps = []string{
 	"CAP_AUDIT_READ",
 }
 
-// idRangeMin represents the minimum uid/gid range required by a sys container instance
-var idRangeMin uint32 = 1
+// IdRangeMin represents the minimum uid/gid range required by a sys container instance
+var IdRangeMin uint32 = 65536
 
 // cfgNamespaces checks that the namespace config is valid and adds any missing Linux
 // namespaces to the system container config
@@ -189,22 +189,22 @@ func cfgIDMappings(spec *specs.Spec) error {
 
 	validMapFound := false
 	for _, mapping := range spec.Linux.UIDMappings {
-		if mapping.ContainerID == 0 && mapping.Size >= idRangeMin {
+		if mapping.ContainerID == 0 && mapping.Size >= IdRangeMin {
 			validMapFound = true
 		}
 	}
 	if !validMapFound {
-		return fmt.Errorf("container spec uid mapping does not map %d uids starting at container uid 0", idRangeMin)
+		return fmt.Errorf("container spec uid mapping does not map %d uids starting at container uid 0", IdRangeMin)
 	}
 
 	validMapFound = false
 	for _, mapping := range spec.Linux.GIDMappings {
-		if mapping.ContainerID == 0 && mapping.Size >= idRangeMin {
+		if mapping.ContainerID == 0 && mapping.Size >= IdRangeMin {
 			validMapFound = true
 		}
 	}
 	if !validMapFound {
-		return fmt.Errorf("container spec gid mapping does not map %d gids starting at container gid 0", idRangeMin)
+		return fmt.Errorf("container spec gid mapping does not map %d gids starting at container gid 0", IdRangeMin)
 	}
 
 	return nil
@@ -320,7 +320,9 @@ func ConvertSpec(spec *specs.Spec, strict bool) error {
 	cfgCapabilities(spec)
 	cfgMaskedPaths(spec)
 	cfgReadonlyPaths(spec)
-	cfgSysboxfsMounts(spec)
+
+	// TODO: uncomment this once sysbox-fs comes into the picture
+	// cfgSysboxfsMounts(spec)
 
 	if err := cfgCgroups(spec); err != nil {
 		return fmt.Errorf("failed to configure cgroup mounts: %v", err)
