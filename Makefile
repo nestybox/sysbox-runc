@@ -61,11 +61,12 @@ man:
 runcimage:
 	docker build ${DOCKER_BUILD_PROXY} -t $(RUNC_IMAGE) .
 
+# Note: sysvisor-runc does not support rootles mode, so rootless integration tests are not invoked as part of test or localtest
 test:
-	make unittest integration rootlessintegration
+	make unittest integration
 
 localtest:
-	make localunittest localintegration localrootlessintegration
+	make localunittest localintegration
 
 unittest: runcimage
 	docker run ${DOCKER_RUN_PROXY} -t --privileged --rm -v /lib/modules:/lib/modules:ro -v $(CURDIR):/go/src/$(PROJECT) $(RUNC_IMAGE) make localunittest TESTFLAGS=${TESTFLAGS}
@@ -73,8 +74,9 @@ unittest: runcimage
 localunittest: all
 	$(GO) test -timeout 3m -tags "$(BUILDTAGS)" ${TESTFLAGS} -v $(allpackages)
 
+# TODO: remove the volume mount for /var/lib/sysvisorfs once sysvisorfs is present in the sysvisor repo; instead, modify the docker image to install sysvisorfs within the container.
 integration: runcimage
-	docker run ${DOCKER_RUN_PROXY} -t --privileged --rm -v /lib/modules:/lib/modules:ro -v $(CURDIR):/go/src/$(PROJECT) $(RUNC_IMAGE) make localintegration TESTPATH=${TESTPATH}
+	docker run ${DOCKER_RUN_PROXY} -t --privileged --rm -v /lib/modules:/lib/modules:ro -v $(CURDIR):/go/src/$(PROJECT) -v /var/lib/sysvisorfs:/var/lib/sysvisorfs $(RUNC_IMAGE) make localintegration TESTPATH=${TESTPATH}
 
 localintegration: all
 	bats -t tests/integration${TESTPATH}
