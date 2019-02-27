@@ -61,9 +61,12 @@ man:
 runcimage:
 	$(CONTAINER_ENGINE) build $(CONTAINER_ENGINE_BUILD_FLAGS) -t $(RUNC_IMAGE) .
 
-test: unittest integration rootlessintegration
+# Note: sysbox-runc does not support rootles mode, so rootless integration tests are not invoked as part of test or localtest
+test:
+	make unittest integration
 
-localtest: localunittest localintegration localrootlessintegration
+localtest:
+	make localunittest localintegration
 
 unittest: runcimage
 	$(CONTAINER_ENGINE) run $(CONTAINER_ENGINE_RUN_FLAGS) \
