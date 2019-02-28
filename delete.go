@@ -29,7 +29,7 @@ func killContainer(container libcontainer.Container) error {
 
 var deleteCommand = cli.Command{
 	Name:  "delete",
-	Usage: "delete any resources held by the container often used with detached container",
+	Usage: "delete any resources held by the container; often used with detached container",
 	ArgsUsage: `<container-id>
 
 Where "<container-id>" is the name for the instance of the container.

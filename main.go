@@ -36,14 +36,13 @@ const (
 
 sysvisor-runc is a command line client for running system containers.
 
-A system container is a Linux container whose main purpose is to
-provide a secure and isolated Linux run-time environment resembling a
-bare-metal host.
+A system container is a container whose main purpose is to package and
+deploy a full operating system environment (e.g., init process, system
+daemons, libraries, utilities, etc.)
 
-Unlike application containers which are used to package and deploy
-application micro-services, system containers package and deploy
-virtual Linux host images (inside of which application containers may
-be deployed, e.g., using Docker or Kubernetes).
+A system container provides enviroment inside of which application
+containers can be deployed (e.g., by running Docker and Kubernetes
+inside the system container).
 
 sysvisor-runc is a fork of the Open Container Initiative (OCI) runc
 that has been customized for system containers.
@@ -51,6 +50,15 @@ that has been customized for system containers.
 sysvisor-runc is configured using OCI bundles (i.e., a directory that
 includes a specification file named "` + specConfig + `" and a root
 filesystem containing the contents of the system container).
+
+System containers must be isolated from the host and from each other.
+sysvisor-runc achieves this by using several Linux isolation
+technologies (e.g., all Linux namespaces, cgroups, seccomp, etc.) as
+well as by restricting the set of configurations for a system
+container (i.e., the system container OCI bundle must meet certain
+requirements). sysvisor-runc will check that the config meets these
+requirements when creating a system container; the "sysvisor-runc spec"
+command can be used to generate a baseline system container configuration.
 
 To start a new instance of a system container:
 
