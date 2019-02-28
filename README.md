@@ -66,7 +66,7 @@ You can run a specific test case by setting the `TESTFLAGS` variable.
 You can run a specific integration test by setting the `TESTPATH` variable.
 
 ```bash
-# make test TESTPATH="/checkpoint.bats"
+# make integration TESTPATH="/checkpoint.bats"
 ```
 
 You can run a test in your proxy environment by setting `DOCKER_BUILD_PROXY` and `DOCKER_RUN_PROXY` variables.
