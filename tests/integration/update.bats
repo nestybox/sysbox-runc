@@ -34,11 +34,16 @@ function setup() {
     },
     "pids": {
         "limit": 20
-    },
+    }
 EOF
     )
     DATA=$(echo ${DATA} | sed 's/\n/\\n/g')
-    sed -i "s/\(\"resources\": {\)/\1\n${DATA}/" ${BUSYBOX_BUNDLE}/config.json
+
+    if grep -q "\"resources\"" ${BUSYBOX_BUNDLE}/config.json; then
+        sed -i "s/\(\"resources\": {\)/\1\n${DATA},/" ${BUSYBOX_BUNDLE}/config.json
+    else
+        sed -i "s/\(\"linux\": {\)/\1\n\"resources\": {${DATA}},/" ${BUSYBOX_BUNDLE}/config.json
+    fi
 }
 
 function check_cgroup_value() {
@@ -70,6 +75,12 @@ function check_cgroup_value() {
     CGROUP_SYSTEM_MEMORY=$(grep "cgroup"  /proc/self/mountinfo | gawk 'toupper($NF) ~ /\<'MEMORY'\>/ { print $5; exit }')
 
     # check that initial values were properly set
+
+    # XXX: DEBUG
+    cat $BUSYBOX_BUNDLE/config.json
+    echo $CGROUP_BLKIO
+    cat $CGROUP_BLKIO/blkio.weight
+
     check_cgroup_value $CGROUP_BLKIO "blkio.weight" 1000
     check_cgroup_value $CGROUP_CPU "cpu.cfs_period_us" 1000000
     check_cgroup_value $CGROUP_CPU "cpu.cfs_quota_us" 500000
@@ -101,13 +112,18 @@ function check_cgroup_value() {
     [ "$status" -eq 0 ]
     check_cgroup_value $CGROUP_CPU "cpu.shares" 200
 
+    # sysvisor-runc: it's not possible to update the cpuset while a system container
+    # is running, because Linux will not allow a cpuset of a cgroup to be
+    # set when that cgroup has child cgroups; recall that sysvisor-runc sets up a
+    # child cgroup for the system containers cgroup root.
+    #
     # update cpuset if supported (i.e. we're running on a multicore cpu)
-    cpu_count=$(grep '^processor' /proc/cpuinfo | wc -l)
-    if [ $cpu_count -gt 1 ]; then
-        runc update test_update --cpuset-cpus "1"
-        [ "$status" -eq 0 ]
-        check_cgroup_value $CGROUP_CPUSET "cpuset.cpus" 1
-    fi
+    # cpu_count=$(grep '^processor' /proc/cpuinfo | wc -l)
+    # if [ $cpu_count -gt 1 ]; then
+    #     runc update test_update --cpuset-cpus "1"
+    #     [ "$status" -eq 0 ]
+    #     check_cgroup_value $CGROUP_CPUSET "cpuset.cpus" 1
+    # fi
 
     # update memory limit
     runc update test_update --memory 67108864

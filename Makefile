@@ -74,9 +74,8 @@ unittest: runcimage
 localunittest: all
 	$(GO) test -timeout 3m -tags "$(BUILDTAGS)" ${TESTFLAGS} -v $(allpackages)
 
-# TODO: remove the volume mount for /var/lib/sysvisorfs once sysvisorfs is present in the sysvisor repo; instead, modify the docker image to install sysvisorfs within the container.
 integration: runcimage
-	docker run ${DOCKER_RUN_PROXY} -t --privileged --rm -v /lib/modules:/lib/modules:ro -v $(CURDIR):/go/src/$(PROJECT) -v /var/lib/sysvisorfs:/var/lib/sysvisorfs $(RUNC_IMAGE) make localintegration TESTPATH=${TESTPATH}
+	docker run ${DOCKER_RUN_PROXY} -t --privileged --rm -v /lib/modules:/lib/modules:ro -v $(CURDIR):/go/src/$(PROJECT) $(RUNC_IMAGE) make localintegration TESTPATH=${TESTPATH}
 
 localintegration: all
 	bats -t tests/integration${TESTPATH}

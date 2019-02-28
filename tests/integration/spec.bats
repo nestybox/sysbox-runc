@@ -11,6 +11,10 @@ function setup() {
   run mkdir "$HELLO_BUNDLE"
   run mkdir "$HELLO_BUNDLE"/rootfs
   run tar -C "$HELLO_BUNDLE"/rootfs -xf "$HELLO_IMAGE"
+
+  # sysvisor-runc: bundle must have same uid/gid as that passed to
+  # "runc spec" (see runc_spec())
+  chown -R "$UID_MAP":"$GID_MAP" "$HELLO_BUNDLE"
 }
 
 function teardown() {
@@ -87,7 +91,7 @@ function teardown() {
   GOPATH="$GOPATH" go build src/runtime-spec/schema/validate.go
   [ -e ./validate ]
 
-  runc spec
+  runc spec "$UID_MAP" "$GID_MAP" "$ID_MAP_SIZE"
   [ -e config.json ]
 
   run ./validate src/runtime-spec/schema/config-schema.json config.json

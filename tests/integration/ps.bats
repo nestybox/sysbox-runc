@@ -25,7 +25,7 @@ function teardown() {
   runc ps test_busybox
   [ "$status" -eq 0 ]
   [[ ${lines[0]} =~ UID\ +PID\ +PPID\ +C\ +STIME\ +TTY\ +TIME\ +CMD+ ]]
-  [[ "${lines[1]}" == *"$(id -un 2>/dev/null)"*[0-9]* ]]
+  [[ "${lines[1]}" == *"$UID_MAP"*[0-9]* ]]
 }
 
 @test "ps -f json" {
@@ -44,7 +44,7 @@ function teardown() {
   [[ ${lines[0]} =~ [0-9]+ ]]
 }
 
-@test "ps -e -x" {
+@test "ps -e" {
   # ps is not supported, it requires cgroups
   requires root
 
@@ -55,8 +55,10 @@ function teardown() {
   # check state
   testcontainer test_busybox running
 
-  runc ps test_busybox -e -x
+  # sysvisor-runc: -e -x yields 0 processes because sys container uid
+  # is not the same as the uid of the process executing ps.
+  runc ps test_busybox -e
   [ "$status" -eq 0 ]
-  [[ ${lines[0]} =~ \ +PID\ +TTY\ +STAT\ +TIME\ +COMMAND+ ]]
+  [[ ${lines[0]} =~ \ +PID\ +TTY\ +TIME\ +CMD+ ]]
   [[ "${lines[1]}" =~ [0-9]+ ]]
 }
