@@ -98,3 +98,17 @@ function teardown() {
   [ "$status" -eq 0 ]
   [[ "${lines[0]}" == *"The document is valid"* ]]
 }
+
+@test "spec read-only path filtering" {
+  skip "not written yet"
+  # configure sys cont spec with read-only paths on files handled by sysvisor-fs
+  # launch the sys container
+  # verify that read-only paths in config are ignored
+}
+
+@test "spec masked path filtering" {
+  skip "not written yet"
+  # configure sys cont spec with masked paths on files handled by sysvisor-fs
+  # launch the sys container
+  # verify that masked paths in config are ignored
+}
