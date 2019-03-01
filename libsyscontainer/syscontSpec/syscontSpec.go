@@ -154,7 +154,7 @@ func cfgNamespaces(spec *specs.Spec) error {
 		}
 	}
 
-	// Add any missing namespaces (currently the cgroup namespace only)
+	// Add remaining namespaces (currently the cgroup namespace only)
 	found := false
 	for _, cfgNs := range spec.Linux.Namespaces {
 		if cfgNs.Type == specs.CgroupNamespace {
@@ -210,19 +210,20 @@ func cfgIDMappings(spec *specs.Spec) error {
 	return nil
 }
 
-// cfgCapabilities sets the capabilities for the root process in the system container
+// cfgCapabilities sets the capabilities for the process in the system container
 func cfgCapabilities(spec *specs.Spec) {
 
-	// In a system container, root has all capabilities within the container's user
-	// namespace; note however that the kernel will only allow privileged access to
-	// namespaced resources and restrict access to non-namespaced resources.
 	caps := spec.Process.Capabilities
+	uid := spec.Process.User.UID
 
-	caps.Bounding = linuxCaps
-	caps.Effective = linuxCaps
-	caps.Inheritable = linuxCaps
-	caps.Permitted = linuxCaps
-	caps.Ambient = linuxCaps
+	// In a sys container, the root process has all capabilities
+	if uid == 0 {
+		caps.Bounding = linuxCaps
+		caps.Effective = linuxCaps
+		caps.Inheritable = linuxCaps
+		caps.Permitted = linuxCaps
+		caps.Ambient = linuxCaps
+	}
 }
 
 // cfgMaskedPaths removes from the container's config any masked paths for which
@@ -281,11 +282,10 @@ func cfgSysboxfsMounts(spec *specs.Spec) {
 func cfgCgroups(spec *specs.Spec) error {
 
 	// Remove the read-only attribute from the cgroup mount; this is fine because the sys
-	// container's cgroup root will be in a child cgroup of the cgroup that controls the
+	// container's cgroup root will be a child of the cgroup that controls the
 	// sys container's resources; thus, root processes inside the sys container will be
 	// able to allocate cgroup resources yet not modify the resources allocated to the sys
 	// container itself.
-
 	for i, mount := range spec.Mounts {
 		if mount.Type == "cgroup" {
 			for j := 0; j < len(mount.Options); j++ {

@@ -15,7 +15,10 @@ func Example(uid, gid, idRange uint32, bundle string) (*specs.Spec, error) {
 		Hostname: "syscont",
 		Process: &specs.Process{
 			Terminal: true,
-			User:     specs.User{},
+			User: specs.User{
+				UID: 0,
+				GID: 0,
+			},
 			Args: []string{
 				"sh",
 			},

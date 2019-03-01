@@ -395,6 +395,13 @@ func validateProcessSpec(spec *specs.Process) error {
 	if spec.SelinuxLabel != "" && !selinux.GetEnabled() {
 		return errors.New("selinux label is specified in config, but selinux is disabled or not supported")
 	}
+
+	// If the spec does not contain a capabilities object, create one
+	// so that it can be manipulated later on
+	if spec.Capabilities == nil {
+		spec.Capabilities = new(specs.LinuxCapabilities)
+	}
+
 	return nil
 }
 

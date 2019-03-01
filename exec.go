@@ -11,6 +11,8 @@ import (
 
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/utils"
+	"github.com/opencontainers/runc/libsyscontainer/syscontSpec"
+
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"
 )
@@ -199,6 +201,7 @@ func getProcess(context *cli.Context, bundle string) (*specs.Process, error) {
 			p.Capabilities.Ambient = append(p.Capabilities.Ambient, c)
 		}
 	}
+
 	// append the passed env variables
 	p.Env = append(p.Env, context.StringSlice("env")...)
 
@@ -232,5 +235,11 @@ func getProcess(context *cli.Context, bundle string) (*specs.Process, error) {
 		}
 		p.User.AdditionalGids = append(p.User.AdditionalGids, uint32(gid))
 	}
+
+	// convert sys cont spec (after uid and cap override above)
+	if err := syscontSpec.ConvertSpec(spec, false); err != nil {
+		return nil, fmt.Errorf("error in system container spec: %v", err)
+	}
+
 	return p, validateProcessSpec(p)
 }

@@ -140,7 +140,6 @@ func getArgs(context *cli.Context, uid, gid, size *uint32) error {
 }
 
 // loadSpec loads the specification from the provided path
-// and converts it to a system container spec.
 func loadSpec(cPath string) (spec *specs.Spec, err error) {
 	cf, err := os.Open(cPath)
 	if err != nil {
@@ -153,11 +152,6 @@ func loadSpec(cPath string) (spec *specs.Spec, err error) {
 
 	if err = json.NewDecoder(cf).Decode(&spec); err != nil {
 		return nil, err
-	}
-
-	err = syscontSpec.ConvertSpec(spec, false)
-	if err != nil {
-		return nil, fmt.Errorf("error in system container spec: %v", err)
 	}
 
 	return spec, validateProcessSpec(spec.Process)
