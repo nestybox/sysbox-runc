@@ -99,6 +99,11 @@ function teardown() {
   [[ "${lines[0]}" == *"The document is valid"* ]]
 }
 
+@test "spec process validator" {
+  skip "not written yet"
+  # verify process uid=gid=0
+}
+
 @test "spec read-only path filtering" {
   skip "not written yet"
   # configure sys cont spec with read-only paths on files handled by sysvisor-fs

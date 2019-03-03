@@ -212,19 +212,20 @@ func cfgIDMappings(spec *specs.Spec) error {
 	return nil
 }
 
-// cfgCapabilities sets the capabilities for the root process in the system container
+// cfgCapabilities sets the capabilities for the process in the system container
 func cfgCapabilities(spec *specs.Spec) {
 
-	// In a system container, root has all capabilities within the container's user
-	// namespace; note however that the kernel will only allow privileged access to
-	// namespaced resources and restrict access to non-namespaced resources.
 	caps := spec.Process.Capabilities
+	uid := spec.Process.User.UID
 
-	caps.Bounding = linuxCaps;
-	caps.Effective = linuxCaps;
-	caps.Inheritable = linuxCaps;
-	caps.Permitted = linuxCaps;
-	caps.Ambient = linuxCaps;
+	// In a sys container, the root process has all capabilities
+	if uid == 0 {
+		caps.Bounding = linuxCaps;
+		caps.Effective = linuxCaps;
+		caps.Inheritable = linuxCaps;
+		caps.Permitted = linuxCaps;
+		caps.Ambient = linuxCaps;
+	}
 }
 
 // cfgMaskedPaths removes from the container's config any masked paths for which
