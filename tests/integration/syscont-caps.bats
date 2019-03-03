@@ -11,8 +11,6 @@ function teardown() {
   teardown_busybox
 }
 
-# TODO: re-work these tests
-
 # A sys container root process has full caps (regardless of the container spec)
 @test "syscont: root process caps" {
 
