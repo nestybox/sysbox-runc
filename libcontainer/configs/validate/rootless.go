@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"nestybox/sysvisor-runc/libcontainer/configs"
+	"github.com/opencontainers/runc/libcontainer/configs"
 )
 
 // rootlessEUID makes sure that the config can be applied when runc

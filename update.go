@@ -9,8 +9,8 @@ import (
 	"strconv"
 
 	"github.com/docker/go-units"
-	"nestybox/sysvisor-runc/libcontainer/configs"
-	"nestybox/sysvisor-runc/libcontainer/intelrdt"
+	"github.com/opencontainers/runc/libcontainer/configs"
+	"github.com/opencontainers/runc/libcontainer/intelrdt"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"
 )

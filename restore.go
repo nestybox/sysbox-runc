@@ -5,8 +5,8 @@ package main
 import (
 	"os"
 
-	"nestybox/sysvisor-runc/libcontainer"
-	"nestybox/sysvisor-runc/libcontainer/system"
+	"github.com/opencontainers/runc/libcontainer"
+	"github.com/opencontainers/runc/libcontainer/system"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )

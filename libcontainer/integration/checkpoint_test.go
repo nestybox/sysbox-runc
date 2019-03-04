@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"nestybox/sysvisor-runc/libcontainer"
-	"nestybox/sysvisor-runc/libcontainer/configs"
+	"github.com/opencontainers/runc/libcontainer"
+	"github.com/opencontainers/runc/libcontainer/configs"
 
 	"golang.org/x/sys/unix"
 )

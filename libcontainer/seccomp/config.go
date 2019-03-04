@@ -3,7 +3,7 @@ package seccomp
 import (
 	"fmt"
 
-	"nestybox/sysvisor-runc/libcontainer/configs"
+	"github.com/opencontainers/runc/libcontainer/configs"
 )
 
 var operators = map[string]configs.Operator{

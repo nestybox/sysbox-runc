@@ -9,13 +9,13 @@ import (
 	"sync"
 	"time"
 
-	// "nestybox/sysvisor-runc/libcontainer"
-	// "nestybox/sysvisor-runc/libcontainer/cgroups"
-	// "nestybox/sysvisor-runc/libcontainer/intelrdt"
+	// "github.com/opencontainers/runc/libcontainer"
+	// "github.com/opencontainers/runc/libcontainer/cgroups"
+	// "github.com/opencontainers/runc/libcontainer/intelrdt"
 
-	"nestybox/sysvisor-runc/libcontainer"
-	"nestybox/sysvisor-runc/libcontainer/cgroups"
-	"nestybox/sysvisor-runc/libcontainer/intelrdt"
+	"github.com/opencontainers/runc/libcontainer"
+	"github.com/opencontainers/runc/libcontainer/cgroups"
+	"github.com/opencontainers/runc/libcontainer/intelrdt"
 
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"

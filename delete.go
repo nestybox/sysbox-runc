@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"nestybox/sysvisor-runc/libcontainer"
+	"github.com/opencontainers/runc/libcontainer"
 	"github.com/urfave/cli"
 
 	"golang.org/x/sys/unix"

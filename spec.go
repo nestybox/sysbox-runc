@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"syscall"
 
-	"nestybox/sysvisor-runc/libcontainer/configs"
-	"nestybox/sysvisor-runc/libsyscontainer/syscontSpec"
+	"github.com/opencontainers/runc/libcontainer/configs"
+	"github.com/opencontainers/runc/libsyscontainer/syscontSpec"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"

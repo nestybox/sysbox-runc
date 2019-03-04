@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"nestybox/sysvisor-runc/libsyscontainer/syscontSpec"
+	"github.com/opencontainers/runc/libsyscontainer/syscontSpec"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
 

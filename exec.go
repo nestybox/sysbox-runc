@@ -9,10 +9,10 @@ import (
 	"strconv"
 	"strings"
 
-	"nestybox/sysvisor-runc/libcontainer"
-	"nestybox/sysvisor-runc/libcontainer/utils"
+	"github.com/opencontainers/runc/libcontainer"
+	"github.com/opencontainers/runc/libcontainer/utils"
 
-	"nestybox/sysvisor-runc/libsyscontainer/syscontSpec"
+	"github.com/opencontainers/runc/libsyscontainer/syscontSpec"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"

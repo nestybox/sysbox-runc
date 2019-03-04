@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"os"
 
-	"nestybox/sysvisor-runc/libcontainer"
-	"nestybox/sysvisor-runc/libcontainer/utils"
+	"github.com/opencontainers/runc/libcontainer"
+	"github.com/opencontainers/runc/libcontainer/utils"
 	"github.com/urfave/cli"
 )
 

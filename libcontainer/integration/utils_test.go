@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"nestybox/sysvisor-runc/libcontainer"
-	"nestybox/sysvisor-runc/libcontainer/configs"
+	"github.com/opencontainers/runc/libcontainer"
+	"github.com/opencontainers/runc/libcontainer/configs"
 )
 
 func ptrInt(v int) *int {

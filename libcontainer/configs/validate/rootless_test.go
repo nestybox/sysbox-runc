@@ -3,7 +3,7 @@ package validate
 import (
 	"testing"
 
-	"nestybox/sysvisor-runc/libcontainer/configs"
+	"github.com/opencontainers/runc/libcontainer/configs"
 )
 
 func rootlessEUIDConfig() *configs.Config {

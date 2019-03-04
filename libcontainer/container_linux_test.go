@@ -8,10 +8,10 @@ import (
 	"os"
 	"testing"
 
-	"nestybox/sysvisor-runc/libcontainer/cgroups"
-	"nestybox/sysvisor-runc/libcontainer/configs"
-	"nestybox/sysvisor-runc/libcontainer/intelrdt"
-	"nestybox/sysvisor-runc/libcontainer/system"
+	"github.com/opencontainers/runc/libcontainer/cgroups"
+	"github.com/opencontainers/runc/libcontainer/configs"
+	"github.com/opencontainers/runc/libcontainer/intelrdt"
+	"github.com/opencontainers/runc/libcontainer/system"
 )
 
 type mockCgroupManager struct {

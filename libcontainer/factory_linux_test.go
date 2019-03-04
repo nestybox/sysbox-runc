@@ -9,9 +9,9 @@ import (
 	"reflect"
 	"testing"
 
-	"nestybox/sysvisor-runc/libcontainer/configs"
-	"nestybox/sysvisor-runc/libcontainer/mount"
-	"nestybox/sysvisor-runc/libcontainer/utils"
+	"github.com/opencontainers/runc/libcontainer/configs"
+	"github.com/opencontainers/runc/libcontainer/mount"
+	"github.com/opencontainers/runc/libcontainer/utils"
 	"github.com/opencontainers/runtime-spec/specs-go"
 
 	"golang.org/x/sys/unix"

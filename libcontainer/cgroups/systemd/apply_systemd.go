@@ -16,9 +16,9 @@ import (
 	systemdDbus "github.com/coreos/go-systemd/dbus"
 	systemdUtil "github.com/coreos/go-systemd/util"
 	"github.com/godbus/dbus"
-	"nestybox/sysvisor-runc/libcontainer/cgroups"
-	"nestybox/sysvisor-runc/libcontainer/cgroups/fs"
-	"nestybox/sysvisor-runc/libcontainer/configs"
+	"github.com/opencontainers/runc/libcontainer/cgroups"
+	"github.com/opencontainers/runc/libcontainer/cgroups/fs"
+	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/sirupsen/logrus"
 )
 

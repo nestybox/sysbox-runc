@@ -13,9 +13,9 @@ import (
 
 	"encoding/json"
 
-	"nestybox/sysvisor-runc/libcontainer"
-	"nestybox/sysvisor-runc/libcontainer/user"
-	"nestybox/sysvisor-runc/libcontainer/utils"
+	"github.com/opencontainers/runc/libcontainer"
+	"github.com/opencontainers/runc/libcontainer/user"
+	"github.com/opencontainers/runc/libcontainer/utils"
 	"github.com/urfave/cli"
 )
 

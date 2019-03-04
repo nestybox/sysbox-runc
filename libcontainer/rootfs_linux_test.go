@@ -5,7 +5,7 @@ package libcontainer
 import (
 	"testing"
 
-	"nestybox/sysvisor-runc/libcontainer/configs"
+	"github.com/opencontainers/runc/libcontainer/configs"
 )
 
 func TestCheckMountDestOnProc(t *testing.T) {

@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"nestybox/sysvisor-runc/libcontainer/configs"
-	"nestybox/sysvisor-runc/libcontainer/intelrdt"
+	"github.com/opencontainers/runc/libcontainer/configs"
+	"github.com/opencontainers/runc/libcontainer/intelrdt"
 	selinux "github.com/opencontainers/selinux/go-selinux"
 )
 

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"nestybox/sysvisor-runc/libcontainer/system"
+	"github.com/opencontainers/runc/libcontainer/system"
 )
 
 func newRestoredProcess(pid int, fds []string) (*restoredProcess, error) {

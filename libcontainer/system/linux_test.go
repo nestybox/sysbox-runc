@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"nestybox/sysvisor-runc/libcontainer/user"
+	"github.com/opencontainers/runc/libcontainer/user"
 )
 
 func TestUIDMapInUserNS(t *testing.T) {

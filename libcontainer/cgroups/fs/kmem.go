@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"syscall" // for Errno type only
 
-	"nestybox/sysvisor-runc/libcontainer/cgroups"
+	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"golang.org/x/sys/unix"
 )
 

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"nestybox/sysvisor-runc/libcontainer/cgroups"
-	"nestybox/sysvisor-runc/libcontainer/configs"
+	"github.com/opencontainers/runc/libcontainer/cgroups"
+	"github.com/opencontainers/runc/libcontainer/configs"
 )
 
 type FreezerGroup struct {

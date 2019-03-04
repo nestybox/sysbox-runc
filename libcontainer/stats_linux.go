@@ -1,7 +1,7 @@
 package libcontainer
 
-import "nestybox/sysvisor-runc/libcontainer/cgroups"
-import "nestybox/sysvisor-runc/libcontainer/intelrdt"
+import "github.com/opencontainers/runc/libcontainer/cgroups"
+import "github.com/opencontainers/runc/libcontainer/intelrdt"
 
 type Stats struct {
 	Interfaces    []*NetworkInterface

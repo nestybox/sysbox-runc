@@ -47,8 +47,9 @@ $ ./install.sh /usr/local
 
 ## Writing integration tests
 
-Helper functions (nestybox/sysvisor-runc/integration/helpers.bash) are
-provided in order to facilitate writing tests.
+[helper functions]
+(https://github.com/opencontainers/runc/blob/master/test/integration/helpers.bash)
+are provided in order to facilitate writing tests.
 
 ```sh
 #!/usr/bin/env bats

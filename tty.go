@@ -10,8 +10,8 @@ import (
 	"sync"
 
 	"github.com/containerd/console"
-	"nestybox/sysvisor-runc/libcontainer"
-	"nestybox/sysvisor-runc/libcontainer/utils"
+	"github.com/opencontainers/runc/libcontainer"
+	"github.com/opencontainers/runc/libcontainer/utils"
 )
 
 type tty struct {

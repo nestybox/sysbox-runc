@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"nestybox/sysvisor-runc/libcontainer/utils"
+	"github.com/opencontainers/runc/libcontainer/utils"
 )
 
 func TestUserParseLine(t *testing.T) {

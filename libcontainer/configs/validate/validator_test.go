@@ -4,8 +4,8 @@ import (
 	"os"
 	"testing"
 
-	"nestybox/sysvisor-runc/libcontainer/configs"
-	"nestybox/sysvisor-runc/libcontainer/configs/validate"
+	"github.com/opencontainers/runc/libcontainer/configs"
+	"github.com/opencontainers/runc/libcontainer/configs/validate"
 )
 
 func TestValidate(t *testing.T) {

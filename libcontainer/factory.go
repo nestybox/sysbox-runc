@@ -1,7 +1,7 @@
 package libcontainer
 
 import (
-	"nestybox/sysvisor-runc/libcontainer/configs"
+	"github.com/opencontainers/runc/libcontainer/configs"
 )
 
 type Factory interface {

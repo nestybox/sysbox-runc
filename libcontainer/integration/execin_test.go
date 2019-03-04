@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/containerd/console"
-	"nestybox/sysvisor-runc/libcontainer"
-	"nestybox/sysvisor-runc/libcontainer/configs"
-	"nestybox/sysvisor-runc/libcontainer/utils"
+	"github.com/opencontainers/runc/libcontainer"
+	"github.com/opencontainers/runc/libcontainer/configs"
+	"github.com/opencontainers/runc/libcontainer/utils"
 
 	"golang.org/x/sys/unix"
 )

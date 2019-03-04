@@ -5,7 +5,7 @@ package system
 import (
 	"os"
 
-	"nestybox/sysvisor-runc/libcontainer/user"
+	"github.com/opencontainers/runc/libcontainer/user"
 )
 
 // RunningInUserNS is a stub for non-Linux systems
