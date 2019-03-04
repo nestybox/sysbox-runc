@@ -163,6 +163,9 @@ func cfgNamespaces(spec *specs.Spec) error {
 	}
 
 	if !found {
+
+		// TODO: log this event.
+
 		newns := specs.LinuxNamespace{
 			Type: specs.CgroupNamespace,
 			Path: "",
@@ -218,6 +221,9 @@ func cfgCapabilities(spec *specs.Spec) {
 
 	// In a sys container, the root process has all capabilities
 	if uid == 0 {
+
+		// TODO: if the capabilities are being changed, log this event.
+
 		caps.Bounding = linuxCaps
 		caps.Effective = linuxCaps
 		caps.Inheritable = linuxCaps
@@ -233,6 +239,9 @@ func cfgMaskedPaths(spec *specs.Spec) {
 	for i := 0; i < len(paths); i++ {
 		for _, mount := range sysboxfsMounts {
 			if paths[i] == mount.Destination {
+
+				// TODO: log this event
+
 				paths = append(paths[:i], paths[i+1:]...)
 				i--
 				break
@@ -249,6 +258,9 @@ func cfgReadonlyPaths(spec *specs.Spec) {
 	for i := 0; i < len(paths); i++ {
 		for _, mount := range sysboxfsMounts {
 			if paths[i] == mount.Destination {
+
+				// TODO: log this event
+
 				paths = append(paths[:i], paths[i+1:]...)
 				i--
 				break
@@ -327,8 +339,6 @@ func ConvertSpec(spec *specs.Spec, strict bool) error {
 	if err := cfgCgroups(spec); err != nil {
 		return fmt.Errorf("failed to configure cgroup mounts: %v", err)
 	}
-
-	// Verify rootfs has uid/gid ownership matching the uid/gid config
 
 	// Remove readonly root filesystem config (spec.Root.Readonly)
 
