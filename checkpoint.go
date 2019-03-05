@@ -121,7 +121,7 @@ var namespaceMapping = map[specs.LinuxNamespaceType]int{
 }
 
 func setEmptyNsMask(context *cli.Context, options *libcontainer.CriuOpts) error {
-	/* Runc doesn't manage network devices and their configuration */
+	/* sysvisor-runc doesn't manage network devices and their configuration */
 	nsmask := unix.CLONE_NEWNET
 
 	for _, ns := range context.StringSlice("empty-ns") {

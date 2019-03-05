@@ -12,6 +12,9 @@ function teardown() {
 }
 
 @test "checkpoint and restore" {
+
+  skip "sysvisor-runc unsupported feature"
+
   # XXX: currently criu require root containers.
   requires criu root
 
@@ -45,6 +48,9 @@ function teardown() {
 }
 
 @test "checkpoint --pre-dump and restore" {
+
+  skip "sysvisor-runc unsupported feature"
+
   # XXX: currently criu require root containers.
   requires criu root
 
@@ -121,6 +127,9 @@ function teardown() {
 }
 
 @test "checkpoint --lazy-pages and restore" {
+
+  skip "sysvisor-runc unsupported feature"
+
   # XXX: currently criu require root containers.
   requires criu root
 
@@ -231,6 +240,9 @@ function teardown() {
 }
 
 @test "checkpoint and restore in external network namespace" {
+
+  skip "sysvisor-runc unsupported feature"
+
   # XXX: currently criu require root containers.
   requires criu root
 
@@ -293,6 +305,9 @@ function teardown() {
 }
 
 @test "checkpoint and restore with container specific CRIU config" {
+
+  skip "sysvisor-runc unsupported feature"
+
   # XXX: currently criu require root containers.
   requires criu root
 
@@ -341,4 +356,3 @@ function teardown() {
   unlink $tmp
   test -f ./work-dir/$tmplog2 && unlink ./work-dir/$tmplog2
 }
-

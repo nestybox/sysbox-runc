@@ -533,9 +533,11 @@ func (c *linuxContainer) newSetnsProcess(p *Process, cmd *exec.Cmd, parentPipe, 
 	if err != nil {
 		return nil, err
 	}
+	// sysvisor-runc: setns processes enter the child cgroup (i.e., the system container's
+	// cgroup root)
 	return &setnsProcess{
 		cmd:             cmd,
-		cgroupPaths:     c.cgroupManager.GetPaths(),
+		cgroupPaths:     c.cgroupManager.GetChildCgroupPaths(),
 		rootlessCgroups: c.config.RootlessCgroups,
 		intelRdtPath:    state.IntelRdtPath,
 		childPipe:       childPipe,
@@ -1394,9 +1396,8 @@ func (c *linuxContainer) criuApplyCgroups(pid int, req *criurpc.CriuReq) error {
 	if err := c.cgroupManager.Apply(pid); err != nil {
 		return err
 	}
-
 	if err := c.cgroupManager.Set(c.config); err != nil {
-		return newSystemError(err)
+	 	return newSystemError(err)
 	}
 
 	path := fmt.Sprintf("/proc/%d/cgroup", pid)

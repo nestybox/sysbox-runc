@@ -1,6 +1,6 @@
-# runc Integration Tests
+# sysvisor-runc Integration Tests
 
-Integration tests provide end-to-end testing of runc.
+Integration tests provide end-to-end testing of sysvisor-runc.
 
 Note that integration tests do **not** replace unit tests.
 
@@ -71,8 +71,8 @@ function teardown() {
 }
 
 @test "this is a simple test" {
-  runc run containerid
-  # "The runc macro" automatically populates $status, $output and $lines.
+  sysvisor-runc run containerid
+  # "The sysvisor-runc macro" automatically populates $status, $output and $lines.
   # Please refer to bats documentation to find out more.
   [ "$status" -eq 0 ]
 

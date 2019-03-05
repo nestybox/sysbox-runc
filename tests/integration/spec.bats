@@ -11,6 +11,10 @@ function setup() {
   run mkdir "$HELLO_BUNDLE"
   run mkdir "$HELLO_BUNDLE"/rootfs
   run tar -C "$HELLO_BUNDLE"/rootfs -xf "$HELLO_IMAGE"
+
+  # sysvisor-runc: bundle must have same uid/gid as that passed to
+  # "runc spec" (see runc_spec())
+  chown -R "$UID_MAP":"$GID_MAP" "$HELLO_BUNDLE"
 }
 
 function teardown() {
@@ -87,10 +91,29 @@ function teardown() {
   GOPATH="$GOPATH" go build src/runtime-spec/schema/validate.go
   [ -e ./validate ]
 
-  runc spec
+  runc spec "$UID_MAP" "$GID_MAP" "$ID_MAP_SIZE"
   [ -e config.json ]
 
   run ./validate src/runtime-spec/schema/config-schema.json config.json
   [ "$status" -eq 0 ]
   [[ "${lines[0]}" == *"The document is valid"* ]]
+}
+
+@test "spec process validator" {
+  skip "not written yet"
+  # verify process uid=gid=0
+}
+
+@test "spec read-only path filtering" {
+  skip "not written yet"
+  # configure sys cont spec with read-only paths on files handled by sysvisor-fs
+  # launch the sys container
+  # verify that read-only paths in config are ignored
+}
+
+@test "spec masked path filtering" {
+  skip "not written yet"
+  # configure sys cont spec with masked paths on files handled by sysvisor-fs
+  # launch the sys container
+  # verify that masked paths in config are ignored
 }

@@ -274,6 +274,21 @@ func (p *initProcess) start() error {
 	if err := p.manager.Apply(p.pid()); err != nil {
 		return newSystemErrorWithCause(err, "applying cgroup configuration for process")
 	}
+
+	// sysvisor-runc: set the cgroup resources before creating a child cgroup for
+	// the system container's cgroup root. This way the child cgroup will inherit
+	// the cgroup resources. Also, do this before the prestart hook so that the
+	// prestart hook may apply cgroup permissions.
+	if err := p.manager.Set(p.config.Config); err != nil {
+		return newSystemErrorWithCause(err, "setting cgroup config for ready process")
+	}
+
+	// sysvisor-runc: create a child cgroup that will serve as the system container's
+	// cgroup root.
+	if err:= p.manager.CreateChildCgroup(p.config.Config); err != nil {
+		return newSystemErrorWithCause(err, "creating system container child cgroup")
+	}
+
 	if p.intelRdtManager != nil {
 		if err := p.intelRdtManager.Apply(p.pid()); err != nil {
 			return newSystemErrorWithCause(err, "applying Intel RDT configuration for process")
@@ -305,9 +320,10 @@ func (p *initProcess) start() error {
 		return newSystemErrorWithCausef(err, "getting pipe fds for pid %d", childPid)
 	}
 	p.setExternalDescriptors(fds)
-	// Do this before syncing with child so that no children
-	// can escape the cgroup
-	if err := p.manager.Apply(childPid); err != nil {
+
+	// sysvisor-runc: place the system container's init process in the child cgroup. Do
+	// this before syncing with child so that no children can escape the cgroup
+	if err := p.manager.ApplyChildCgroup(childPid); err != nil {
 		return newSystemErrorWithCause(err, "applying cgroup configuration for process")
 	}
 	if p.intelRdtManager != nil {
@@ -354,10 +370,6 @@ func (p *initProcess) start() error {
 			}
 			// call prestart hooks
 			if !p.config.Config.Namespaces.Contains(configs.NEWNS) {
-				// Setup cgroup before prestart hook, so that the prestart hook could apply cgroup permissions.
-				if err := p.manager.Set(p.config.Config); err != nil {
-					return newSystemErrorWithCause(err, "setting cgroup config for ready process")
-				}
 				if p.intelRdtManager != nil {
 					if err := p.intelRdtManager.Set(p.config.Config); err != nil {
 						return newSystemErrorWithCause(err, "setting Intel RDT config for ready process")
@@ -385,10 +397,6 @@ func (p *initProcess) start() error {
 			}
 			sentRun = true
 		case procHooks:
-			// Setup cgroup before prestart hook, so that the prestart hook could apply cgroup permissions.
-			if err := p.manager.Set(p.config.Config); err != nil {
-				return newSystemErrorWithCause(err, "setting cgroup config for procHooks process")
-			}
 			if p.intelRdtManager != nil {
 				if err := p.intelRdtManager.Set(p.config.Config); err != nil {
 					return newSystemErrorWithCause(err, "setting Intel RDT config for procHooks process")

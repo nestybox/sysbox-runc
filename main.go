@@ -1,3 +1,13 @@
+//
+// (c) 2019 Nestybox. All Rights Reserved.
+//
+
+//
+// Change Log:
+//
+// * Modified usage message for sysvisor-runc.
+//
+
 package main
 
 import (
@@ -22,34 +32,45 @@ var gitCommit = ""
 
 const (
 	specConfig = "config.json"
-	usage      = `Open Container Initiative runtime
+	usage      = `system container runc
 
-runc is a command line client for running applications packaged according to
-the Open Container Initiative (OCI) format and is a compliant implementation of the
-Open Container Initiative specification.
+sysvisor-runc is a command line client for running system containers.
 
-runc integrates well with existing process supervisors to provide a production
-container runtime environment for applications. It can be used with your
-existing process monitoring tools and the container will be spawned as a
-direct child of the process supervisor.
+A system container is a container whose main purpose is to package and
+deploy a full operating system environment (e.g., init process, system
+daemons, libraries, utilities, etc.)
 
-Containers are configured using bundles. A bundle for a container is a directory
-that includes a specification file named "` + specConfig + `" and a root filesystem.
-The root filesystem contains the contents of the container.
+A system container provides enviroment inside of which application
+containers can be deployed (e.g., by running Docker and Kubernetes
+inside the system container).
 
-To start a new instance of a container:
+sysvisor-runc is a fork of the Open Container Initiative (OCI) runc
+that has been customized for system containers.
 
-    # runc run [ -b bundle ] <container-id>
+sysvisor-runc is configured using OCI bundles (i.e., a directory that
+includes a specification file named "` + specConfig + `" and a root
+filesystem containing the contents of the system container).
 
-Where "<container-id>" is your name for the instance of the container that you
-are starting. The name you provide for the container instance must be unique on
-your host. Providing the bundle directory using "-b" is optional. The default
-value for "bundle" is the current directory.`
-)
+System containers must be isolated from the host and from each other.
+sysvisor-runc achieves this by using several Linux isolation
+technologies (e.g., all Linux namespaces, cgroups, seccomp, etc.) as
+well as by restricting the set of configurations for a system
+container (i.e., the system container OCI bundle must meet certain
+requirements). sysvisor-runc will check that the config meets these
+requirements when creating a system container; the "sysvisor-runc spec"
+command can be used to generate a baseline system container configuration.
+
+To start a new instance of a system container:
+
+    # sysvisor-runc run [ -b bundle ] <container-id>
+
+Where "<container-id>" is your name for the instance of the system
+container that you are starting (which must be unique on the host).
+`)
 
 func main() {
 	app := cli.NewApp()
-	app.Name = "runc"
+	app.Name = "sysvisor-runc"
 	app.Usage = usage
 
 	var v []string
@@ -62,11 +83,11 @@ func main() {
 	v = append(v, fmt.Sprintf("spec: %s", specs.Version))
 	app.Version = strings.Join(v, "\n")
 
-	root := "/run/runc"
+	root := "/run/sysvisor-runc"
 	if shouldHonorXDGRuntimeDir() {
 		if runtimeDir := os.Getenv("XDG_RUNTIME_DIR"); runtimeDir != "" {
-			root = runtimeDir + "/runc"
-			// According to the XDG specification, we need to set anything in
+			root = runtimeDir + "/sysvisor-runc"
+ 			// According to the XDG specification, we need to set anything in
 			// XDG_RUNTIME_DIR to have a sticky bit if we don't want it to get
 			// auto-pruned.
 			if err := os.MkdirAll(root, 0700); err != nil {
@@ -105,7 +126,7 @@ func main() {
 		},
 		cli.BoolFlag{
 			Name:  "systemd-cgroup",
-			Usage: "enable systemd cgroup support, expects cgroupsPath to be of form \"slice:prefix:name\" for e.g. \"system.slice:runc:434234\"",
+			Usage: "enable systemd cgroup support, expects cgroupsPath to be of form \"slice:prefix:name\" for e.g. \"system.slice:sysvisor-runc:434234\"",
 		},
 		cli.StringFlag{
 			Name:  "rootless",

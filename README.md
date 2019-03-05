@@ -1,29 +1,16 @@
-# runc
-
-[![Build Status](https://travis-ci.org/opencontainers/runc.svg?branch=master)](https://travis-ci.org/opencontainers/runc)
-[![Go Report Card](https://goreportcard.com/badge/github.com/opencontainers/runc)](https://goreportcard.com/report/github.com/opencontainers/runc)
-[![GoDoc](https://godoc.org/github.com/opencontainers/runc?status.svg)](https://godoc.org/github.com/opencontainers/runc)
+# sysvisor-runc
 
 ## Introduction
 
-`runc` is a CLI tool for spawning and running containers according to the OCI specification.
+`sysvisor-runc` is a fork of the OCI runc CLI tool, modified for spawning and running system containers.
 
-## Releases
-
-`runc` depends on and tracks the [runtime-spec](https://github.com/opencontainers/runtime-spec) repository.
-We will try to make sure that `runc` and the OCI specification major versions stay in lockstep.
-This means that `runc` 1.0.0 should implement the 1.0 version of the specification.
-
-You can find official releases of `runc` on the [release](https://github.com/opencontainers/runc/releases) page.
-
-### Security
-
-If you wish to report a security issue, please disclose the issue responsibly
-to security@opencontainers.org.
+`sysvisor-runc` tracks the OCI [runc](https://github.com/opencontainers/runc) repository
+as well as the OCI [runtime-spec](https://github.com/opencontainers/runtime-spec)
+repository.
 
 ## Building
 
-`runc` currently supports the Linux platform with various architecture support.
+`sysvisor-runc` currently supports the Linux platform with various architecture support.
 It must be built with Go version 1.6 or higher in order for some features to function properly.
 
 In order to enable seccomp support you will need to install `libseccomp` on your platform.
@@ -32,30 +19,16 @@ In order to enable seccomp support you will need to install `libseccomp` on your
 Otherwise, if you do not want to build `runc` with seccomp support you can add `BUILDTAGS=""` when running make.
 
 ```bash
-# create a 'github.com/opencontainers' in your GOPATH/src
-cd github.com/opencontainers
-git clone https://github.com/opencontainers/runc
-cd runc
-
 make
 sudo make install
 ```
 
-You can also use `go get` to install to your `GOPATH`, assuming that you have a `github.com` parent folder already created under `src`:
-
-```bash
-go get github.com/opencontainers/runc
-cd $GOPATH/src/github.com/opencontainers/runc
-make
-sudo make install
-```
-
-`runc` will be installed to `/usr/local/sbin/runc` on your system.
+`sysvisor-runc` will be installed to `/usr/local/sbin/sysvisor-runc` on your system.
 
 
 #### Build Tags
 
-`runc` supports optional build tags for compiling support of various features.
+`sysvisor-runc` supports optional build tags for compiling support of various features.
 To add build tags to the make option the `BUILDTAGS` variable must be set.
 
 ```bash
@@ -73,14 +46,16 @@ make BUILDTAGS='seccomp apparmor'
 
 ### Running the test suite
 
-`runc` currently supports running its test suite via Docker.
+`sysvisor-runc` currently supports running its test suite via Docker.
 To run the suite just type `make test`.
 
 ```bash
 make test
 ```
 
-There are additional make targets for running the tests outside of a container but this is not recommended as the tests are written with the expectation that they can write and remove anywhere.
+There are additional make targets for running the tests outside of a container but this is
+not recommended as the tests are written with the expectation that they can write and
+remove anywhere.
 
 You can run a specific test case by setting the `TESTFLAGS` variable.
 
@@ -91,7 +66,7 @@ You can run a specific test case by setting the `TESTFLAGS` variable.
 You can run a specific integration test by setting the `TESTPATH` variable.
 
 ```bash
-# make test TESTPATH="/checkpoint.bats"
+# make integration TESTPATH="/checkpoint.bats"
 ```
 
 You can run a test in your proxy environment by setting `DOCKER_BUILD_PROXY` and `DOCKER_RUN_PROXY` variables.
@@ -102,15 +77,15 @@ You can run a test in your proxy environment by setting `DOCKER_BUILD_PROXY` and
 
 ### Dependencies Management
 
-`runc` uses [vndr](https://github.com/LK4D4/vndr) for dependencies management.
+`sysvisor-runc` uses [vndr](https://github.com/LK4D4/vndr) for dependencies management.
 Please refer to [vndr](https://github.com/LK4D4/vndr) for how to add or update
 new dependencies.
 
-## Using runc
+## Using sysvisor-runc
 
 ### Creating an OCI Bundle
 
-In order to use runc you must have your container in the format of an OCI bundle.
+In order to use sysvisor-runc you must have your system container in the format of an OCI bundle.
 If you have Docker installed you can use its `export` method to acquire a root filesystem from an existing Docker container.
 
 ```bash
@@ -125,129 +100,61 @@ mkdir rootfs
 docker export $(docker create busybox) | tar -C rootfs -xvf -
 ```
 
-After a root filesystem is populated you just generate a spec in the format of a `config.json` file inside your bundle.
-`runc` provides a `spec` command to generate a base template spec that you are then able to edit.
-To find features and documentation for fields in the spec please refer to the [specs](https://github.com/opencontainers/runtime-spec) repository.
+After a root filesystem is populated you just generate a system container spec in the
+format of a `config.json` file inside your bundle.  `sysvisor-runc` provides a `spec`
+command to generate a base template spec that you are then able to edit.  To find features
+and documentation for fields in the spec please refer to the
+[specs](https://github.com/opencontainers/runtime-spec) repository.
 
 ```bash
-runc spec
+sysvisor-runc spec
 ```
 
-### Running Containers
+### Running System Containers
 
-Assuming you have an OCI bundle from the previous step you can execute the container in two different ways.
+Assuming you have an OCI bundle from the previous step you can execute the system container in two different ways.
 
 The first way is to use the convenience command `run` that will handle creating, starting, and deleting the container after it exits.
 
 ```bash
 # run as root
 cd /mycontainer
-runc run mycontainerid
+sysvisor-runc run mycontainerid
 ```
 
-If you used the unmodified `runc spec` template this should give you a `sh` session inside the container.
+If you used the unmodified `sysvisor-runc spec` template this should give you a `sh` session inside the system container.
 
 The second way to start a container is using the specs lifecycle operations.
 This gives you more power over how the container is created and managed while it is running.
-This will also launch the container in the background so you will have to edit the `config.json` to remove the `terminal` setting for the simple examples here.
-Your process field in the `config.json` should look like this below with `"terminal": false` and `"args": ["sleep", "5"]`.
+This will also launch the system container in the background so you will have to edit the `config.json` to remove the `terminal` setting for the simple examples here.
+Your process field in the `config.json` should have `"terminal": false` and `"args": ["sleep", "5"]`.
 
-
-```json
-        "process": {
-                "terminal": false,
-                "user": {
-                        "uid": 0,
-                        "gid": 0
-                },
-                "args": [
-                        "sleep", "5"
-                ],
-                "env": [
-                        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-                        "TERM=xterm"
-                ],
-                "cwd": "/",
-                "capabilities": {
-                        "bounding": [
-                                "CAP_AUDIT_WRITE",
-                                "CAP_KILL",
-                                "CAP_NET_BIND_SERVICE"
-                        ],
-                        "effective": [
-                                "CAP_AUDIT_WRITE",
-                                "CAP_KILL",
-                                "CAP_NET_BIND_SERVICE"
-                        ],
-                        "inheritable": [
-                                "CAP_AUDIT_WRITE",
-                                "CAP_KILL",
-                                "CAP_NET_BIND_SERVICE"
-                        ],
-                        "permitted": [
-                                "CAP_AUDIT_WRITE",
-                                "CAP_KILL",
-                                "CAP_NET_BIND_SERVICE"
-                        ],
-                        "ambient": [
-                                "CAP_AUDIT_WRITE",
-                                "CAP_KILL",
-                                "CAP_NET_BIND_SERVICE"
-                        ]
-                },
-                "rlimits": [
-                        {
-                                "type": "RLIMIT_NOFILE",
-                                "hard": 1024,
-                                "soft": 1024
-                        }
-                ],
-                "noNewPrivileges": true
-        },
-```
-
-Now we can go through the lifecycle operations in your shell.
+These are the lifecycle operations in your shell.
 
 
 ```bash
 # run as root
 cd /mycontainer
-runc create mycontainerid
+sysvisor-runc create mycontainerid
 
 # view the container is created and in the "created" state
-runc list
+sysvisor-runc list
 
 # start the process inside the container
-runc start mycontainerid
+sysvisor-runc start mycontainerid
 
 # after 5 seconds view that the container has exited and is now in the stopped state
-runc list
+sysvisor-runc list
 
 # now delete the container
-runc delete mycontainerid
+sysvisor-runc delete mycontainerid
 ```
 
 This allows higher level systems to augment the containers creation logic with setup of various settings after the container is created and/or before it is deleted. For example, the container's network stack is commonly set up after `create` but before `start`.
 
-#### Rootless containers
-`runc` has the ability to run containers without root privileges. This is called `rootless`. You need to pass some parameters to `runc` in order to run rootless containers. See below and compare with the previous version. Run the following commands as an ordinary user:
-```bash
-# Same as the first example
-mkdir ~/mycontainer
-cd ~/mycontainer
-mkdir rootfs
-docker export $(docker create busybox) | tar -C rootfs -xvf -
-
-# The --rootless parameter instructs runc spec to generate a configuration for a rootless container, which will allow you to run the container as a non-root user.
-runc spec --rootless
-
-# The --root parameter tells runc where to store the container state. It must be writable by the user.
-runc --root /tmp/runc run mycontainerid
-```
-
 #### Supervisors
 
-`runc` can be used with process supervisors and init systems to ensure that containers are restarted when they exit.
+`sysvisor-runc` can be used with process supervisors and init systems to ensure that containers are restarted when they exit.
 An example systemd unit file looks something like this.
 
 ```systemd
@@ -256,15 +163,11 @@ Description=Start My Container
 
 [Service]
 Type=forking
-ExecStart=/usr/local/sbin/runc run -d --pid-file /run/mycontainerid.pid mycontainerid
-ExecStopPost=/usr/local/sbin/runc delete mycontainerid
+ExecStart=/usr/local/sbin/sysvisor-runc run -d --pid-file /run/mycontainerid.pid mycontainerid
+ExecStopPost=/usr/local/sbin/sysvisor-runc delete mycontainerid
 WorkingDirectory=/mycontainer
 PIDFile=/run/mycontainerid.pid
 
 [Install]
 WantedBy=multi-user.target
 ```
-
-## License
-
-The code and docs are released under the [Apache 2.0 license](LICENSE).

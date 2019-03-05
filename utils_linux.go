@@ -387,6 +387,13 @@ func validateProcessSpec(spec *specs.Process) error {
 	if len(spec.Args) == 0 {
 		return fmt.Errorf("args must not be empty")
 	}
+
+	// If the spec does not contain a capabilities object, create one
+	// so that it can be manipulated later on
+	if spec.Capabilities == nil {
+		spec.Capabilities = new(specs.LinuxCapabilities)
+	}
+
 	return nil
 }
 

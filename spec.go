@@ -7,85 +7,61 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strconv"
+	"syscall"
 
 	"github.com/opencontainers/runc/libcontainer/configs"
-	"github.com/opencontainers/runc/libcontainer/specconv"
+	"github.com/opencontainers/runc/libsyscontainer/syscontSpec"
+
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"
 )
 
 var specCommand = cli.Command{
 	Name:      "spec",
-	Usage:     "create a new specification file",
-	ArgsUsage: "",
-	Description: `The spec command creates the new specification file named "` + specConfig + `" for
-the bundle.
+	Usage:     "create a new system container specification file",
+	ArgsUsage: "<uid> <gid> <size>",
+	Description: `The spec command creates the new system container specification file
+named "` + specConfig + `" for the bundle.
 
 The spec generated is just a starter file. Editing of the spec is required to
-achieve desired results. For example, the newly generated spec includes an args
-parameter that is initially set to call the "sh" command when the container is
-started. Calling "sh" may work for an ubuntu container or busybox, but will not
-work for containers that do not include the "sh" program.
+achieve desired results.
 
-EXAMPLE:
-  To run docker's hello-world container one needs to set the args parameter
-in the spec to call hello. This can be done using the sed command or a text
-editor. The following commands create a bundle for hello-world, change the
-default args parameter in the spec from "sh" to "/hello", then run the hello
-command in a new hello-world container named container1:
+System containers always use the Linux user namespace and thus require user and
+group id mappings.
 
-    mkdir hello
-    cd hello
-    docker pull hello-world
-    docker export $(docker create hello-world) > hello-world.tar
-    mkdir rootfs
-    tar -C rootfs -xf hello-world.tar
-    runc spec
-    sed -i 's;"sh";"/hello";' ` + specConfig + `
-    runc run container1
+Arguments uid and gid indicate the host user/group IDs to which the system
+container's root user/group are mapped. Size is the number of IDs that must be
+mapped; it must be set >= ` + strconv.FormatUint(uint64(syscontSpec.IdRangeMin),10) + ` for compatibility
+with Linux distros that use id 65534 as "nobody".
 
-In the run command above, "container1" is the name for the instance of the
-container that you are starting. The name you provide for the container instance
-must be unique on your host.
+If the "--bundle" option is present, the uid and gid parameters must match the
+user and group owners of the bundle.
 
-An alternative for generating a customized spec config is to use "oci-runtime-tool", the
-sub-command "oci-runtime-tool generate" has lots of options that can be used to do any
-customizations as you want, see runtime-tools (https://github.com/opencontainers/runtime-tools)
-to get more information.
+When starting a container through sysvisor-runc, sysvisor-runc needs root
+privilege. If not already running as root, you can use sudo to give
+sysvisor-runc root privilege.
 
-When starting a container through runc, runc needs root privilege. If not
-already running as root, you can use sudo to give runc root privilege. For
-example: "sudo runc start container1" will give runc root privilege to start the
-container on your host.
-
-Alternatively, you can start a rootless container, which has the ability to run
-without root privileges. For this to work, the specification file needs to be
-adjusted accordingly. You can pass the parameter --rootless to this command to
-generate a proper rootless spec file.
-
-Note that --rootless is not needed when you execute runc as the root in a user namespace
-created by an unprivileged user.
+sysvisor-runc does not currently support running without root privilege (i.e.,
+rootless).
 `,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:  "bundle, b",
 			Value: "",
-			Usage: "path to the root of the bundle directory",
-		},
-		cli.BoolFlag{
-			Name:  "rootless",
-			Usage: "generate a configuration for a rootless container",
+			Usage: "path to the root of the bundle directory (i.e., rootfs)",
 		},
 	},
 	Action: func(context *cli.Context) error {
-		if err := checkArgs(context, 0, exactArgs); err != nil {
+
+		var uid, gid, size uint32
+
+		if err := checkArgs(context, 3, exactArgs); err != nil {
 			return err
 		}
-		spec := specconv.Example()
 
-		rootless := context.Bool("rootless")
-		if rootless {
-			specconv.ToRootless(spec)
+		if err := getArgs(context, &uid, &gid, &size); err != nil {
+			return err
 		}
 
 		checkNoFile := func(name string) error {
@@ -98,15 +74,41 @@ created by an unprivileged user.
 			}
 			return nil
 		}
+
 		bundle := context.String("bundle")
+
+		if bundle != "" {
+			fi, err := os.Stat(bundle)
+			if err != nil {
+				return err
+			}
+			if bundleId := fi.Sys().(*syscall.Stat_t).Uid; uid != bundleId {
+				return fmt.Errorf("rootfs uid %d does not match uid %d passed to this command", bundleId, uid)
+			}
+			if bundleId := fi.Sys().(*syscall.Stat_t).Gid; gid != bundleId {
+				return fmt.Errorf("rootfs gid %d does not match gid %d passed to this command", bundleId, gid)
+			}
+		}
+
+		spec, err := syscontSpec.Example(uid, gid, size, bundle)
+		if err != nil {
+			return err
+		}
+
+		if err := syscontSpec.ConvertSpec(spec, false); err != nil {
+			return err
+		}
+
 		if bundle != "" {
 			if err := os.Chdir(bundle); err != nil {
 				return err
 			}
 		}
+
 		if err := checkNoFile(specConfig); err != nil {
 			return err
 		}
+
 		data, err := json.MarshalIndent(spec, "", "\t")
 		if err != nil {
 			return err
@@ -115,7 +117,30 @@ created by an unprivileged user.
 	},
 }
 
-// loadSpec loads the specification from the provided path.
+// getArgs parses and returns the uid, gid, and size command line arguments
+func getArgs (context *cli.Context, uid, gid, size *uint32) error {
+	var num [3]uint64
+	var err error
+
+	for i :=0; i < 3; i++ {
+		str := context.Args().Get(i)
+		num[i], err = strconv.ParseUint(str, 10, 32)
+		if err != nil {
+			return err
+		}
+	}
+
+	// TODO: check validity of uid, gid, and size
+	// (must be < 2^32, must be in /etc/subuid|gid and size must match)
+
+	*uid = uint32(num[0])
+	*gid = uint32(num[1])
+	*size = uint32(num[2])
+
+	return nil
+}
+
+// loadSpec loads the specification from the provided path
 func loadSpec(cPath string) (spec *specs.Spec, err error) {
 	cf, err := os.Open(cPath)
 	if err != nil {
@@ -129,6 +154,7 @@ func loadSpec(cPath string) (spec *specs.Spec, err error) {
 	if err = json.NewDecoder(cf).Decode(&spec); err != nil {
 		return nil, err
 	}
+
 	return spec, validateProcessSpec(spec.Process)
 }
 

@@ -6,12 +6,12 @@ load helpers
   runc -h
   [ "$status" -eq 0 ]
   [[ ${lines[0]} =~ NAME:+ ]]
-  [[ ${lines[1]} =~ runc\ '-'\ Open\ Container\ Initiative\ runtime+ ]]
+  [[ ${lines[1]} =~ sysvisor-runc\ '-'\ system\ container\ runc+ ]]
 
   runc --help
   [ "$status" -eq 0 ]
   [[ ${lines[0]} =~ NAME:+ ]]
-  [[ ${lines[1]} =~ runc\ '-'\ Open\ Container\ Initiative\ runtime+ ]]
+  [[ ${lines[1]} =~ sysvisor-runc\ '-'\ system\ container\ runc+ ]]
 }
 
 @test "runc command -h" {

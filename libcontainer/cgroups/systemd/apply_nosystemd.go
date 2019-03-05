@@ -50,6 +50,22 @@ func (m *Manager) Freeze(state configs.FreezerState) error {
 	return fmt.Errorf("Systemd not supported")
 }
 
+func (m *Manager) CreateSubCgroup(container *configs.Config) error {
+	return fmt.Errorf("Systemd not supported")
+}
+
 func Freeze(c *configs.Cgroup, state configs.FreezerState) error {
 	return fmt.Errorf("Systemd not supported")
+}
+
+func (m *Manager) CreateChildCgroup(container *configs.Config) error {
+	return fmt.Errorf("Systemd not supported")
+}
+
+func (m *Manager) ApplyChildCgroup(pid int) error {
+	return fmt.Errorf("Systemd not supported")
+}
+
+func (m *Manager) GetChildCgroupPaths() map[string]string {
+	return nil
 }

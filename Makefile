@@ -5,6 +5,8 @@
 
 GO := go
 
+RUNC_TARGET := sysvisor-runc
+
 SOURCES := $(shell find . 2>&1 | grep -E '.*\.(c|h|go)$$')
 PREFIX := $(DESTDIR)/usr/local
 BINDIR := $(PREFIX)/sbin
@@ -27,12 +29,12 @@ VERSION := ${shell cat ./VERSION}
 
 SHELL := $(shell command -v bash 2>/dev/null)
 
-.DEFAULT: runc
+.DEFAULT: $(RUNC_TARGET)
 
-runc: $(SOURCES)
-	$(GO) build -buildmode=pie $(EXTRA_FLAGS) -ldflags "-X main.gitCommit=${COMMIT} -X main.version=${VERSION} $(EXTRA_LDFLAGS)" -tags "$(BUILDTAGS)" -o runc .
+$(RUNC_TARGET): $(SOURCES)
+	$(GO) build -buildmode=pie $(EXTRA_FLAGS) -ldflags "-X main.gitCommit=${COMMIT} -X main.version=${VERSION} $(EXTRA_LDFLAGS)" -tags "$(BUILDTAGS)" -o $(RUNC_TARGET) .
 
-all: runc recvtty
+all: $(RUNC_TARGET) recvtty
 
 recvtty: contrib/cmd/recvtty/recvtty
 
@@ -40,7 +42,7 @@ contrib/cmd/recvtty/recvtty: $(SOURCES)
 	$(GO) build -buildmode=pie $(EXTRA_FLAGS) -ldflags "-X main.gitCommit=${COMMIT} -X main.version=${VERSION} $(EXTRA_LDFLAGS)" -tags "$(BUILDTAGS)" -o contrib/cmd/recvtty/recvtty ./contrib/cmd/recvtty
 
 static: $(SOURCES)
-	CGO_ENABLED=1 $(GO) build $(EXTRA_FLAGS) -tags "$(BUILDTAGS) netgo osusergo static_build" -installsuffix netgo -ldflags "-w -extldflags -static -X main.gitCommit=${COMMIT} -X main.version=${VERSION} $(EXTRA_LDFLAGS)" -o runc .
+	CGO_ENABLED=1 $(GO) build $(EXTRA_FLAGS) -tags "$(BUILDTAGS) netgo osusergo static_build" -installsuffix netgo -ldflags "-w -extldflags -static -X main.gitCommit=${COMMIT} -X main.version=${VERSION} $(EXTRA_LDFLAGS)" -o $(RUNC_TARGET) .
 	CGO_ENABLED=1 $(GO) build $(EXTRA_FLAGS) -tags "$(BUILDTAGS) netgo osusergo static_build" -installsuffix netgo -ldflags "-w -extldflags -static -X main.gitCommit=${COMMIT} -X main.version=${VERSION} $(EXTRA_LDFLAGS)" -o contrib/cmd/recvtty/recvtty ./contrib/cmd/recvtty
 
 release:
@@ -59,11 +61,12 @@ man:
 runcimage:
 	docker build ${DOCKER_BUILD_PROXY} -t $(RUNC_IMAGE) .
 
+# Note: sysvisor-runc does not support rootles mode, so rootless integration tests are not invoked as part of test or localtest
 test:
-	make unittest integration rootlessintegration
+	make unittest integration
 
 localtest:
-	make localunittest localintegration localrootlessintegration
+	make localunittest localintegration
 
 unittest: runcimage
 	docker run ${DOCKER_RUN_PROXY} -t --privileged --rm -v /lib/modules:/lib/modules:ro -v $(CURDIR):/go/src/$(PROJECT) $(RUNC_IMAGE) make localunittest TESTFLAGS=${TESTFLAGS}
@@ -87,26 +90,26 @@ shell: runcimage
 	docker run ${DOCKER_RUN_PROXY} -ti --privileged --rm -v $(CURDIR):/go/src/$(PROJECT) $(RUNC_IMAGE) bash
 
 install:
-	install -D -m0755 runc $(BINDIR)/runc
+	install -D -m0755 $(RUNC_TARGET) $(BINDIR)/$(RUNC_TARGET)
 
 install-bash:
-	install -D -m0644 contrib/completions/bash/runc $(PREFIX)/share/bash-completion/completions/runc
+	install -D -m0644 contrib/completions/bash/$(RUNC_TARGET) $(PREFIX)/share/bash-completion/completions/$(RUNC_TARGET)
 
 install-man:
 	install -d -m 755 $(MAN_INSTALL_PATH)
 	install -m 644 $(MAN_PAGES) $(MAN_INSTALL_PATH)
 
 uninstall:
-	rm -f $(BINDIR)/runc
+	rm -f $(BINDIR)/$(RUNC_TARGET)
 
 uninstall-bash:
-	rm -f $(PREFIX)/share/bash-completion/completions/runc
+	rm -f $(PREFIX)/share/bash-completion/completions/$(RUNC_TARGET)
 
 uninstall-man:
 	rm -f $(addprefix $(MAN_INSTALL_PATH),$(MAN_PAGES_BASE))
 
 clean:
-	rm -f runc runc-*
+	rm -f $(RUNC_TARGET) $(RUNC_TARGET)-*
 	rm -f contrib/cmd/recvtty/recvtty
 	rm -rf $(RELEASE_DIR)
 	rm -rf $(MAN_DIR)
@@ -117,6 +120,9 @@ validate:
 	$(GO) vet $(allpackages)
 
 ci: validate test release
+
+listpackages:
+	@echo $(allpackages)
 
 cross: runcimage
 	docker run ${DOCKER_RUN_PROXY} -e BUILDTAGS="$(BUILDTAGS)" --rm -v $(CURDIR):/go/src/$(PROJECT) $(RUNC_IMAGE) make localcross
