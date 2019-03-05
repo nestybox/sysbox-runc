@@ -8,6 +8,14 @@
 as well as the OCI [runtime-spec](https://github.com/opencontainers/runtime-spec)
 repository.
 
+
+## Integration with sysvisor-fs
+
+sysvisor-runc is tightly integrated with sysvisor-fs via
+gRPC. sysvisor-runc mounts sysvisor-fs in the system container's root
+filesystem as needed to create the system container abstraction.
+
+
 ## Building
 
 `sysvisor-runc` currently supports the Linux platform with various architecture support.
