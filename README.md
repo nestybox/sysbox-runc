@@ -8,6 +8,14 @@
 as well as the OCI [runtime-spec](https://github.com/opencontainers/runtime-spec)
 repository.
 
+
+## Integration with sysbox-fs
+
+sysbox-runc is tightly integrated with sysbox-fs via
+gRPC. sysbox-runc mounts sysbox-fs in the system container's root
+filesystem as needed to create the system container abstraction.
+
+
 ## Building
 
 `sysbox-runc` currently supports the Linux platform with various architecture support.
