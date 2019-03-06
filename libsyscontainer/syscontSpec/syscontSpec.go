@@ -5,7 +5,9 @@ package syscontSpec
 import (
 	"fmt"
 
+	mapset "github.com/deckarep/golang-set"
 	"github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/sirupsen/logrus"
 )
 
 // sysboxfsMounts is a list of system container mounts backed by sysbox-fs;
@@ -313,8 +315,105 @@ func cfgCgroups(spec *specs.Spec) error {
 	return nil
 }
 
+// cfgSeccomp configures the system container's seccomp settings.
+func cfgSeccomp(seccomp *specs.LinuxSeccomp) error {
+	if seccomp == nil {
+		return nil
+	}
+
+	supportedArch := false
+	for _, arch := range seccomp.Architectures {
+		if arch == specs.ArchX86_64 {
+			supportedArch = true
+		}
+	}
+	if !supportedArch {
+		return nil
+	}
+
+	// we don't yet support specs with default trap & trace actions
+	if seccomp.DefaultAction != specs.ActAllow &&
+		seccomp.DefaultAction != specs.ActErrno &&
+		seccomp.DefaultAction != specs.ActKill {
+		return fmt.Errorf("spec seccomp default actions other than allow, errno, and kill are not supported")
+	}
+
+	// categorize syscalls per seccomp actions
+	allowSet := mapset.NewSet()
+	errnoSet := mapset.NewSet()
+	killSet := mapset.NewSet()
+
+	for _, syscall := range seccomp.Syscalls {
+		for _, name := range syscall.Names {
+			switch syscall.Action {
+			case specs.ActAllow:
+				allowSet.Add(name)
+			case specs.ActErrno:
+				errnoSet.Add(name)
+			case specs.ActKill:
+				killSet.Add(name)
+			}
+		}
+	}
+
+	// convert sys container syscall whitelist to a set
+	syscontAllowSet := mapset.NewSet()
+	for _, sc := range syscontSyscallWhitelist {
+		syscontAllowSet.Add(sc)
+	}
+
+	// seccomp syscall lsit may be a whitelist or blacklist
+	whitelist := (seccomp.DefaultAction == specs.ActErrno ||
+		seccomp.DefaultAction == specs.ActKill)
+
+	// diffset is the set of syscalls that needs adding (for whitelist) or removing (for blacklist)
+	diffSet := mapset.NewSet()
+	if whitelist {
+		diffSet = syscontAllowSet.Difference(allowSet)
+	} else {
+		disallowSet := errnoSet.Union(killSet)
+		diffSet = disallowSet.Difference(syscontAllowSet)
+	}
+
+	if whitelist {
+		// add the diffset to the whitelist
+		for syscallName := range diffSet.Iter() {
+			str := fmt.Sprintf("%v", syscallName)
+			sc := specs.LinuxSyscall{
+				Names:  []string{str},
+				Action: specs.ActAllow,
+			}
+			seccomp.Syscalls = append(seccomp.Syscalls, sc)
+		}
+
+		logrus.Debugf("Added syscalls to seccomp profile: %v", diffSet)
+
+	} else {
+		// remove the diffset from the blacklist
+		var newSyscalls []specs.LinuxSyscall
+		for _, sc := range seccomp.Syscalls {
+			for i, scName := range sc.Names {
+				if diffSet.Contains(scName) {
+					// Remove this syscall
+					sc.Names = append(sc.Names[:i], sc.Names[i+1:]...)
+				}
+			}
+			if sc.Names != nil {
+				newSyscalls = append(newSyscalls, sc)
+			}
+		}
+		seccomp.Syscalls = newSyscalls
+
+		logrus.Debugf("Removed syscalls from seccomp profile: %v", diffSet)
+	}
+
+	return nil
+}
+
 // ConvertSpec converts the given container spec to a system container spec.
 func ConvertSpec(spec *specs.Spec, strict bool) error {
+
+	// TODO: verify spec in not nil and contains a Linux object; bail if it doesn't
 
 	// TODO: Modify the spec for sys containers here;
 	// validate and return the modified spec. Also, modify the seccomp
@@ -349,6 +448,9 @@ func ConvertSpec(spec *specs.Spec, strict bool) error {
 	// - entry point must be system daemon
 
 	// cfg seccomp config
+	if err := cfgSeccomp(spec.Linux.Seccomp); err != nil {
+		return fmt.Errorf("failed to configure seccomp: %v", err)
+	}
 
 	return nil
 }
