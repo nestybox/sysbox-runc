@@ -4,10 +4,15 @@ package syscontSpec
 
 import (
 	"fmt"
+	"os"
+	"bytes"
+	"path/filepath"
 
 	"github.com/sirupsen/logrus"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/deckarep/golang-set"
+
+	"golang.org/x/sys/unix"
 )
 
 // sysvisorfsMounts is a list of system container mounts backed by sysvisor-fs;
@@ -23,67 +28,67 @@ var sysvisorfsMounts = []specs.Mount{
 	// 	Destination: "/proc/cpuinfo",
 	// 	Source:      "/var/lib/sysvisorfs/proc/cpuinfo",
 	// 	Type:        "bind",
-	// 	Options:     "rbind", "rprivate"
+	// 	Options:     []string("rbind", "rprivate"}
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/cgroups",
 	// 	Source:      "/var/lib/sysvisorfs/proc/cgroups",
 	// 	Type:        "bind",
-	// 	Options:     "rbind", "rprivate",
+	// 	Options:     []string("rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/devices",
 	// 	Source:      "/var/lib/sysvisorfs/proc/devices",
 	// 	Type:        "bind",
-	// 	Options:     "rbind", "rprivate",
+	// 	Options:     []string("rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/diskstats",
 	// 	Source:      "/var/lib/sysvisorfs/proc/diskstats",
 	// 	Type:        "bind",
-	// 	Options:     "rbind", "rprivate",
+	// 	Options:     []string("rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/loadavg",
 	// 	Source:      "/var/lib/sysvisorfs/proc/loadavg",
 	// 	Type:        "bind",
-	// 	Options:     "rbind", "rprivate",
+	// 	Options:     []string("rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/meminfo",
 	// 	Source:      "/var/lib/sysvisorfs/proc/meminfo",
 	// 	Type:        "bind",
-	// 	Options:     "rbind", "rprivate",
+	// 	Options:     []string("rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/pagetypeinfo",
 	// 	Source:      "/var/lib/sysvisorfs/proc/pagetypeinfo",
 	// 	Type:        "bind",
-	// 	Options:     "rbind", "rprivate",
+	// 	Options:     []string("rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/partitions",
 	// 	Source:      "/var/lib/sysvisorfs/proc/partitions",
 	// 	Type:        "bind",
-	// 	Options:     "rbind", "rprivate",
+	// 	Options:     []string("rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/stat",
 	// 	Source:      "/var/lib/sysvisorfs/proc/stat",
 	// 	Type:        "bind",
-	// 	Options:     "rbind", "rprivate",
+	// 	Options:     []string("rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/swaps",
 	// 	Source:      "/var/lib/sysvisorfs/proc/swaps",
 	// 	Type:        "bind",
-	// 	Options:     "rbind", "rprivate",
+	// 	Options:     []string("rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/sys",
 	// 	Source:      "/var/lib/sysvisorfs/proc/sys",
 	// 	Type:        "bind",
-	// 	Options:     "rbind", "rprivate",
+	// 	Options:     []string("rbind", "rprivate"},
 	// },
 	specs.Mount{
 		Destination: "/proc/uptime",
@@ -283,6 +288,9 @@ func cfgSysvisorfsMounts(spec *specs.Spec) {
 			if spec.Mounts[i].Destination == mount.Destination {
 				spec.Mounts = append(spec.Mounts[:i], spec.Mounts[i+1:]...)
 				i--
+
+				// TODO: log this event
+
 				break
 			}
 		}
@@ -412,6 +420,53 @@ func cfgSeccomp(seccomp *specs.LinuxSeccomp) error {
 	return nil
 }
 
+// cfgLibModMount bind mounts the host's /lib/modules/<kernel-release>
+// directory in the same path inside the system container; this allows
+// system container processes to verify the presence of modules via
+// modprobe. System apps such as Docker and K8s do this. Note that
+// this does not imply module loading/unloading is supported in a
+// system container. It merely lets processes check if a module is
+// loaded.
+func cfgLibModMount(spec *specs.Spec) error {
+	var utsname unix.Utsname
+	if err := unix.Uname(&utsname); err != nil {
+		return err
+	}
+
+	n := bytes.IndexByte(utsname.Release[:], 0)
+	path := filepath.Join("/lib/modules/", string(utsname.Release[:n]))
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		logrus.Infof("failed to setup bind mount for %s: %v", path, err)
+		return nil
+	}
+
+	mount := specs.Mount{
+		Destination: path,
+		Source:      path,
+		Type:        "bind",
+		Options:     []string{"rbind", "rprivate"},
+	}
+
+	// check if the container spec has a match or a conflict for the mount
+	for _, m := range spec.Mounts {
+		if (m.Source == mount.Source) &&
+			(m.Destination == mount.Destination) &&
+			(m.Type == mount.Type) &&
+			stringSliceEqual(m.Options, mount.Options) {
+			return nil
+		}
+
+		if (m.Destination == mount.Destination) {
+			logrus.Infof("Honoring container spec override for mount of %s", path)
+			return nil
+		}
+	}
+
+	spec.Mounts = append(spec.Mounts, mount)
+	logrus.Debugf("Added bind mount for %s to container's spec", path)
+	return nil
+}
+
 // ConvertSpec converts the given container spec to a system container spec.
 func ConvertSpec(spec *specs.Spec, strict bool) error {
 
@@ -434,12 +489,16 @@ func ConvertSpec(spec *specs.Spec, strict bool) error {
 	cfgMaskedPaths(spec)
 	cfgReadonlyPaths(spec)
 
-	// TODO: uncomment this once sysvisor-fs comes into the picture
-	// cfgSysvisorfsMounts(spec)
-
 	if err := cfgCgroups(spec); err != nil {
 		return fmt.Errorf("failed to configure cgroup mounts: %v", err)
 	}
+
+	if err := cfgLibModMount(spec); err != nil {
+		return fmt.Errorf("failed to setup /lib/module/<kernel-version> mount: %v", err)
+	}
+
+	// TODO: uncomment this once sysvisor-fs comes into the picture
+	// cfgSysvisorfsMounts(spec)
 
 	// Remove readonly root filesystem config (spec.Root.Readonly)
 

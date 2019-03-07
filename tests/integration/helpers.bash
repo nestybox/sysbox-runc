@@ -285,7 +285,7 @@ function setup_busybox() {
 	tar --exclude './dev/*' -C "$BUSYBOX_BUNDLE"/rootfs -xf "$BUSYBOX_IMAGE"
 
         # sysvisor-runc: set bundle ownership to match system container's uid/gid map (see runc_spec())
-        chown -R "$UID_MAP":"$GID_MAP" $BUSYBOX_BUNDLE
+        chown -R "$UID_MAP":"$GID_MAP" "$BUSYBOX_BUNDLE"
 
 	cd "$BUSYBOX_BUNDLE"
 
@@ -297,6 +297,10 @@ function setup_hello() {
 	run mkdir "$HELLO_BUNDLE"
 	run mkdir "$HELLO_BUNDLE"/rootfs
 	tar --exclude './dev/*' -C "$HELLO_BUNDLE"/rootfs -xf "$HELLO_IMAGE"
+
+        # sysvisor-runc: set bundle ownership to match system container's uid/gid map (see runc_spec())
+        chown -R "$UID_MAP":"$GID_MAP" "$HELLO_BUNDLE"
+
 	cd "$HELLO_BUNDLE"
 	runc_spec
 	sed -i 's;"sh";"/hello";' config.json
