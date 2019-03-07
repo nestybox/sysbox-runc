@@ -1,4 +1,4 @@
-package syscontSpec
+package syscont
 
 // stringSliceEqual compares two slices and returns true if they match
 func stringSliceEqual(a, b []string) bool {

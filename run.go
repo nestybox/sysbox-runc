@@ -5,7 +5,7 @@ package main
 import (
 	"os"
 
-	"github.com/opencontainers/runc/libsyscontainer/sysbox"
+	"github.com/opencontainers/runc/libsysbox/sysbox"
 	"github.com/urfave/cli"
 )
 

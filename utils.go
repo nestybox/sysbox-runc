@@ -7,8 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/opencontainers/runc/libsyscontainer/syscontSpec"
-
+	"github.com/opencontainers/runc/libsysbox/syscont"
 	"github.com/opencontainers/runtime-spec/specs-go"
 
 	"github.com/sirupsen/logrus"
@@ -77,7 +76,7 @@ func setupSpec(context *cli.Context) (*specs.Spec, error) {
 		return nil, err
 	}
 
-	if err := syscontSpec.ConvertSpec(spec, false); err != nil {
+	if err := syscont.ConvertSpec(spec, false); err != nil {
 		return nil, fmt.Errorf("error in system container spec: %v", err)
 	}
 

@@ -1,4 +1,4 @@
-package syscontSpec
+package syscont
 
 import (
 	"github.com/opencontainers/runtime-spec/specs-go"

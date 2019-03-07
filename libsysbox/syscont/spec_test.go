@@ -1,4 +1,4 @@
-package syscontSpec
+package syscont
 
 import (
 	"testing"
