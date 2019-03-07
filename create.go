@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 
+	"github.com/opencontainers/runc/libsyscontainer/sysbox"
 	"github.com/urfave/cli"
 )
 
@@ -56,6 +57,9 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 			return err
 		}
 		if err := revisePidFile(context); err != nil {
+			return err
+		}
+		if err := sysbox.CheckHostConfig(); err != nil {
 			return err
 		}
 		spec, err := setupSpec(context)
