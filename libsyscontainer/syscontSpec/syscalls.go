@@ -313,10 +313,7 @@ var syscontSyscallWhitelist = []string{
 	"waitpid",
 	"write",
 	"writev",
-	"personality",
-	"personality",
-	"personality",
-	"personality",
+
 	"personality",
 	"arch_prctl",
 	"modify_ldt",
@@ -331,4 +328,8 @@ var syscontSyscallWhitelist = []string{
 	"request_key",
 	"keyctl",
 	"pivot_root",
+
+	// allow namespace creation inside the system container (for nested containers)
+	"setns",
+	"unshare",
 }

@@ -2,7 +2,7 @@
 
 ## Introduction
 
-`sysvisor-runc` is a fork of the OCI runc CLI tool, modified for spawning and running system containers.
+`sysvisor-runc` is a fork of the OCI runc, modified for spawning and running system containers.
 
 `sysvisor-runc` tracks the OCI [runc](https://github.com/opencontainers/runc) repository
 as well as the OCI [runtime-spec](https://github.com/opencontainers/runtime-spec)
