@@ -4,6 +4,7 @@ import (
 	"os"
 
 	"github.com/urfave/cli"
+	"github.com/opencontainers/runc/libsyscontainer/sysvisor"
 )
 
 var createCommand = cli.Command{
@@ -56,6 +57,9 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 			return err
 		}
 		if err := revisePidFile(context); err != nil {
+			return err
+		}
+		if err := sysvisor.CheckHostConfig(); err != nil {
 			return err
 		}
 		spec, err := setupSpec(context)
