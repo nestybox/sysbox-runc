@@ -2,8 +2,13 @@ package syscontSpec
 
 import (
 	"testing"
+	"os"
+	"bytes"
+	"path/filepath"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
+
+	"golang.org/x/sys/unix"
 )
 
 func findSeccompSyscall(seccomp *specs.LinuxSeccomp, targetSyscalls []string) (allFound bool, notFound []string) {
@@ -42,13 +47,12 @@ func genSeccompWhitelist(syscalls []string) []specs.LinuxSyscall {
 	return specSyscalls
 }
 
-
 func TestCfgSeccomp(t *testing.T) {
 	var seccomp *specs.LinuxSeccomp
 
 	// Test handling of nil seccomp
 	if err := cfgSeccomp(nil); err != nil {
-		t.Errorf("cfgSeccomp(nil) returned error: %v", err)
+		t.Errorf("cfgSeccomp: returned error: %v", err)
 	}
 
 	// Test handling of unsupported arch
@@ -58,7 +62,7 @@ func TestCfgSeccomp(t *testing.T) {
 		Syscalls: []specs.LinuxSyscall{},
 	}
 	if err := cfgSeccomp(seccomp); err != nil {
-		t.Errorf("cfgSeccomp failed to handle unsupported arch: %v", err)
+		t.Errorf("cfgSeccomp: failed to handle unsupported arch: %v", err)
 	}
 
 	// Test handling of empty syscall whitelist
@@ -68,10 +72,10 @@ func TestCfgSeccomp(t *testing.T) {
 		Syscalls: []specs.LinuxSyscall{},
 	}
 	if err := cfgSeccomp(seccomp); err != nil {
-		t.Errorf("cfgSeccomp(spec) returned error: %v", err)
+		t.Errorf("cfgSeccomp: returned error: %v", err)
 	}
 	if ok, notFound := findSeccompSyscall(seccomp, syscontSyscallWhitelist); !ok {
-		t.Errorf("cfgSeccomp(spec) whitelist test failed: missing syscalls: %s", notFound)
+		t.Errorf("cfgSeccomp: empty whitelist test failed: missing syscalls: %s", notFound)
 	}
 
 	// Test handling of complete syscall whitelist
@@ -81,10 +85,10 @@ func TestCfgSeccomp(t *testing.T) {
 		Syscalls: genSeccompWhitelist(syscontSyscallWhitelist),
 	}
 	if err := cfgSeccomp(seccomp); err != nil {
-		t.Errorf("cfgSeccomp(spec) returned error: %v", err)
+		t.Errorf("cfgSeccomp: returned error: %v", err)
 	}
 	if ok, notFound := findSeccompSyscall(seccomp, syscontSyscallWhitelist); !ok {
-		t.Errorf("cfgSeccomp(spec) whitelist test failed: missing syscalls: %s", notFound)
+		t.Errorf("cfgSeccomp: full whitelist test failed: missing syscalls: %s", notFound)
 	}
 
 	// Test handling of incomplete syscall whitelist
@@ -95,10 +99,10 @@ func TestCfgSeccomp(t *testing.T) {
 		Syscalls: genSeccompWhitelist(partialList),
 	}
 	if err := cfgSeccomp(seccomp); err != nil {
-		t.Errorf("cfgSeccomp(spec) returned error: %v", err)
+		t.Errorf("cfgSeccomp: returned error: %v", err)
 	}
 	if ok, notFound := findSeccompSyscall(seccomp, syscontSyscallWhitelist); !ok {
-		t.Errorf("cfgSeccomp(spec) whitelist test failed: missing syscalls: %s", notFound)
+		t.Errorf("cfgSeccomp: incomplete whitelist test failed: missing syscalls: %s", notFound)
 	}
 
 	// Test handling of whitelist with multiple syscalls per LinuxSyscall entry
@@ -112,14 +116,50 @@ func TestCfgSeccomp(t *testing.T) {
 		Syscalls: []specs.LinuxSyscall{linuxSyscall},
 	}
 	if err := cfgSeccomp(seccomp); err != nil {
-		t.Errorf("cfgSeccomp(spec) returned error: %v", err)
+		t.Errorf("cfgSeccomp: returned error: %v", err)
 	}
 	if ok, notFound := findSeccompSyscall(seccomp, syscontSyscallWhitelist); !ok {
-		t.Errorf("cfgSeccomp(spec) whitelist test failed: missing syscalls: %s", notFound)
+		t.Errorf("cfgSeccomp: multiple syscall per entry whitelist test failed: missing syscalls: %s", notFound)
 	}
 
 	// Docker uses whitelists, so we skip the blacklist tests for now
-	// Test handling of empty blacklist
-	// Test handling of conflicting blacklist
-	// Test handling of non-conflicting blacklist
+	// TODO: :Test handling of empty blacklist
+	// TODO: Test handling of conflicting blacklist
+	// TODO: Test handling of non-conflicting blacklist
+}
+
+func TestCfgLibModMount(t *testing.T) {
+
+	var utsname unix.Utsname
+	if err := unix.Uname(&utsname); err != nil {
+		t.Errorf("cfgLibModMount: uname failed: %v", err)
+	}
+
+	n := bytes.IndexByte(utsname.Release[:], 0)
+	path := filepath.Join("/lib/modules/", string(utsname.Release[:n]))
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return // skip test
+	}
+
+	spec := new(specs.Spec)
+
+	// Test handling of spec without "/lib/modules/<kernel-release>" mount
+	if err := cfgLibModMount(spec); err != nil {
+		t.Errorf("cfgLibModMount: returned error: %v", err)
+	}
+	m := spec.Mounts[0]
+	if (m.Destination != path) || (m.Source != path) || (m.Type != "bind") {
+		t.Errorf("cfgLibModMount: failed basic mount test")
+	}
+
+	// Test handling of spec with matching "/lib/modules/<kernel-release>" mount
+	if err := cfgLibModMount(spec); err != nil {
+		t.Errorf("cfgLibModMount: failed matching mount test: %v", err)
+	}
+
+	// test config with conflicting /lib/modules mount
+	spec.Mounts[0].Options = []string{}
+	if err := cfgLibModMount(spec); err != nil {
+		t.Errorf("cfgLibModMount: failed conflicting mount test: %v", err)
+	}
 }

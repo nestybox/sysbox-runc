@@ -106,6 +106,7 @@ localrootlessintegration: all
 shell: runcimage
 	$(CONTAINER_ENGINE) run $(CONTAINER_ENGINE_RUN_FLAGS) \
 		-ti --privileged --rm \
+		-v /lib/modules:/lib/modules:ro \
 		-v $(CURDIR):/go/src/$(PROJECT) \
 		$(RUNC_IMAGE) bash
 
