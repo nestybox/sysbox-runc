@@ -427,7 +427,16 @@ func cfgSeccomp(seccomp *specs.LinuxSeccomp) error {
 // this does not imply module loading/unloading is supported in a
 // system container. It merely lets processes check if a module is
 // loaded.
-func cfgLibModMount(spec *specs.Spec) error {
+func cfgLibModMount(spec *specs.Spec, doFhsCheck bool) error {
+
+	if doFhsCheck {
+		// only do the mount if the container's rootfs has a "/lib" dir
+		rootfsLibPath := filepath.Join(spec.Root.Path, "lib")
+		if _, err := os.Stat(rootfsLibPath); os.IsNotExist(err) {
+			return nil
+		}
+	}
+
 	var utsname unix.Utsname
 	if err := unix.Uname(&utsname); err != nil {
 		return err
@@ -462,6 +471,9 @@ func cfgLibModMount(spec *specs.Spec) error {
 		}
 	}
 
+	// perform the mount; note that the mount will appear inside the system
+	// container as owned by nobody:nogroup; this is fine since the files
+	// are not meant to be modified from within the system container.
 	spec.Mounts = append(spec.Mounts, mount)
 	logrus.Debugf("Added bind mount for %s to container's spec", path)
 	return nil
@@ -493,7 +505,7 @@ func ConvertSpec(spec *specs.Spec, strict bool) error {
 		return fmt.Errorf("failed to configure cgroup mounts: %v", err)
 	}
 
-	if err := cfgLibModMount(spec); err != nil {
+	if err := cfgLibModMount(spec, true); err != nil {
 		return fmt.Errorf("failed to setup /lib/module/<kernel-version> mount: %v", err)
 	}
 
