@@ -34,12 +34,18 @@ func checkUnprivilegedUserns() error {
 		}
 	}
 
+	// TODO: add other distros
+	// Fedora
+	// CentOS
+	// Arch
+	// Alpine
+	// Amazon
+
 	return nil
 }
 
 // CheckHostConfig checks if the host is configured appropriately to run system containers.
 func CheckHostConfig() error {
-
 	errPreamble := "host is not configured properly: "
 
 	if err := checkUnprivilegedUserns(); err != nil {
