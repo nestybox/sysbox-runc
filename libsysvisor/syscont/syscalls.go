@@ -1,6 +1,6 @@
 // +build linux
 
-package syscontSpec
+package syscont
 
 // List of syscalls allowed inside a system container
 var syscontSyscallWhitelist = []string{

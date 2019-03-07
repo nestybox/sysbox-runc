@@ -11,7 +11,7 @@ import (
 	"syscall"
 
 	"github.com/opencontainers/runc/libcontainer/configs"
-	"github.com/opencontainers/runc/libsyscontainer/syscontSpec"
+	"github.com/opencontainers/runc/libsysvisor/syscont"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"
@@ -32,7 +32,7 @@ group id mappings.
 
 Arguments uid and gid indicate the host user/group IDs to which the system
 container's root user/group are mapped. Size is the number of IDs that must be
-mapped; it must be set >= ` + strconv.FormatUint(uint64(syscontSpec.IdRangeMin),10) + ` for compatibility
+mapped; it must be set >= ` + strconv.FormatUint(uint64(syscont.IdRangeMin),10) + ` for compatibility
 with Linux distros that use id 65534 as "nobody".
 
 If the "--bundle" option is present, the uid and gid parameters must match the
@@ -90,12 +90,12 @@ rootless).
 			}
 		}
 
-		spec, err := syscontSpec.Example(uid, gid, size, bundle)
+		spec, err := syscont.Example(uid, gid, size, bundle)
 		if err != nil {
 			return err
 		}
 
-		if err := syscontSpec.ConvertSpec(spec, false); err != nil {
+		if err := syscont.ConvertSpec(spec, false); err != nil {
 			return err
 		}
 

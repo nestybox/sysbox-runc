@@ -4,7 +4,7 @@ import (
 	"os"
 
 	"github.com/urfave/cli"
-	"github.com/opencontainers/runc/libsyscontainer/sysvisor"
+	"github.com/opencontainers/runc/libsysvisor/sysvisor"
 )
 
 var createCommand = cli.Command{

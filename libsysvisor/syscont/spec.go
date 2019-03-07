@@ -1,6 +1,6 @@
 // +build linux
 
-package syscontSpec
+package syscont
 
 import (
 	"fmt"

@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/urfave/cli"
-	"github.com/opencontainers/runc/libsyscontainer/sysvisor"
+	"github.com/opencontainers/runc/libsysvisor/sysvisor"
 )
 
 // default action is to start a container
