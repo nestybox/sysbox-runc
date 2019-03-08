@@ -15,89 +15,98 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// sysvisorfsMounts is a list of system container mounts backed by sysvisor-fs;
-// please keep in alphabetical order.
+// sysvisorfsMounts is a list of system container mounts backed by sysvisor-fs
+// (please keep in alphabetical order)
 var sysvisorfsMounts = []specs.Mount{
-	specs.Mount{
-		Destination: "/proc",
-		Source:      "proc",
-		Type:        "proc",
-		Options:     []string{"nosuid", "noexec", "nodev"},
-	},
 	// specs.Mount{
 	// 	Destination: "/proc/cpuinfo",
 	// 	Source:      "/var/lib/sysvisorfs/proc/cpuinfo",
 	// 	Type:        "bind",
-	// 	Options:     []string("rbind", "rprivate"}
+	// 	Options:     []string{"rbind", "rprivate"}
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/cgroups",
 	// 	Source:      "/var/lib/sysvisorfs/proc/cgroups",
 	// 	Type:        "bind",
-	// 	Options:     []string("rbind", "rprivate"},
+	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/devices",
 	// 	Source:      "/var/lib/sysvisorfs/proc/devices",
 	// 	Type:        "bind",
-	// 	Options:     []string("rbind", "rprivate"},
+	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/diskstats",
 	// 	Source:      "/var/lib/sysvisorfs/proc/diskstats",
 	// 	Type:        "bind",
-	// 	Options:     []string("rbind", "rprivate"},
+	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/loadavg",
 	// 	Source:      "/var/lib/sysvisorfs/proc/loadavg",
 	// 	Type:        "bind",
-	// 	Options:     []string("rbind", "rprivate"},
+	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/meminfo",
 	// 	Source:      "/var/lib/sysvisorfs/proc/meminfo",
 	// 	Type:        "bind",
-	// 	Options:     []string("rbind", "rprivate"},
+	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/pagetypeinfo",
 	// 	Source:      "/var/lib/sysvisorfs/proc/pagetypeinfo",
 	// 	Type:        "bind",
-	// 	Options:     []string("rbind", "rprivate"},
+	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/partitions",
 	// 	Source:      "/var/lib/sysvisorfs/proc/partitions",
 	// 	Type:        "bind",
-	// 	Options:     []string("rbind", "rprivate"},
+	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/stat",
 	// 	Source:      "/var/lib/sysvisorfs/proc/stat",
 	// 	Type:        "bind",
-	// 	Options:     []string("rbind", "rprivate"},
+	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/swaps",
 	// 	Source:      "/var/lib/sysvisorfs/proc/swaps",
 	// 	Type:        "bind",
-	// 	Options:     []string("rbind", "rprivate"},
+	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/sys",
 	// 	Source:      "/var/lib/sysvisorfs/proc/sys",
 	// 	Type:        "bind",
-	// 	Options:     []string("rbind", "rprivate"},
+	// 	Options:     []string{"rbind", "rprivate"},
 	// },
-	specs.Mount{
-		Destination: "/proc/uptime",
-		Source:      "/var/lib/sysvisorfs/proc/uptime",
-		Type:        "bind",
-		Options:     []string{"rbind", "rprivate"},
-	},
+	// specs.Mount{
+	// 	Destination: "/proc/uptime",
+	// 	Source:      "/var/lib/sysvisorfs/proc/uptime",
+	// 	Type:        "bind",
+	// 	Options:     []string{"rbind", "rprivate"},
+	// },
 }
 
+// sysvisorRwPaths list the paths within the sys container's rootfs
+// that must have read-write permission
+var sysvisorRwPaths = []string {
+	"/proc",
+	"/proc/sys",
+}
+
+// sysvisorExposedPaths list the paths within the sys container's rootfs
+// that must not be masked
+var sysvisorExposedPaths = []string {
+	"/proc",
+	"/proc/sys",
+}
+
+// linuxCaps is the full list of Linux capabilities
 var linuxCaps = []string{
 	"CAP_CHOWN",
 	"CAP_DAC_OVERRIDE",
@@ -170,14 +179,12 @@ func cfgNamespaces(spec *specs.Spec) error {
 	}
 
 	if !found {
-
-		// TODO: log this event.
-
 		newns := specs.LinuxNamespace{
 			Type: "cgroup",
 			Path: "",
 		}
 		spec.Linux.Namespaces = append(spec.Linux.Namespaces, newns)
+		logrus.Debugf("added cgroupns to namespace spec")
 	}
 
 	return nil
@@ -224,87 +231,76 @@ func cfgIDMappings(spec *specs.Spec) error {
 
 // cfgCapabilities sets the capabilities for the process in the system container
 func cfgCapabilities(spec *specs.Spec) {
-
 	caps := spec.Process.Capabilities
 	uid := spec.Process.User.UID
 
 	// In a sys container, the root process has all capabilities
 	if uid == 0 {
-
-		// TODO: if the capabilities are being changed, log this event.
-
 		caps.Bounding = linuxCaps;
 		caps.Effective = linuxCaps;
 		caps.Inheritable = linuxCaps;
 		caps.Permitted = linuxCaps;
 		caps.Ambient = linuxCaps;
+		logrus.Debugf("enabled all capabilities in the process spec")
 	}
 }
 
 // cfgMaskedPaths removes from the container's config any masked paths for which
 // sysvisor-fs will handle accesses.
 func cfgMaskedPaths(spec *specs.Spec) {
-	paths := spec.Linux.MaskedPaths
-	for i := 0; i < len(paths); i++ {
-		for _, mount := range sysvisorfsMounts {
-			if paths[i] == mount.Destination {
-
-				// TODO: log this event
-
-				paths = append(paths[:i], paths[i+1:]...)
+	specPaths := spec.Linux.MaskedPaths
+	for i := 0; i < len(specPaths); i++ {
+		for _, path := range sysvisorExposedPaths {
+			if specPaths[i] == path {
+				specPaths = append(specPaths[:i], specPaths[i+1:]...)
 				i--
+				logrus.Debugf("removed masked path %s from spec", path)
 				break
 			}
 		}
 	}
-	spec.Linux.MaskedPaths = paths
+	spec.Linux.MaskedPaths = specPaths
 }
 
-// cfgReadonlyPaths removes from the container's config any read-only paths for which
-// sysvisor-fs will handle accesses.
+// cfgReadonlyPaths removes from the container's config any read-only paths
+// that must be read-write in the system container
 func cfgReadonlyPaths(spec *specs.Spec) {
-	paths := spec.Linux.ReadonlyPaths
-	for i := 0; i < len(paths); i++ {
-		for _, mount := range sysvisorfsMounts {
-			if paths[i] == mount.Destination {
-
-				// TODO: log this event
-
-				paths = append(paths[:i], paths[i+1:]...)
+	specPaths := spec.Linux.ReadonlyPaths
+	for i := 0; i < len(specPaths); i++ {
+		for _, path := range sysvisorRwPaths {
+			if specPaths[i] == path {
+				specPaths = append(specPaths[:i], specPaths[i+1:]...)
 				i--
+				logrus.Debugf("removed read-only path %s from spec", path)
 				break
 			}
 		}
 	}
-	spec.Linux.ReadonlyPaths = paths
+	spec.Linux.ReadonlyPaths = specPaths
 }
 
 // cfgSysvisorfsMounts adds the sysvisor-fs mounts to the containers config.
 func cfgSysvisorfsMounts(spec *specs.Spec) {
-
-	// remove from the config any mounts that conflict with sysvisorfs mounts
+	// remove mounts that conflict with sysvisor-fs mounts
 	for i := 0; i < len(spec.Mounts); i++ {
 		for _, mount := range sysvisorfsMounts {
 			if spec.Mounts[i].Destination == mount.Destination {
 				spec.Mounts = append(spec.Mounts[:i], spec.Mounts[i+1:]...)
 				i--
-
-				// TODO: log this event
-
+				logrus.Debugf("removed mount %s from spec (will be backed by sysvisorfs)", mount.Destination)
 				break
 			}
 		}
 	}
-
 	// add sysvisorfs mounts to the config
 	for _, mount := range sysvisorfsMounts {
 		spec.Mounts = append(spec.Mounts, mount)
+		logrus.Debugf("added sysvisor-fs mount %s to spec", mount.Destination)
 	}
 }
 
 // cfgCgroups configures the system container's cgroup settings.
 func cfgCgroups(spec *specs.Spec) error {
-
 	// Remove the read-only attribute from the cgroup mount; this is fine because the sys
 	// container's cgroup root will be a child of the cgroup that controls the
 	// sys container's resources; thus, root processes inside the sys container will be
@@ -316,6 +312,7 @@ func cfgCgroups(spec *specs.Spec) error {
 				if mount.Options[j] == "ro" {
 					mount.Options = append(mount.Options[:j], mount.Options[j+1:]...)
 					j--
+					logrus.Debugf("removed read-only attr for cgroup mount %s", mount.Destination)
 				}
 			}
 			spec.Mounts[i].Options = mount.Options
@@ -396,7 +393,7 @@ func cfgSeccomp(seccomp *specs.LinuxSeccomp) error {
 			seccomp.Syscalls = append(seccomp.Syscalls, sc)
 		}
 
-		logrus.Debugf("Added syscalls to seccomp profile: %v", diffSet)
+		logrus.Debugf("added syscalls to seccomp profile: %v", diffSet)
 
 	} else {
 		// remove the diffset from the blacklist
@@ -414,7 +411,7 @@ func cfgSeccomp(seccomp *specs.LinuxSeccomp) error {
 		}
 		seccomp.Syscalls = newSyscalls
 
-		logrus.Debugf("Removed syscalls from seccomp profile: %v", diffSet)
+		logrus.Debugf("removed syscalls from seccomp profile: %v", diffSet)
 	}
 
 	return nil
@@ -445,7 +442,7 @@ func cfgLibModMount(spec *specs.Spec, doFhsCheck bool) error {
 	n := bytes.IndexByte(utsname.Release[:], 0)
 	path := filepath.Join("/lib/modules/", string(utsname.Release[:n]))
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		logrus.Infof("failed to setup bind mount for %s: %v", path, err)
+		logrus.Warnf("could not setup bind mount for %s: %v", path, err)
 		return nil
 	}
 
@@ -466,7 +463,7 @@ func cfgLibModMount(spec *specs.Spec, doFhsCheck bool) error {
 		}
 
 		if (m.Destination == mount.Destination) {
-			logrus.Infof("Honoring container spec override for mount of %s", path)
+			logrus.Infof("honoring container spec override for mount of %s", m.Destination)
 			return nil
 		}
 	}
@@ -475,7 +472,7 @@ func cfgLibModMount(spec *specs.Spec, doFhsCheck bool) error {
 	// container as owned by nobody:nogroup; this is fine since the files
 	// are not meant to be modified from within the system container.
 	spec.Mounts = append(spec.Mounts, mount)
-	logrus.Debugf("Added bind mount for %s to container's spec", path)
+	logrus.Debugf("added bind mount for %s to container's spec", path)
 	return nil
 }
 
@@ -509,8 +506,7 @@ func ConvertSpec(spec *specs.Spec, strict bool) error {
 		return fmt.Errorf("failed to setup /lib/module/<kernel-version> mount: %v", err)
 	}
 
-	// TODO: uncomment this once sysvisor-fs comes into the picture
-	// cfgSysvisorfsMounts(spec)
+	cfgSysvisorfsMounts(spec)
 
 	// Remove readonly root filesystem config (spec.Root.Readonly)
 
@@ -524,6 +520,8 @@ func ConvertSpec(spec *specs.Spec, strict bool) error {
 	if err := cfgSeccomp(spec.Linux.Seccomp); err != nil {
 		return fmt.Errorf("failed to configure seccomp: %v", err)
 	}
+
+	// TODO: disallow all mounts over /proc in spec; only sysvisor-fs may mount over /proc
 
 	return nil
 }
