@@ -26,6 +26,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/system"
 	"github.com/opencontainers/runc/libcontainer/utils"
 	"github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/opencontainers/runc/libsysvisor/sysvisor" 
 
 	criurpc "github.com/checkpoint-restore/go-criu/rpc"
 	"github.com/golang/protobuf/proto"
@@ -346,6 +347,13 @@ func (c *linuxContainer) start(process *Process) error {
 	}
 	// generate a timestamp indicating when the container was started
 	c.created = time.Now().UTC()
+
+	// sysvisor-runc: send the creation-timestamp to sysvisor-fs.
+	if !sysvisor.SendContainerCreationTime(c.created) { 
+		return newSystemErrorWithCause(err,
+			 "Setting container creation time with sysvisor-fs") 
+	}
+
 	if process.Init {
 		c.state = &createdState{
 			c: c,
@@ -369,7 +377,7 @@ func (c *linuxContainer) start(process *Process) error {
 					return newSystemErrorWithCausef(err, "running poststart hook %d", i)
 				}
 			}
-		}
+		}	
 	}
 	return nil
 }

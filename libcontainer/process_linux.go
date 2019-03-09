@@ -18,6 +18,8 @@ import (
 	"github.com/opencontainers/runc/libcontainer/intelrdt"
 	"github.com/opencontainers/runc/libcontainer/system"
 	"github.com/opencontainers/runc/libcontainer/utils"
+	"github.com/opencontainers/runc/libsysvisor/sysvisor"
+	pb "github.com/opencontainers/runc/libsysvisor/sysvisor_protobuf"
 
 	"golang.org/x/sys/unix"
 )
@@ -285,7 +287,7 @@ func (p *initProcess) start() error {
 
 	// sysvisor-runc: create a child cgroup that will serve as the system container's
 	// cgroup root.
-	if err:= p.manager.CreateChildCgroup(p.config.Config); err != nil {
+	if err := p.manager.CreateChildCgroup(p.config.Config); err != nil {
 		return newSystemErrorWithCause(err, "creating system container child cgroup")
 	}
 
@@ -336,6 +338,16 @@ func (p *initProcess) start() error {
 		if _, err := p.parentPipe.Write([]byte{createCgroupns}); err != nil {
 			return newSystemErrorWithCause(err, "sending synchronization value to init process")
 		}
+	}
+
+	// sysvisor-runc: register the container with sysvisor-fs (must be done before
+	// prestart hooks).
+	if !sysvisor.SendContainerRegistration(&pb.ContainerData{
+		Id:       p.container.id,
+		InitPid:  int32(childPid),
+		Hostname: p.container.config.Hostname,
+	}) {
+		return newSystemErrorWithCause(err, "registering with sysvisor-fs")
 	}
 
 	// Wait for our first child to exit

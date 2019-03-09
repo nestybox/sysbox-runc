@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 
 	"github.com/opencontainers/runc/libcontainer/configs"
+	"github.com/opencontainers/runc/libsysvisor/sysvisor"
+	pb "github.com/opencontainers/runc/libsysvisor/sysvisor_protobuf"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
@@ -57,6 +59,12 @@ func destroy(c *linuxContainer) error {
 		err = herr
 	}
 	c.state = &stoppedState{c: c}
+
+	// Unregister container from sysvisor-fs (must be done after post-stop hooks).
+	if !sysvisor.SendContainerUnregistration(&pb.ContainerData{Id: c.id}) {
+		return newSystemErrorWithCause(err, "unregistering from sysvisor-fs")
+	}
+
 	return err
 }
 
