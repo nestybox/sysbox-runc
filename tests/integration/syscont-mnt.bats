@@ -11,6 +11,22 @@ function teardown() {
   teardown_busybox
 }
 
+@test "syscont: /lib/modules/<kernel-release> mount" {
+  runc run -d --console-socket $CONSOLE_SOCKET test_busybox
+  [ "$status" -eq 0 ]
+
+  runc exec test_busybox sh -c 'mount | grep "/lib/modules"'
+  [ "$status" -eq 0 ]
+  [[ "${output}" =~ "/lib/modules/$(uname -r)" ]]
+}
+
+@test "syscont: disallowed mounts" {
+  skip "not written yet"
+  # add some disallowed mounts to the container's spec
+  # launch the sys container
+  # verify that sysbox-runc removed the disallowed mounts
+}
+
 @test "syscont: sysbox-fs mounts" {
   skip "not written yet"
   # launch the sys container
@@ -25,13 +41,4 @@ function teardown() {
 @test "syscont: procfs unmount" {
   skip "wait until sysbox implements intercept of umount syscall"
   # Verify that unmounting procfs inside the sys container is not allowed
-}
-
-@test "syscont: /lib/modules/<kernel-release> mount" {
-  runc run -d --console-socket "$CONSOLE_SOCKET" test_busybox
-  [ "$status" -eq 0 ]
-
-  runc exec test_busybox sh -c 'mount | grep "/lib/modules"'
-  [ "$status" -eq 0 ]
-  [[ "${output}" =~ "/lib/modules/$(uname -r)" ]]
 }

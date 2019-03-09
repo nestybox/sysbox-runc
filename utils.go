@@ -76,7 +76,7 @@ func setupSpec(context *cli.Context) (*specs.Spec, error) {
 		return nil, err
 	}
 
-	if err := syscont.ConvertSpec(spec, false); err != nil {
+	if err := syscont.ConvertSpec(spec); err != nil {
 		return nil, fmt.Errorf("error in system container spec: %v", err)
 	}
 

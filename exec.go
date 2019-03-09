@@ -237,7 +237,7 @@ func getProcess(context *cli.Context, bundle string) (*specs.Process, error) {
 	}
 
 	// convert sys cont spec (after uid and cap override above)
-	if err := syscont.ConvertSpec(spec, false); err != nil {
+	if err := syscont.ConvertSpec(spec); err != nil {
 		return nil, fmt.Errorf("error in system container spec: %v", err)
 	}
 
