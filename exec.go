@@ -163,7 +163,11 @@ func getProcess(context *cli.Context, bundle string) (*specs.Process, error) {
 		if err := json.NewDecoder(f).Decode(&p); err != nil {
 			return nil, err
 		}
-		return &p, validateProcessSpec(&p)
+		if err := validateProcessSpec(&p); err != nil {
+			return nil, err
+		}
+		// sysvisor-runc: convert the process spec for system containers
+		return &p, syscont.ConvertProcessSpec(&p)
 	}
 	// process via cli flags
 	if err := os.Chdir(bundle); err != nil {
@@ -227,11 +231,9 @@ func getProcess(context *cli.Context, bundle string) (*specs.Process, error) {
 		}
 		p.User.AdditionalGids = append(p.User.AdditionalGids, uint32(gid))
 	}
-
-	// convert sys cont spec (after uid and cap override above)
-	if err := syscont.ConvertSpec(spec); err != nil {
-		return nil, fmt.Errorf("error in system container spec: %v", err)
+	// sysvisor-runc: convert the process spec for system containers
+	if err := syscont.ConvertProcessSpec(p); err != nil {
+		return nil, err
 	}
-
 	return p, nil
 }

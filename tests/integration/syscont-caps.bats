@@ -94,7 +94,10 @@ function teardown() {
 }
 
 
-# TODO: Verify that exec cap override works
+# TODO: Verify sysvisor-runc exec caps are set correctly when giving exec a process.json
+
+
+# TODO: Verify that sysvisor-runc exec cap override works
 # - create spec without any caps and run sys container
 # - exec into sys container as user 0 with --cap=CAP_SYS_ADMIN; verify root has all caps
 # - exec into sys container as user 1000 with --cap=CAP_SYS_ADMIN; verify root has CAP_SYS_ADMIN only
