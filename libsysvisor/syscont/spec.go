@@ -7,6 +7,9 @@ import (
 	"os"
 	"bytes"
 	"path/filepath"
+	"syscall"
+	"strings"
+	"reflect"
 
 	"github.com/sirupsen/logrus"
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -151,6 +154,12 @@ var linuxCaps = []string{
 // IdRangeMin represents the minimum uid/gid range required by a sys container instance
 var IdRangeMin uint32 = 65536
 
+// SupportedRootFs is the list of supported filesystems for backing the system container's
+// root path
+var SupportedRootFs = map[string]int64{
+	"btrfs": unix.BTRFS_SUPER_MAGIC,
+}
+
 // cfgNamespaces checks that the namespace config is valid and adds any missing Linux
 // namespaces to the system container config
 func cfgNamespaces(spec *specs.Spec) error {
@@ -281,17 +290,19 @@ func cfgReadonlyPaths(spec *specs.Spec) {
 
 // cfgSysvisorfsMounts adds the sysvisor-fs mounts to the containers config.
 func cfgSysvisorfsMounts(spec *specs.Spec) {
-	// remove mounts that conflict with sysvisor-fs mounts
+
+	// disallow all mounts over /proc/* or /sys/* (except for /sys/fs/cgroup);
+	// only sysvisor-fs mounts are allowed there.
 	for i := 0; i < len(spec.Mounts); i++ {
-		for _, mount := range sysvisorfsMounts {
-			if spec.Mounts[i].Destination == mount.Destination {
-				spec.Mounts = append(spec.Mounts[:i], spec.Mounts[i+1:]...)
-				i--
-				logrus.Debugf("removed mount %s from spec (will be backed by sysvisorfs)", mount.Destination)
-				break
-			}
+		m := spec.Mounts[i]
+		if strings.HasPrefix(m.Destination, "/proc/") ||
+			(strings.HasPrefix(m.Destination, "/sys/") && (m.Destination != "/sys/fs/cgroup")) {
+			spec.Mounts = append(spec.Mounts[:i], spec.Mounts[i+1:]...)
+			i--
+			logrus.Debugf("removed mount %s from spec (not compatible with sysvisor-runc)", m.Destination)
 		}
 	}
+
 	// add sysvisorfs mounts to the config
 	for _, mount := range sysvisorfsMounts {
 		spec.Mounts = append(spec.Mounts, mount)
@@ -301,7 +312,8 @@ func cfgSysvisorfsMounts(spec *specs.Spec) {
 
 // cfgCgroups configures the system container's cgroup settings.
 func cfgCgroups(spec *specs.Spec) error {
-	// Remove the read-only attribute from the cgroup mount; this is fine because the sys
+
+	// remove the read-only attribute from the cgroup mount; this is fine because the sys
 	// container's cgroup root will be a child of the cgroup that controls the
 	// sys container's resources; thus, root processes inside the sys container will be
 	// able to allocate cgroup resources yet not modify the resources allocated to the sys
@@ -463,7 +475,7 @@ func cfgLibModMount(spec *specs.Spec, doFhsCheck bool) error {
 		}
 
 		if (m.Destination == mount.Destination) {
-			logrus.Infof("honoring container spec override for mount of %s", m.Destination)
+			logrus.Debugf("honoring container spec override for mount of %s", m.Destination)
 			return nil
 		}
 	}
@@ -476,15 +488,54 @@ func cfgLibModMount(spec *specs.Spec, doFhsCheck bool) error {
 	return nil
 }
 
+// checkRootFilesys checks if the system container's rootfs is on a
+// filesystem supported by sysvisor
+func checkRootFilesys(rootPath string) error {
+
+	var stat syscall.Statfs_t
+	if err := syscall.Statfs(rootPath, &stat); err != nil {
+		fmt.Errorf("failed to find filesystem info for container root path at %s", rootPath)
+	}
+
+	for _, magic := range SupportedRootFs {
+		if stat.Type == magic {
+			return nil
+		}
+	}
+
+	logrus.Debugf("system container root path is not on one of these filesystems: " +
+		           "%v; running an inner docker container won't work " +
+		           "unless a host volume is mounted on the system " +
+		           "container's /var/lib/docker",
+		           reflect.ValueOf(SupportedRootFs).MapKeys())
+
+	return nil
+}
+
+// specCheck performs some basic checks on the system container's spec
+func specCheck(spec *specs.Spec) error {
+
+	if spec.Root == nil || spec.Linux == nil {
+		return fmt.Errorf("not a linux container spec")
+	}
+
+	if spec.Root.Readonly {
+		return fmt.Errorf("root path must be read-write but it's set to read-only")
+	}
+
+	if err := checkRootFilesys(spec.Root.Path); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // ConvertSpec converts the given container spec to a system container spec.
-func ConvertSpec(spec *specs.Spec, strict bool) error {
+func ConvertSpec(spec *specs.Spec) error {
 
-	// TODO: verify spec in not nil and contains a Linux object; bail if it doesn't
-
-	// TODO: Modify the spec for sys containers here;
-	// validate and return the modified spec. Also, modify the seccomp
-	// config for sys containers. Log messages when performing conversions.
-	// If comparison should be strict, report errors on incompatible configs.
+	if err := specCheck(spec); err != nil {
+		return fmt.Errorf("invalid or unsupported system container spec: %v", err)
+	}
 
 	if err := cfgNamespaces(spec); err != nil {
 		return fmt.Errorf("invalid namespace config: %v", err)
@@ -508,20 +559,9 @@ func ConvertSpec(spec *specs.Spec, strict bool) error {
 
 	cfgSysvisorfsMounts(spec)
 
-	// Remove readonly root filesystem config (spec.Root.Readonly)
-
-	// Remove prestart hooks
-
-	// cfg process spec
-	// - uid/gid must be 0
-	// - entry point must be system daemon
-
-	// cfg seccomp config
 	if err := cfgSeccomp(spec.Linux.Seccomp); err != nil {
 		return fmt.Errorf("failed to configure seccomp: %v", err)
 	}
-
-	// TODO: disallow all mounts over /proc in spec; only sysvisor-fs may mount over /proc
 
 	return nil
 }

@@ -95,7 +95,7 @@ rootless).
 			return err
 		}
 
-		if err := syscont.ConvertSpec(spec, false); err != nil {
+		if err := syscont.ConvertSpec(spec); err != nil {
 			return err
 		}
 

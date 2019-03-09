@@ -30,7 +30,7 @@ func checkUnprivilegedUserns() error {
 		fmt.Sscanf(string(b), "%d", &val)
 
 		if (val != 1) {
-			return fmt.Errorf("%s: want 1, have %d", path, val)
+			return fmt.Errorf("kernel is not configured to allow unprivileged users to create namespaces: %s: want 1, have %d", path, val)
 		}
 	}
 
@@ -46,10 +46,8 @@ func checkUnprivilegedUserns() error {
 
 // CheckHostConfig checks if the host is configured appropriately to run system containers.
 func CheckHostConfig() error {
-	errPreamble := "host is not configured properly: "
-
 	if err := checkUnprivilegedUserns(); err != nil {
-		return fmt.Errorf(errPreamble + "kernel does not allow unprivileged users to create namespaces: %v", err)
+		return fmt.Errorf("host is not configured properly: %v", err)
 	}
 	return nil
 }
