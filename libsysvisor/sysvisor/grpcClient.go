@@ -46,13 +46,11 @@ func SendContainerRegistration(data *pb.ContainerData) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	r, err := cntrChanIntf.ContainerRegistration(ctx, data)
+	_, err := cntrChanIntf.ContainerRegistration(ctx, data)
 	if err != nil {
 		log.Fatalf("Could not interact with Sysvisorfs: %v", err)
 		return false
 	}
-	log.Println("Response: ", r.Success)
-
 	return true
 }
 
@@ -74,13 +72,11 @@ func SendContainerUnregistration(data *pb.ContainerData) bool {
 	defer cancel()
 
 	// Generate a container-unregistration message to Sysvisorfs
-	r, err := cntrChanIntf.ContainerUnregistration(ctx, data)
+	_, err := cntrChanIntf.ContainerUnregistration(ctx, data)
 	if err != nil {
 		log.Fatalf("Could not interact with Sysvisorfs: %v", err)
 		return false
 	}
-	log.Println("Response: ", r.Success)
-
 	return true
 }
 
