@@ -401,11 +401,12 @@ func (p *initProcess) start() (retErr error) {
 
 	// sysbox-runc: register the container with sysbox-fs (must be done before
 	// prestart hooks).
-	if !sysbox.SendContainerRegistration(&pb.ContainerData{
+	regInfo := &pb.ContainerData{
 		Id:       p.container.id,
 		InitPid:  int32(childPid),
 		Hostname: p.container.config.Hostname,
-	}) {
+	}
+	if err := sysbox.SendContainerRegistration(regInfo); err != nil {
 		return newSystemErrorWithCause(err, "registering with sysbox-fs")
 	}
 

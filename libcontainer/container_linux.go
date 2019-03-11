@@ -20,6 +20,7 @@ import (
 	"time"
 
 	securejoin "github.com/cyphar/filepath-securejoin"
+	"github.com/golang/protobuf/proto"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/intelrdt"
@@ -30,7 +31,7 @@ import (
 
 	"github.com/checkpoint-restore/go-criu/v4"
 	criurpc "github.com/checkpoint-restore/go-criu/v4/rpc"
-	"github.com/golang/protobuf/proto"
+
 	errorsf "github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink/nl"
@@ -372,9 +373,9 @@ func (c *linuxContainer) start(process *Process) error {
 	c.created = time.Now().UTC()
 
 	// sysbox-runc: send the creation-timestamp to sysbox-fs.
-	if !sysbox.SendContainerCreationTime(c.created) {
+	if err := sysbox.SendContainerCreationTime(c.created); err != nil {
 		return newSystemErrorWithCause(err,
-			"Setting container creation time with sysbox-fs")
+			"setting container creation time with sysbox-fs")
 	}
 
 	if process.Init {

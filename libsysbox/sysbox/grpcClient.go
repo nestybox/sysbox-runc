@@ -2,6 +2,7 @@ package sysbox
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -32,12 +33,12 @@ func sysboxfs_connect() *grpc.ClientConn {
 // is a blocking call that can potentially have a minor impact
 // on container's boot-up speed.
 //
-func SendContainerRegistration(data *pb.ContainerData) bool {
+func SendContainerRegistration(data *pb.ContainerData) error {
 
 	// Set up sysboxfs pipeline.
 	conn := sysboxfs_connect()
 	if conn == nil {
-		return false
+		return fmt.Errorf("failed to connect with sysbox-fs")
 	}
 	defer conn.Close()
 
@@ -48,22 +49,21 @@ func SendContainerRegistration(data *pb.ContainerData) bool {
 
 	_, err := cntrChanIntf.ContainerRegistration(ctx, data)
 	if err != nil {
-		log.Fatalf("Could not interact with sysboxfs: %v", err)
-		return false
+		return fmt.Errorf("failed to register container with sysbox-fs: %v", err)
 	}
 
-	return true
+	return nil
 }
 
 //
 // Unregisters container from sysboxfs.
 //
-func SendContainerUnregistration(data *pb.ContainerData) bool {
+func SendContainerUnregistration(data *pb.ContainerData) error {
 
 	// Set up sysboxfs pipeline.
 	conn := sysboxfs_connect()
 	if conn == nil {
-		return false
+		return fmt.Errorf("failed to connect with sysbox-fs")
 	}
 	defer conn.Close()
 
@@ -75,18 +75,16 @@ func SendContainerUnregistration(data *pb.ContainerData) bool {
 	// Generate a container-unregistration message to sysboxfs
 	_, err := cntrChanIntf.ContainerUnregistration(ctx, data)
 	if err != nil {
-		log.Fatalf("Could not interact with sysboxfs: %v", err)
-		return false
+		return fmt.Errorf("failed to unregister container with sysbox-fs: %v", err)
 	}
 
-	return true
+	return nil
 }
 
 //
 // Sends creation-time attribute to sysbox-fs end.
 //
-func SendContainerCreationTime(time time.Time) bool {
-
+func SendContainerCreationTime(time time.Time) error {
 	// TBD
-	return true
+	return nil
 }

@@ -65,8 +65,8 @@ func destroy(c *linuxContainer) error {
 	c.state = &stoppedState{c: c}
 
 	// Unregister container from sysbox-fs (must be done after post-stop hooks).
-	if !sysbox.SendContainerUnregistration(&pb.ContainerData{Id: c.id}) {
-		return newSystemErrorWithCause(err, "unregistering from sysbox-fs")
+	if err := sysbox.SendContainerUnregistration(&pb.ContainerData{Id: c.id}); err != nil {
+		return newSystemErrorWithCause(err, "unregistering with sysbox-fs")
 	}
 
 	return err
