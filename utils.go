@@ -68,7 +68,8 @@ func setupSpec(context *cli.Context) (*specs.Spec, error) {
 		return nil, err
 	}
 
-	if err := syscont.ConvertSpec(spec); err != nil {
+	noSysvisorfs := context.Bool("no-sysvisorfs")
+	if err := syscont.ConvertSpec(spec, noSysvisorfs); err != nil {
 		return nil, fmt.Errorf("error in system container spec: %v", err)
 	}
 

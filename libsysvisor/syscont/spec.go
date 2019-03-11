@@ -537,7 +537,7 @@ func ConvertProcessSpec(p *specs.Process) error {
 }
 
 // ConvertSpec converts the given container spec to a system container spec.
-func ConvertSpec(spec *specs.Spec) error {
+func ConvertSpec(spec *specs.Spec, noSysvisorfs bool) error {
 
 	if err := checkSpec(spec); err != nil {
 		return fmt.Errorf("invalid or unsupported system container spec: %v", err)
@@ -555,9 +555,6 @@ func ConvertSpec(spec *specs.Spec) error {
 		return fmt.Errorf("invalid user/group ID config: %v", err)
 	}
 
-	cfgMaskedPaths(spec)
-	cfgReadonlyPaths(spec)
-
 	if err := cfgCgroups(spec); err != nil {
 		return fmt.Errorf("failed to configure cgroup mounts: %v", err)
 	}
@@ -566,7 +563,11 @@ func ConvertSpec(spec *specs.Spec) error {
 		return fmt.Errorf("failed to setup /lib/module/<kernel-version> mount: %v", err)
 	}
 
-	cfgSysvisorfsMounts(spec)
+	if !noSysvisorfs {
+		cfgMaskedPaths(spec)
+		cfgReadonlyPaths(spec)
+		cfgSysvisorfsMounts(spec)
+	}
 
 	if err := cfgSeccomp(spec.Linux.Seccomp); err != nil {
 		return fmt.Errorf("failed to configure seccomp: %v", err)

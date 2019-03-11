@@ -130,9 +130,9 @@ func CriuPath(criupath string) func(*LinuxFactory) error {
 // Sysvisorfs returns an option func that configures a LinuxFactory to
 // return containers that use sysvisor-fs for emulating parts of the
 // container's rootfs
-func Sysvisorfs() func(*LinuxFactory) error {
+func Sysvisorfs(enable bool) func(*LinuxFactory) error {
 	return func(l *LinuxFactory) error {
-		l.Sysvisorfs = true
+		l.Sysvisorfs = enable
 		return nil
 	}
 }
