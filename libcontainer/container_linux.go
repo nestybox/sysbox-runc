@@ -54,6 +54,7 @@ type linuxContainer struct {
 	criuVersion          int
 	state                containerState
 	created              time.Time
+	sysvisorfs           bool
 }
 
 // State represents a running container's state
@@ -349,9 +350,10 @@ func (c *linuxContainer) start(process *Process) error {
 	c.created = time.Now().UTC()
 
 	// sysvisor-runc: send the creation-timestamp to sysvisor-fs.
-	if err := sysvisor.SendContainerCreationTime(c.created); err != nil {
-		return newSystemErrorWithCause(err,
-			 "setting container creation time with sysvisor-fs")
+	if c.sysvisorfs {
+		if err := sysvisor.SendContainerCreationTime(c.created); err != nil {
+			return newSystemErrorWithCause(err, "setting container creation time with sysvisor-fs")
+		}
 	}
 
 	if process.Init {

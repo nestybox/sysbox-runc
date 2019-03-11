@@ -342,13 +342,15 @@ func (p *initProcess) start() error {
 
 	// sysvisor-runc: register the container with sysvisor-fs (must be done before
 	// prestart hooks).
-	regInfo := &pb.ContainerData{
-		Id:       p.container.id,
-		InitPid:  int32(childPid),
-		Hostname: p.container.config.Hostname,
-	}
-	if err := sysvisor.SendContainerRegistration(regInfo); err != nil {
-		return newSystemErrorWithCause(err, "registering with sysvisor-fs")
+	if p.container.sysvisorfs {
+		regInfo := &pb.ContainerData{
+			Id:       p.container.id,
+			InitPid:  int32(childPid),
+			Hostname: p.container.config.Hostname,
+		}
+		if err := sysvisor.SendContainerRegistration(regInfo); err != nil {
+			return newSystemErrorWithCause(err, "registering with sysvisor-fs")
+		}
 	}
 
 	// Wait for our first child to exit
