@@ -95,7 +95,8 @@ rootless).
 			return err
 		}
 
-		if err := syscont.ConvertSpec(spec); err != nil {
+		noSysboxfs := context.GlobalBool("no-sysboxfs")
+		if err := syscont.ConvertSpec(spec, noSysboxfs); err != nil {
 			return err
 		}
 

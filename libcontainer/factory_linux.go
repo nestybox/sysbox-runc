@@ -180,9 +180,9 @@ func CriuPath(criupath string) func(*LinuxFactory) error {
 // Sysboxfs returns an option func that configures a LinuxFactory to
 // return containers that use sysbox-fs for emulating parts of the
 // container's rootfs
-func Sysboxfs() func(*LinuxFactory) error {
+func Sysboxfs(enable bool) func(*LinuxFactory) error {
 	return func(l *LinuxFactory) error {
-		l.Sysboxfs = true
+		l.Sysboxfs = enable
 		return nil
 	}
 }
@@ -285,7 +285,7 @@ func (l *LinuxFactory) Create(id string, config *configs.Config) (Container, err
 		newuidmapPath: l.NewuidmapPath,
 		newgidmapPath: l.NewgidmapPath,
 		cgroupManager: l.NewCgroupsManager(config.Cgroups, nil),
-		sysboxfs:    l.Sysboxfs,
+		sysboxfs:      l.Sysboxfs,
 	}
 	if intelrdt.IsCATEnabled() || intelrdt.IsMBAEnabled() {
 		c.intelRdtManager = l.NewIntelRdtManager(config, id, "")

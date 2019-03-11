@@ -129,6 +129,10 @@ func main() {
 			Value: "auto",
 			Usage: "ignore cgroup permission errors ('true', 'false', or 'auto')",
 		},
+		cli.BoolFlag{
+			Name:  "no-sysboxfs",
+			Usage: "do not interact with sysbox-fs; meant for testing and debugging.",
+		},
 	}
 	app.Commands = []cli.Command{
 		checkpointCommand,
