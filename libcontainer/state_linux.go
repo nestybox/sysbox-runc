@@ -61,8 +61,8 @@ func destroy(c *linuxContainer) error {
 	c.state = &stoppedState{c: c}
 
 	// Unregister container from sysvisor-fs (must be done after post-stop hooks).
-	if !sysvisor.SendContainerUnregistration(&pb.ContainerData{Id: c.id}) {
-		return newSystemErrorWithCause(err, "unregistering from sysvisor-fs")
+	if err := sysvisor.SendContainerUnregistration(&pb.ContainerData{Id: c.id}); err != nil {
+		return newSystemErrorWithCause(err, "unregistering with sysvisor-fs")
 	}
 
 	return err

@@ -1,6 +1,7 @@
 package sysvisor
 
 import (
+	"fmt"
 	"context"
 	"log"
 	"time"
@@ -32,12 +33,12 @@ func sysvisorfs_connect() *grpc.ClientConn {
 // is a blocking call that can potentially have a minor impact
 // on container's boot-up speed.
 //
-func SendContainerRegistration(data *pb.ContainerData) bool {
+func SendContainerRegistration(data *pb.ContainerData) error {
 
 	// Set up sysvisorfs pipeline.
 	conn := sysvisorfs_connect()
 	if conn == nil {
-		return false
+		return fmt.Errorf("failed to connect with sysvisor-fs")
 	}
 	defer conn.Close()
 
@@ -48,21 +49,21 @@ func SendContainerRegistration(data *pb.ContainerData) bool {
 
 	_, err := cntrChanIntf.ContainerRegistration(ctx, data)
 	if err != nil {
-		log.Fatalf("Could not interact with Sysvisorfs: %v", err)
-		return false
+		return fmt.Errorf("failed to register container with sysvisor-fs: %v", err)
 	}
-	return true
+
+	return nil
 }
 
 //
 // Unregisters container from Sysvisorfs.
 //
-func SendContainerUnregistration(data *pb.ContainerData) bool {
+func SendContainerUnregistration(data *pb.ContainerData) error {
 
 	// Set up sysvisorfs pipeline.
 	conn := sysvisorfs_connect()
 	if conn == nil {
-		return false
+		return fmt.Errorf("failed to connect with sysvisor-fs")
 	}
 	defer conn.Close()
 
@@ -74,17 +75,16 @@ func SendContainerUnregistration(data *pb.ContainerData) bool {
 	// Generate a container-unregistration message to Sysvisorfs
 	_, err := cntrChanIntf.ContainerUnregistration(ctx, data)
 	if err != nil {
-		log.Fatalf("Could not interact with Sysvisorfs: %v", err)
-		return false
+		return fmt.Errorf("failed to unregister container with sysvisor-fs: %v", err)
 	}
-	return true
+
+	return nil
 }
 
 //
 // Sends creation-time attribute to sysvisor-fs end.
 //
-func SendContainerCreationTime(time time.Time) bool {
-
+func SendContainerCreationTime(time time.Time) error {
 	// TBD
-	return true
+	return nil
 }
