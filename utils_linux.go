@@ -70,7 +70,7 @@ func loadFactory(context *cli.Context) (libcontainer.Factory, error) {
 		newgidmap = ""
 	}
 
-	sysvisorfs := !context.Bool("no-sysvisorfs")
+	sysvisorfs := !context.GlobalBool("no-sysvisorfs")
 
 	return libcontainer.New(abs, cgroupManager, intelRdtManager,
 		libcontainer.CriuPath(context.GlobalString("criu")),

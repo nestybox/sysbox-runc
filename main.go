@@ -133,6 +133,10 @@ func main() {
 			Value: "auto",
 			Usage: "ignore cgroup permission errors ('true', 'false', or 'auto')",
 		},
+		cli.BoolFlag{
+			Name:  "no-sysvisorfs",
+			Usage: "do not interact with sysvisor-fs; meant for testing and debugging.",
+		},
 	}
 	app.Commands = []cli.Command{
 		checkpointCommand,

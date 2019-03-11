@@ -51,10 +51,6 @@ rootless).
 			Value: "",
 			Usage: "path to the root of the bundle directory (i.e., rootfs)",
 		},
-		cli.BoolFlag{
-			Name:  "no-sysvisorfs",
-			Usage: "create a spec without sysvisor-fs with the container; meant for testing and debugging.",
-		},
 	},
 	Action: func(context *cli.Context) error {
 
@@ -99,7 +95,7 @@ rootless).
 			return err
 		}
 
-		noSysvisorfs := context.Bool("no-sysvisorfs")
+		noSysvisorfs := context.GlobalBool("no-sysvisorfs")
 		if err := syscont.ConvertSpec(spec, noSysvisorfs); err != nil {
 			return err
 		}
