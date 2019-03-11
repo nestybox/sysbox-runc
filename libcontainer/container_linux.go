@@ -57,6 +57,7 @@ type linuxContainer struct {
 	criuVersion          int
 	state                containerState
 	created              time.Time
+	sysboxfs             bool
 }
 
 // State represents a running container's state
@@ -373,9 +374,10 @@ func (c *linuxContainer) start(process *Process) error {
 	c.created = time.Now().UTC()
 
 	// sysbox-runc: send the creation-timestamp to sysbox-fs.
-	if err := sysbox.SendContainerCreationTime(c.created); err != nil {
-		return newSystemErrorWithCause(err,
-			"setting container creation time with sysbox-fs")
+	if c.sysboxfs {
+		if err := sysbox.SendContainerCreationTime(c.created); err != nil {
+			return newSystemErrorWithCause(err, "setting container creation time with sysbox-fs")
+		}
 	}
 
 	if process.Init {
