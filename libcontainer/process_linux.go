@@ -19,7 +19,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/system"
 	"github.com/opencontainers/runc/libcontainer/utils"
 	"github.com/opencontainers/runc/libsysvisor/sysvisor"
-	pb "github.com/opencontainers/runc/libsysvisor/sysvisor_protobuf"
+	pb "github.com/opencontainers/runc/libsysvisor/sysvisor-protobuf"
 
 	"golang.org/x/sys/unix"
 )

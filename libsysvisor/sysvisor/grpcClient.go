@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	pb "github.com/opencontainers/runc/libsysvisor/sysvisor_protobuf"
+	pb "github.com/opencontainers/runc/libsysvisor/sysvisor-protobuf"
 	"google.golang.org/grpc"
 )
 
