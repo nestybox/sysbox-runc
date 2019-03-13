@@ -7,3 +7,6 @@ release
 GPATH
 GRTAGS
 GTAGS
+
+# Ignore protobuf auto-generated code
+libsysvisor/sysvisor-protobuf
