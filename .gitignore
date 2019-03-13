@@ -10,3 +10,6 @@ GTAGS
 
 # Ignore protobuf auto-generated code
 libsysvisor/sysvisor-protobuf
+
+# Ignore virtual-studio-code metadata
+.vscode
