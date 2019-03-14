@@ -76,7 +76,7 @@ func loadFactory(context *cli.Context) (libcontainer.Factory, error) {
 		libcontainer.CriuPath(context.GlobalString("criu")),
 		libcontainer.NewuidmapPath(newuidmap),
 		libcontainer.NewgidmapPath(newgidmap),
-	   libcontainer.Sysvisorfs(sysvisorfs))
+		libcontainer.Sysvisorfs(sysvisorfs))
 }
 
 // getContainer returns the specified container instance by loading it from state

@@ -278,6 +278,7 @@ func (l *LinuxFactory) Load(id string) (Container, error) {
 		cgroupManager:        l.NewCgroupsManager(state.Config.Cgroups, state.CgroupPaths),
 		root:                 containerRoot,
 		created:              state.Created,
+		sysvisorfs:           l.Sysvisorfs,
 	}
 	c.state = &loadedState{c: c}
 	if err := c.refreshState(); err != nil {
