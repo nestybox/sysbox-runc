@@ -21,6 +21,8 @@ import (
 	"github.com/opencontainers/runc/libcontainer/system"
 	"github.com/opencontainers/runc/libcontainer/utils"
 	libcontainerUtils "github.com/opencontainers/runc/libcontainer/utils"
+
+	"github.com/opencontainers/runc/libsysbox/shiftfs"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/opencontainers/selinux/go-selinux/label"
 
@@ -39,34 +41,37 @@ func needsSetupDev(config *configs.Config) bool {
 	return true
 }
 
-// prepareRootfs sets up the devices, mount points, and filesystems for use
-// inside a new mount namespace. It doesn't set anything as ro. You must call
-// finalizeRootfs after this function to finish setting up the rootfs.
+// prepareRootfs sets up the devices, mount points, and filesystems for use inside a new
+// mount namespace. It must be called from the container's rootfs. It doesn't set anything
+// as ro. You must call finalizeRootfs after this function to finish setting up the
+// rootfs.
 func prepareRootfs(pipe io.ReadWriter, iConfig *initConfig) (err error) {
 	config := iConfig.Config
 	if err := prepareRoot(config); err != nil {
 		return newSystemErrorWithCause(err, "preparing rootfs")
 	}
 
-	hasCgroupns := config.Namespaces.Contains(configs.NEWCGROUP)
-	setupDev := needsSetupDev(config)
-	for _, m := range config.Mounts {
-		for _, precmd := range m.PremountCmds {
-			if err := mountCmd(precmd); err != nil {
-				return newSystemErrorWithCause(err, "running premount command")
-			}
-		}
-		if err := mountToRootfs(m, config.Rootfs, config.MountLabel, hasCgroupns); err != nil {
-			return newSystemErrorWithCausef(err, "mounting %q to rootfs at %q", m.Source, m.Destination)
+	if config.ShiftUids {
+		if err := markShiftfsOnRootfs(config.Rootfs, pipe); err != nil {
+			return newSystemErrorWithCause(err, "marking shiftfs on rootfs")
 		}
 
-		for _, postcmd := range m.PostmountCmds {
-			if err := mountCmd(postcmd); err != nil {
-				return newSystemErrorWithCause(err, "running postmount command")
-			}
+		if err := shiftfs.Mount("."); err != nil {
+			return newSystemErrorWithCausef(err, "shiftfs mount failed")
+		}
+
+		// Ensure the prior mount takes effect; otherwise the rootfs setup that follows
+		// fails (e.g., pivot_root() reports an invalid argument error)
+		if err := effectRootfsMount(); err != nil {
+			return newSystemErrorWithCause(err, "effecting rootfs mount")
 		}
 	}
 
+	if err := doMounts(config, pipe); err != nil {
+		return newSystemErrorWithCause(err, "setting up rootfs mounts")
+	}
+
+	setupDev := needsSetupDev(config)
 	if setupDev {
 		if err := createDevices(config); err != nil {
 			return newSystemErrorWithCause(err, "creating device nodes")
@@ -95,10 +100,6 @@ func prepareRootfs(pipe io.ReadWriter, iConfig *initConfig) (err error) {
 	// API must be able to deal with being inside as well as outside the
 	// container. It's just cleaner to do this here (at the expense of the
 	// operation not being perfectly split).
-
-	if err := unix.Chdir(config.Rootfs); err != nil {
-		return newSystemErrorWithCausef(err, "changing dir to %q", config.Rootfs)
-	}
 
 	s := iConfig.SpecState
 	s.Pid = unix.Getpid()
@@ -195,37 +196,37 @@ func mountCmd(cmd configs.Command) error {
 	return nil
 }
 
-func prepareBindMount(m *configs.Mount, rootfs string) error {
-	stat, err := os.Stat(m.Source)
-	if err != nil {
-		// error out if the source of a bind mount does not exist as we will be
-		// unable to bind anything to it.
-		return err
+func prepareBindMount(m *configs.Mount, rootfs string, absDestPath bool) (err error) {
+	var base, dest string
+
+	if err := validateCwd(rootfs); err != nil {
+		return newSystemErrorWithCause(err, "validating cwd")
 	}
+
 	// ensure that the destination of the bind mount is resolved of symlinks at mount time because
 	// any previous mounts can invalidate the next mount's destination.
 	// this can happen when a user specifies mounts within other mounts to cause breakouts or other
 	// evil stuff to try to escape the container's rootfs.
-	var dest string
-	if dest, err = securejoin.SecureJoin(rootfs, m.Destination); err != nil {
+	if absDestPath {
+		base = rootfs
+	} else {
+		base = "."
+	}
+
+	if dest, err = securejoin.SecureJoin(base, m.Destination); err != nil {
 		return err
 	}
 
-	// sysbox-runc: skip this check, we allow sysbox-fs mounts over /proc
-	// if err := checkMountDestination(rootfs, dest); err != nil {
-	// 	return err
-	// }
-
 	// update the mount with the correct dest after symlinks are resolved.
 	m.Destination = dest
-	if err := createIfNotExists(dest, stat.IsDir()); err != nil {
+	if err = createIfNotExists(dest, m.BindSrcIsDir); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func mountCgroupV1(m *configs.Mount, rootfs, mountLabel string, enableCgroupns bool) error {
+func mountCgroupV1(m *configs.Mount, rootfs, mountLabel string, enableCgroupns bool, pipe io.ReadWriter) error {
 	binds, err := getCgroupMounts(m)
 	if err != nil {
 		return err
@@ -245,7 +246,8 @@ func mountCgroupV1(m *configs.Mount, rootfs, mountLabel string, enableCgroupns b
 		Data:             "mode=755",
 		PropagationFlags: m.PropagationFlags,
 	}
-	if err := mountToRootfs(tmpfs, rootfs, mountLabel, enableCgroupns); err != nil {
+
+	if err := mountToRootfs(tmpfs, rootfs, mountLabel, enableCgroupns, pipe); err != nil {
 		return err
 	}
 	for _, b := range binds {
@@ -269,7 +271,7 @@ func mountCgroupV1(m *configs.Mount, rootfs, mountLabel string, enableCgroupns b
 				return err
 			}
 		} else {
-			if err := mountToRootfs(b, rootfs, mountLabel, enableCgroupns); err != nil {
+			if err := mountToRootfs(b, rootfs, mountLabel, enableCgroupns, pipe); err != nil {
 				return err
 			}
 		}
@@ -305,13 +307,14 @@ func mountCgroupV2(m *configs.Mount, rootfs, mountLabel string, enableCgroupns b
 	return nil
 }
 
-func mountToRootfs(m *configs.Mount, rootfs, mountLabel string, enableCgroupns bool) error {
+func mountToRootfs(m *configs.Mount, rootfs, mountLabel string, enableCgroupns bool, pipe io.ReadWriter) error {
 	var (
 		dest = m.Destination
 	)
-	if !strings.HasPrefix(dest, rootfs) {
-		dest = filepath.Join(rootfs, dest)
-	}
+
+	// This function assumes cwd is the container's rootfs
+	dest = filepath.Join(".", dest)
+	m.Destination = dest
 
 	switch m.Device {
 	case "proc", "sysfs":
@@ -331,12 +334,12 @@ func mountToRootfs(m *configs.Mount, rootfs, mountLabel string, enableCgroupns b
 			return err
 		}
 		// Selinux kernels do not support labeling of /proc or /sys
-		return mountPropagate(m, rootfs, "")
+		return mountPropagate(m, "")
 	case "mqueue":
 		if err := os.MkdirAll(dest, 0755); err != nil {
 			return err
 		}
-		if err := mountPropagate(m, rootfs, ""); err != nil {
+		if err := mountPropagate(m, ""); err != nil {
 			return err
 		}
 		return label.SetFileLabel(dest, mountLabel)
@@ -362,7 +365,7 @@ func mountToRootfs(m *configs.Mount, rootfs, mountLabel string, enableCgroupns b
 			defer os.RemoveAll(tmpDir)
 			m.Destination = tmpDir
 		}
-		if err := mountPropagate(m, rootfs, mountLabel); err != nil {
+		if err := mountPropagate(m, mountLabel); err != nil {
 			return err
 		}
 		if copyUp {
@@ -388,62 +391,50 @@ func mountToRootfs(m *configs.Mount, rootfs, mountLabel string, enableCgroupns b
 		}
 		// Initially mounted rw in mountPropagate, remount to ro if flag set.
 		if m.Flags&unix.MS_RDONLY != 0 {
-			if err := remount(m, rootfs); err != nil {
+			if err := remount(m); err != nil {
 				return err
 			}
 		}
 		return nil
 	case "bind":
-		if err := prepareBindMount(m, rootfs); err != nil {
+		// sysbox-runc: in order to support uid shifting on bind mounts, we handle bind
+		// mounts differently than OCI runc; in particular, we mount shiftfs on the bind
+		// mount source if we see it's marked for shiftfs, and we perform the actual bind
+		// mount by asking the parent runc to spawn a helper child process which enters the
+		// container's mount namespace only and performs the mount. The helper process is
+		// used to overcome the problem whereby the container's init process has no search
+		// permission to the bind mount source. Since this helper is not in the container's
+		// user namespace, it has true root credentials and thus can access the bind mount
+		// source yet perform the mount in the container's mount namespace.
+		if m.BindSrcMarkedShiftfs {
+			shiftfs.Mount(m.Source)
+		}
+		if err := prepareBindMount(m, rootfs, false); err != nil {
 			return err
 		}
-		if err := mountPropagate(m, rootfs, mountLabel); err != nil {
-			return err
+		mountInfo := &mountReqInfo{
+			Op:     "bind",
+			Rootfs: rootfs,
+			Mount:  *m,
+			Label:  mountLabel,
 		}
-		// bind mount won't change mount options, we need remount to make mount options effective.
-		// first check that we have non-default options required before attempting a remount
-		if m.Flags&^(unix.MS_REC|unix.MS_REMOUNT|unix.MS_BIND) != 0 {
-			// only remount if unique mount options are set
-			if err := remount(m, rootfs); err != nil {
-				return err
-			}
-		}
-
-		if m.Relabel != "" {
-			if err := label.Validate(m.Relabel); err != nil {
-				return err
-			}
-			shared := label.IsShared(m.Relabel)
-			if err := label.Relabel(m.Source, mountLabel, shared); err != nil {
-				return err
-			}
+		if err := syncParentDoMount(mountInfo, pipe); err != nil {
+			return newSystemErrorWithCause(err, "sync parent do mount")
 		}
 	case "cgroup":
 		if cgroups.IsCgroup2UnifiedMode() {
 			return mountCgroupV2(m, rootfs, mountLabel, enableCgroupns)
 		}
-		return mountCgroupV1(m, rootfs, mountLabel, enableCgroupns)
+		return mountCgroupV1(m, rootfs, mountLabel, enableCgroupns, pipe)
 	default:
 		// ensure that the destination of the mount is resolved of symlinks at mount time because
 		// any previous mounts can invalidate the next mount's destination.
 		// this can happen when a user specifies mounts within other mounts to cause breakouts or other
 		// evil stuff to try to escape the container's rootfs.
-		var err error
-		if dest, err = securejoin.SecureJoin(rootfs, m.Destination); err != nil {
-			return err
-		}
-
-		// sysbox-runc: skip this check, we allow sysbox-fs mounts over /proc
-		// if err := checkMountDestination(rootfs, dest); err != nil {
-		// 	return err
-		// }
-
-		// update the mount with the correct dest after symlinks are resolved.
-		m.Destination = dest
 		if err := os.MkdirAll(dest, 0755); err != nil {
 			return err
 		}
-		return mountPropagate(m, rootfs, mountLabel)
+		return mountPropagate(m, mountLabel)
 	}
 	return nil
 }
@@ -482,70 +473,6 @@ func getCgroupMounts(m *configs.Mount) ([]*configs.Mount, error) {
 	return binds, nil
 }
 
-// checkProcMount checks to ensure that the mount destination is not over the top of /proc.
-// dest is required to be an abs path and have any symlinks resolved before calling this function.
-//
-// if source is nil, don't stat the filesystem.  This is used for restore of a checkpoint.
-func checkProcMount(rootfs, dest, source string) error {
-	const procPath = "/proc"
-	// White list, it should be sub directories of invalid destinations
-	validDestinations := []string{
-		// These entries can be bind mounted by files emulated by fuse,
-		// so commands like top, free displays stats in container.
-		"/proc/cpuinfo",
-		"/proc/diskstats",
-		"/proc/meminfo",
-		"/proc/stat",
-		"/proc/swaps",
-		"/proc/uptime",
-		"/proc/loadavg",
-		"/proc/net/dev",
-	}
-	for _, valid := range validDestinations {
-		path, err := filepath.Rel(filepath.Join(rootfs, valid), dest)
-		if err != nil {
-			return err
-		}
-		if path == "." {
-			return nil
-		}
-	}
-	path, err := filepath.Rel(filepath.Join(rootfs, procPath), dest)
-	if err != nil {
-		return err
-	}
-	// pass if the mount path is located outside of /proc
-	if strings.HasPrefix(path, "..") {
-		return nil
-	}
-	if path == "." {
-		// an empty source is pasted on restore
-		if source == "" {
-			return nil
-		}
-		// only allow a mount on-top of proc if it's source is "proc"
-		isproc, err := isProc(source)
-		if err != nil {
-			return err
-		}
-		// pass if the mount is happening on top of /proc and the source of
-		// the mount is a proc filesystem
-		if isproc {
-			return nil
-		}
-		return fmt.Errorf("%q cannot be mounted because it is not of type proc", dest)
-	}
-	return fmt.Errorf("%q cannot be mounted because it is inside /proc", dest)
-}
-
-func isProc(path string) (bool, error) {
-	var s unix.Statfs_t
-	if err := unix.Statfs(path, &s); err != nil {
-		return false, err
-	}
-	return s.Type == unix.PROC_SUPER_MAGIC, nil
-}
-
 func setupDevSymlinks(rootfs string) error {
 	var links = [][2]string{
 		{"/proc/self/fd", "/dev/fd"},
@@ -561,7 +488,7 @@ func setupDevSymlinks(rootfs string) error {
 	for _, link := range links {
 		var (
 			src = link[0]
-			dst = filepath.Join(rootfs, link[1])
+			dst = filepath.Join(".", link[1])
 		)
 		if err := os.Symlink(src, dst); err != nil && !os.IsExist(err) {
 			return fmt.Errorf("symlink %s %s %s", src, dst, err)
@@ -611,7 +538,7 @@ func createDevices(config *configs.Config) error {
 
 		// containers running in a user namespace are not allowed to mknod
 		// devices so we can just bind mount it from the host.
-		if err := createDeviceNode(config.Rootfs, node, useBindMount); err != nil {
+		if err := createDeviceNode(node, useBindMount); err != nil {
 			unix.Umask(oldMask)
 			return err
 		}
@@ -632,12 +559,13 @@ func bindMountDeviceNode(dest string, node *configs.Device) error {
 }
 
 // Creates the device node in the rootfs of the container.
-func createDeviceNode(rootfs string, node *configs.Device, bind bool) error {
+func createDeviceNode(node *configs.Device, bind bool) error {
 	if node.Path == "" {
 		// The node only exists for cgroup reasons, ignore it here.
 		return nil
 	}
-	dest := filepath.Join(rootfs, node.Path)
+	dest := filepath.Join(".", node.Path)
+
 	if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
 		return err
 	}
@@ -743,7 +671,18 @@ func prepareRoot(config *configs.Config) error {
 		return err
 	}
 
-	return unix.Mount(config.Rootfs, config.Rootfs, "bind", unix.MS_BIND|unix.MS_REC, "")
+	if err := unix.Mount(".", ".", "bind", unix.MS_BIND|unix.MS_REC, ""); err != nil {
+		return err
+	}
+
+	// in order for the mount to take effect on this current process, we need to re-open
+	// the rootfs dir; otherwise the rootfs setup that follows fails (e.g., pivot_root()
+	// reports an invalid argument error)
+	if err := effectRootfsMount(); err != nil {
+		return newSystemErrorWithCause(err, "effecting rootfs mount")
+	}
+
+	return nil
 }
 
 func setReadonly() error {
@@ -763,7 +702,7 @@ func setReadonly() error {
 }
 
 func setupPtmx(config *configs.Config) error {
-	ptmx := filepath.Join(config.Rootfs, "dev/ptmx")
+	ptmx := "dev/ptmx"
 	if err := os.Remove(ptmx); err != nil && !os.IsNotExist(err) {
 		return err
 	}
@@ -788,7 +727,7 @@ func pivotRoot(rootfs string) error {
 	}
 	defer unix.Close(oldroot)
 
-	newroot, err := unix.Open(rootfs, unix.O_DIRECTORY|unix.O_RDONLY, 0)
+	newroot, err := unix.Open(".", unix.O_DIRECTORY|unix.O_RDONLY, 0)
 	if err != nil {
 		return err
 	}
@@ -820,7 +759,8 @@ func pivotRoot(rootfs string) error {
 	if err := unix.Mount("", ".", "", unix.MS_SLAVE|unix.MS_REC, ""); err != nil {
 		return err
 	}
-	// Preform the unmount. MNT_DETACH allows us to unmount /proc/self/cwd.
+
+	// Perform the unmount. MNT_DETACH allows us to unmount /proc/self/cwd.
 	if err := unix.Unmount(".", unix.MNT_DETACH); err != nil {
 		return err
 	}
@@ -983,25 +923,19 @@ func writeSystemProperty(key, value string) error {
 	return ioutil.WriteFile(path.Join("/proc/sys", keyPath), []byte(value), 0644)
 }
 
-func remount(m *configs.Mount, rootfs string) error {
-	var (
-		dest = m.Destination
-	)
-	if !strings.HasPrefix(dest, rootfs) {
-		dest = filepath.Join(rootfs, dest)
-	}
-	return unix.Mount(m.Source, dest, m.Device, uintptr(m.Flags|unix.MS_REMOUNT), "")
+func remount(m *configs.Mount) error {
+	return unix.Mount(m.Source, m.Destination, m.Device, uintptr(m.Flags|unix.MS_REMOUNT), "")
 }
 
 // Do the mount operation followed by additional mounts required to take care
 // of propagation flags.
-func mountPropagate(m *configs.Mount, rootfs string, mountLabel string) error {
+func mountPropagate(m *configs.Mount, mountLabel string) error {
 	var (
 		dest  = m.Destination
 		data  = label.FormatMountLabel(m.Data, mountLabel)
 		flags = m.Flags
 	)
-	if libcontainerUtils.CleanPath(dest) == "/dev" {
+	if dest == "dev" {
 		flags &= ^unix.MS_RDONLY
 	}
 
@@ -1009,11 +943,6 @@ func mountPropagate(m *configs.Mount, rootfs string, mountLabel string) error {
 	// later to make it ro if set.
 	if m.Device == "tmpfs" {
 		flags &= ^unix.MS_RDONLY
-	}
-
-	copyUp := m.Extensions&configs.EXT_COPYUP == configs.EXT_COPYUP
-	if !(copyUp || strings.HasPrefix(dest, rootfs)) {
-		dest = filepath.Join(rootfs, dest)
 	}
 
 	if err := unix.Mount(m.Source, dest, m.Device, uintptr(flags), data); err != nil {
@@ -1040,5 +969,82 @@ func mountNewCgroup(m *configs.Mount) error {
 	if err := unix.Mount(source, m.Destination, m.Device, uintptr(m.Flags), data); err != nil {
 		return err
 	}
+	return nil
+}
+
+// sysbox-runc: doMounts sets up all of the container's mounts as specified in the given config.
+func doMounts(config *configs.Config, pipe io.ReadWriter) error {
+	for _, m := range config.Mounts {
+		for _, precmd := range m.PremountCmds {
+			if err := mountCmd(precmd); err != nil {
+				return newSystemErrorWithCause(err, "running premount command")
+			}
+		}
+		if err := mountToRootfs(m, config.Rootfs, config.MountLabel, true, pipe); err != nil {
+			return newSystemErrorWithCausef(err, "mounting %q to rootfs %q at %q", m.Source, config.Rootfs, m.Destination)
+		}
+		for _, postcmd := range m.PostmountCmds {
+			if err := mountCmd(postcmd); err != nil {
+				return newSystemErrorWithCause(err, "running postmount command")
+			}
+		}
+	}
+	return nil
+}
+
+// sysbox-runc: validateCwd verifies that the current working directory is the container's
+// rootfs
+func validateCwd(rootfs string) error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return newSystemErrorWithCause(err, "getting cwd")
+	}
+	if cwd != rootfs {
+		return newSystemErrorWithCausef(err, "cwd %s is not container's rootfs %s", cwd, rootfs)
+	}
+	return nil
+}
+
+// sysbox-runc: effectRootfsMount ensure the calling process sees the effects of a previous rootfs
+// mount. It does this by reopening the rootfs directory.
+func effectRootfsMount() error {
+
+	// The method for reopening the rootfs directory is pretty lame,
+	// but I could not find any other. Note that the "dev" subdirectory
+	// is guaranteed to be present, as it's created by our parent
+	// sysbox-runc.
+
+	if err := os.Chdir("dev"); err != nil {
+		return newSystemErrorWithCause(err, "chdir dev")
+	}
+	if err := os.Chdir(".."); err != nil {
+		return newSystemErrorWithCause(err, "chdir ..")
+	}
+
+	return nil
+}
+
+// sysbox-runc: markShiftfsOnRootfs places a shiftfs mark over the container's rootfs.
+// Since the shiftfs mark must be done by true root, markShitfsOnRootfs requests the
+// parent runc to place the mark. This will allow the container init process to later
+// mount shiftfs on the rootfs.
+func markShiftfsOnRootfs(rootfs string, pipe io.ReadWriter) error {
+	mountInfo := &mountReqInfo{
+		Op:     "markShiftfs",
+		Rootfs: rootfs,
+		Mount: configs.Mount{
+			Source: rootfs,
+		},
+	}
+
+	err := syncParentDoMount(mountInfo, pipe)
+	if err != nil {
+		return newSystemErrorWithCause(err, "syncing with parent runc to perform mount")
+	}
+
+	if err := effectRootfsMount(); err != nil {
+		return newSystemErrorWithCause(err, "effecting rootfs mount")
+	}
+
 	return nil
 }

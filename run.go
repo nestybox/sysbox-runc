@@ -77,7 +77,11 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 		if err != nil {
 			return err
 		}
-		status, err := startContainer(context, spec, CT_ACT_RUN, nil)
+		shiftUids, err := sysbox.NeedUidShiftOnRootfs(spec)
+		if err != nil {
+			return err
+		}
+		status, err := startContainer(context, spec, CT_ACT_RUN, nil, shiftUids)
 		if err == nil {
 			// exit with the container's exit status so any external supervisor is
 			// notified of the exit with the correct exit status.

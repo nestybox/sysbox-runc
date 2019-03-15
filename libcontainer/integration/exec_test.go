@@ -1015,6 +1015,7 @@ func TestMountCmds(t *testing.T) {
 			{Path: "cp", Args: []string{filepath.Join(rootfs, "tmp", "hello"), filepath.Join(rootfs, "tmp", "hello-backup")}},
 			{Path: "cp", Args: []string{filepath.Join(rootfs, "tmp", "world"), filepath.Join(rootfs, "tmp", "world-backup")}},
 		},
+		BindSrcIsDir: true,
 	})
 
 	container, err := newContainerWithName("test", config)
@@ -1428,10 +1429,11 @@ func TestRootfsPropagationSlaveMount(t *testing.T) {
 	defer unmountOp(dir1host)
 
 	config.Mounts = append(config.Mounts, &configs.Mount{
-		Source:      dir1host,
-		Destination: dir1cont,
-		Device:      "bind",
-		Flags:       unix.MS_BIND | unix.MS_REC})
+		Source:       dir1host,
+		Destination:  dir1cont,
+		Device:       "bind",
+		Flags:        unix.MS_BIND | unix.MS_REC,
+		BindSrcIsDir: true})
 
 	container, err := newContainerWithName("testSlaveMount", config)
 	ok(t, err)
@@ -1543,10 +1545,11 @@ func TestRootfsPropagationSharedMount(t *testing.T) {
 	defer unmountOp(dir1host)
 
 	config.Mounts = append(config.Mounts, &configs.Mount{
-		Source:      dir1host,
-		Destination: dir1cont,
-		Device:      "bind",
-		Flags:       unix.MS_BIND | unix.MS_REC})
+		Source:       dir1host,
+		Destination:  dir1cont,
+		Device:       "bind",
+		Flags:        unix.MS_BIND | unix.MS_REC,
+		BindSrcIsDir: true})
 
 	container, err := newContainerWithName("testSharedMount", config)
 	ok(t, err)

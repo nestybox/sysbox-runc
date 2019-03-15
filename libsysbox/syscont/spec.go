@@ -27,6 +27,7 @@ var sysboxfsMounts = []specs.Mount{
 		Type:        "bind",
 		Options:     []string{"rbind", "rprivate"},
 	},
+
 	// specs.Mount{
 	// 	Destination: "/proc/cgroups",
 	// 	Source:      "/var/lib/sysboxfs/proc/cgroups",
@@ -81,6 +82,7 @@ var sysboxfsMounts = []specs.Mount{
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
+
 	specs.Mount{
 		Destination: "/proc/sys",
 		Source:      "/var/lib/sysboxfs/proc/sys",
@@ -160,80 +162,97 @@ var SupportedRootFs = map[string]int64{
 	"btrfs": unix.BTRFS_SUPER_MAGIC,
 }
 
-// cfgNamespaces checks that the namespace config is valid and adds any missing Linux
-// namespaces to the system container config
+// cfgNamespaces checks that the namespace config has the minimum set
+// of namespaces required and adds any missing namespaces to it
 func cfgNamespaces(spec *specs.Spec) error {
 
-	reqNs := []specs.LinuxNamespaceType{"user", "pid", "ipc", "uts", "mount", "network"}
+	// user-ns and cgroup-ns are not required; but we will add them to the spec.
+	var allNs = []string{"pid", "ipc", "uts", "mount", "network", "user", "cgroup"}
+	var reqNs = []string{"pid", "ipc", "uts", "mount", "network"}
 
-	// Ensure that the config has all the required namespaces
+	allNsSet := mapset.NewSet()
+	for _, ns := range allNs {
+		allNsSet.Add(ns)
+	}
+
+	reqNsSet := mapset.NewSet()
 	for _, ns := range reqNs {
-		found := false
-		for _, cfgNs := range spec.Linux.Namespaces {
-			if cfgNs.Type == ns {
-				found = true
-			}
-		}
-		if !found {
-			return fmt.Errorf("container spec missing the %s namespace", ns)
-		}
+		reqNsSet.Add(ns)
 	}
 
-	// Add remaining namespaces (currently the cgroup namespace only)
-	found := false
-	for _, cfgNs := range spec.Linux.Namespaces {
-		if cfgNs.Type == specs.CgroupNamespace {
-			found = true
-		}
+	specNsSet := mapset.NewSet()
+	for _, ns := range spec.Linux.Namespaces {
+		specNsSet.Add(string(ns.Type))
 	}
 
-	if !found {
+	if !reqNsSet.IsSubset(specNsSet) {
+		return fmt.Errorf("container spec missing namespaces %v", reqNsSet.Difference(specNsSet))
+	}
+
+	addNsSet := allNsSet.Difference(specNsSet)
+	for ns := range addNsSet.Iter() {
+		str := fmt.Sprintf("%v", ns)
 		newns := specs.LinuxNamespace{
-			Type: specs.CgroupNamespace,
+			Type: specs.LinuxNamespaceType(str),
 			Path: "",
 		}
 		spec.Linux.Namespaces = append(spec.Linux.Namespaces, newns)
-		logrus.Debugf("added cgroupns to namespace spec")
+		logrus.Debugf("added namespace %s to spec", ns)
 	}
 
 	return nil
 }
 
-// cfgIDMappings checks that the uid and gid configs are valid
-func cfgIDMappings(spec *specs.Spec) error {
+// allocateIdMappings performs uid and gid allocation for the system container
+func allocateIdMappings(spec *specs.Spec) error {
 
-	if len(spec.Linux.UIDMappings) == 0 {
-		return fmt.Errorf("container spec missing uid mappings")
+	// TODO: for now we fake a uid/gid mapping; in the future we need to perform actual allocation
+	// of uids/gids such that it's exclusive for each system container
+	idMap := specs.LinuxIDMapping{
+		ContainerID: 0,
+		HostID:      231072,
+		Size:        65536,
 	}
 
-	if len(spec.Linux.GIDMappings) == 0 {
-		return fmt.Errorf("container spec missing gid mappings")
+	spec.Linux.UIDMappings = append(spec.Linux.UIDMappings, idMap)
+	spec.Linux.GIDMappings = append(spec.Linux.GIDMappings, idMap)
+
+	return nil
+}
+
+// validateIDMappings checks if the spec's user namespace uid and gid mappings meet sysbox-runc requirements
+func validateIDMappings(spec *specs.Spec) error {
+
+	if len(spec.Linux.UIDMappings) != 1 {
+		return fmt.Errorf("sysbox-runc requires user namespace uid mapping array have one element; found %v", spec.Linux.UIDMappings)
 	}
 
-	// Verify the mapping is valid. Note that we don't disallow mappings that map to the host
-	// root UID (i.e., we honor the ID config). Some runc tests use such mappings.
-
-	validMapFound := false
-	for _, mapping := range spec.Linux.UIDMappings {
-		if mapping.ContainerID == 0 && mapping.Size >= IdRangeMin {
-			validMapFound = true
-		}
-	}
-	if !validMapFound {
-		return fmt.Errorf("container spec uid mapping does not map %d uids starting at container uid 0", IdRangeMin)
+	if len(spec.Linux.GIDMappings) != 1 {
+		return fmt.Errorf("sysbox-runc requires user namespace gid mapping array have one element; found %v", spec.Linux.GIDMappings)
 	}
 
-	validMapFound = false
-	for _, mapping := range spec.Linux.GIDMappings {
-		if mapping.ContainerID == 0 && mapping.Size >= IdRangeMin {
-			validMapFound = true
-		}
+	uidMap := spec.Linux.UIDMappings[0]
+	gidMap := spec.Linux.UIDMappings[0]
+	if uidMap != gidMap {
+		return fmt.Errorf("sysbox-runc requires user namespace uid and gid mappings be identical; found %v and %v", uidMap, gidMap)
 	}
-	if !validMapFound {
-		return fmt.Errorf("container spec gid mapping does not map %d gids starting at container gid 0", IdRangeMin)
+
+	if uidMap.ContainerID != 0 || uidMap.Size < IdRangeMin {
+		return fmt.Errorf("sysbox-runc requires uid mapping specify a container with at least %d uids starting at uid 0; found %v", IdRangeMin, uidMap)
 	}
 
 	return nil
+}
+
+// cfgIDMappings checks if the uid/gid mappings are present and valid; if they
+// are not present, it allocates them. Note that we don't disallow mappings
+// that map to the host root UID (i.e., we honor the ID config). Some runc tests use
+// such mappings.
+func cfgIDMappings(spec *specs.Spec) error {
+	if len(spec.Linux.UIDMappings) == 0 && len(spec.Linux.GIDMappings) == 0 {
+		return allocateIdMappings(spec)
+	}
+	return validateIDMappings(spec)
 }
 
 // cfgCapabilities sets the capabilities for the process in the system container
@@ -427,13 +446,11 @@ func cfgSeccomp(seccomp *specs.LinuxSeccomp) error {
 	return nil
 }
 
-// cfgLibModMount bind mounts the host's /lib/modules/<kernel-release>
-// directory in the same path inside the system container; this allows
-// system container processes to verify the presence of modules via
-// modprobe. System apps such as Docker and K8s do this. Note that
-// this does not imply module loading/unloading is supported in a
-// system container. It merely lets processes check if a module is
-// loaded.
+// cfgLibModMount sets up a read-only bind mount of the host's "/lib/modules/<kernel-release>"
+// directory in the same path inside the system container; this allows system container
+// processes to verify the presence of modules via modprobe. System apps such as Docker and
+// K8s do this. Note that this does not imply module loading/unloading is supported in a
+// system container (it's not). It merely lets processes check if a module is loaded.
 func cfgLibModMount(spec *specs.Spec, doFhsCheck bool) error {
 
 	if doFhsCheck {
@@ -460,7 +477,7 @@ func cfgLibModMount(spec *specs.Spec, doFhsCheck bool) error {
 		Destination: path,
 		Source:      path,
 		Type:        "bind",
-		Options:     []string{"rbind", "rprivate"},
+		Options:     []string{"ro", "rbind", "rprivate"}, // must be read-only
 	}
 
 	// check if the container spec has a match or a conflict for the mount
@@ -570,6 +587,10 @@ func ConvertSpec(spec *specs.Spec, noSysboxfs bool) error {
 	if err := cfgSeccomp(spec.Linux.Seccomp); err != nil {
 		return fmt.Errorf("failed to configure seccomp: %v", err)
 	}
+
+	// TODO: ensure /proc and /sys are mounted (if not present in the container spec)
+
+	// TODO: ensure /dev is mounted
 
 	return nil
 }

@@ -25,9 +25,9 @@ import (
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/intelrdt"
+	"github.com/opencontainers/runc/libcontainer/logs"
 	"github.com/opencontainers/runc/libcontainer/system"
 	"github.com/opencontainers/runc/libcontainer/utils"
-
 	"github.com/opencontainers/runtime-spec/specs-go"
 
 	"github.com/checkpoint-restore/go-criu/v4"
@@ -36,6 +36,7 @@ import (
 	"github.com/golang/protobuf/proto"
 
 	errorsf "github.com/pkg/errors"
+
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink/nl"
 	"golang.org/x/sys/unix"
@@ -606,6 +607,32 @@ func (c *linuxContainer) newSetnsProcess(p *Process, cmd *exec.Cmd, messageSockP
 		bootstrapData:   data,
 		initProcessPid:  state.InitProcessPid,
 	}, nil
+}
+
+// sysbox-runc: create a new helper process command to perform rootfs mount initialization
+func (c *linuxContainer) initMountCmdTemplate(p *Process, childInitPipe, childLogPipe *os.File) *exec.Cmd {
+	cmd := exec.Command(c.initPath, c.initArgs[1:]...)
+	cmd.Args[0] = c.initArgs[0]
+	cmd.Stdin = nil
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	cmd.Dir = c.config.Rootfs
+	if cmd.SysProcAttr == nil {
+		cmd.SysProcAttr = &unix.SysProcAttr{}
+	}
+	cmd.ExtraFiles = append(cmd.ExtraFiles, childInitPipe)
+	cmd.Env = append(cmd.Env, "GOMAXPROCS="+os.Getenv("GOMAXPROCS"))
+	cmd.Env = append(cmd.Env, "_LIBCONTAINER_INITTYPE="+string(initMount))
+	cmd.Env = append(cmd.Env,
+		"_LIBCONTAINER_INITPIPE="+strconv.Itoa(stdioFdCount+len(cmd.ExtraFiles)-1),
+		"_LIBCONTAINER_STATEDIR="+c.root,
+	)
+	cmd.ExtraFiles = append(cmd.ExtraFiles, childLogPipe)
+	cmd.Env = append(cmd.Env,
+		"_LIBCONTAINER_LOGPIPE="+strconv.Itoa(stdioFdCount+len(cmd.ExtraFiles)-1),
+		"_LIBCONTAINER_LOGLEVEL="+p.LogLevel,
+	)
+	return cmd
 }
 
 func (c *linuxContainer) newInitConfig(process *Process) *initConfig {
@@ -1226,16 +1253,13 @@ func (c *linuxContainer) makeCriuRestoreMountpoints(m *configs.Mount) error {
 	case "bind":
 		// The prepareBindMount() function checks if source
 		// exists. So it cannot be used for other filesystem types.
-		if err := prepareBindMount(m, c.config.Rootfs); err != nil {
+		if err := prepareBindMount(m, c.config.Rootfs, true); err != nil {
 			return err
 		}
 	default:
 		// for all other filesystems just create the mountpoints
 		dest, err := securejoin.SecureJoin(c.config.Rootfs, m.Destination)
 		if err != nil {
-			return err
-		}
-		if err := checkProcMount(c.config.Rootfs, dest, ""); err != nil {
 			return err
 		}
 		m.Destination = dest
@@ -2131,4 +2155,119 @@ func requiresRootOrMappingTool(c *configs.Config) bool {
 		{ContainerID: 0, HostID: os.Getegid(), Size: 1},
 	}
 	return !reflect.DeepEqual(c.GidMappings, gidMap)
+}
+
+// sysbox-runc: initMount creates a child helper process that assists the container's
+// init process with rootfs mount initializations. This helper process enters the
+// container's mount namespace (only) and performs the requested mount action. By virtue
+// of only entering the mount namespace, the helper process has true root-level access to
+// the host and thus can perform operations that the container's init process is not
+// allowed to. The helper process is spawned using sysivor-runc's reexec mechanism.
+func (c *linuxContainer) initMount(childPid int, mountInfo *mountReqInfo) error {
+
+	// create the socket pairs for communication with the child
+	parentMsgPipe, childMsgPipe, err := utils.NewSockPair("initMount")
+	if err != nil {
+		return newSystemErrorWithCause(err, "creating new initMount pipe")
+	}
+	defer parentMsgPipe.Close()
+
+	parentLogPipe, childLogPipe, err := os.Pipe()
+	if err != nil {
+		return newSystemErrorWithCause(err, "Unable to create the initMount log pipe")
+	}
+
+	// create a new initMount command
+	initProc := c.initProcess.(*initProcess).process
+	cmd := c.initMountCmdTemplate(initProc, childMsgPipe, childLogPipe)
+
+	// Log error messages from the initMount child process
+	go logs.ForwardLogs(parentLogPipe)
+
+	// start the rootfsInitProcess
+	err = cmd.Start()
+	childMsgPipe.Close()
+	childLogPipe.Close()
+	if err != nil {
+		return newSystemErrorWithCause(err, "starting initMount child")
+	}
+
+	// create the config payload
+	mntNsPath := fmt.Sprintf("mnt:/proc/%d/ns/mnt", childPid)
+	namespaces := []string{mntNsPath}
+
+	r := nl.NewNetlinkRequest(int(InitMsg), 0)
+	r.AddData(&Bytemsg{
+		Type:  NsPathsAttr,
+		Value: []byte(strings.Join(namespaces, ",")),
+	})
+
+	// send the config to the initMount process
+	if _, err := io.Copy(parentMsgPipe, bytes.NewReader(r.Serialize())); err != nil {
+		return newSystemErrorWithCause(err, "copying initMount bootstrap data to pipe")
+	}
+
+	// wait for first rootfsInitProcess to finish
+	status, err := cmd.Process.Wait()
+	if err != nil {
+		cmd.Wait()
+		return err
+	}
+	if !status.Success() {
+		cmd.Wait()
+		return newSystemError(&exec.ExitError{ProcessState: status})
+	}
+
+	// get the initMount child pid from the pipe (it was sent by the first rootfsInitProcess)
+	var pid pid
+	decoder := json.NewDecoder(parentMsgPipe)
+	if err := decoder.Decode(&pid); err != nil {
+		cmd.Wait()
+		return newSystemErrorWithCause(err, "getting the initMount pid from pipe")
+	}
+
+	firstChildProcess, err := os.FindProcess(pid.PidFirstChild)
+	if err != nil {
+		return err
+	}
+
+	// wait for second rootfsInitProcess to finish; ignore the error in case the child has
+	// already been reaped for any reason
+	_, _ = firstChildProcess.Wait()
+
+	// third rootfsInitProcess remains and will enter the go runtime
+	process, err := os.FindProcess(pid.Pid)
+	if err != nil {
+		return err
+	}
+	cmd.Process = process
+
+	// send the mount info to the rootfsInitProcess
+	if err := utils.WriteJSON(parentMsgPipe, mountInfo); err != nil {
+		return newSystemErrorWithCause(err, "writing init mount info to pipe")
+	}
+
+	// wait for msg from the initMount child indicating that it's done
+	ierr := parseSync(parentMsgPipe, func(sync *syncT) error {
+		switch sync.Type {
+		case mountDone:
+			// no further action; parseSync will wait for pipe to be closed on the other side.
+		default:
+			return newSystemError(fmt.Errorf("invalid JSON payload from initSetRootfs child"))
+		}
+		return nil
+	})
+
+	// destroy the socket pair
+	if err := unix.Shutdown(int(parentMsgPipe.Fd()), unix.SHUT_WR); err != nil {
+		return newSystemErrorWithCause(err, "shutting down initMount pipe")
+	}
+
+	if ierr != nil {
+		cmd.Wait()
+		return ierr
+	}
+
+	cmd.Wait()
+	return nil
 }

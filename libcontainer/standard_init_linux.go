@@ -27,6 +27,22 @@ type linuxStandardInit struct {
 	config        *initConfig
 }
 
+// sysbox-runc: info passed when container init process requests parent runc to perform
+// a mount operation on its behalf.
+type mountReqType string
+
+const (
+	markShiftfs mountReqType = "markShiftfs"
+	bind        mountReqType = "bind"
+)
+
+type mountReqInfo struct {
+	Op     mountReqType  `json:"type"`
+	Rootfs string        `json:"rootfs"`
+	Mount  configs.Mount `json:"mount"`
+	Label  string        `json:"label"`
+}
+
 func (l *linuxStandardInit) getSessionRingParams() (string, uint32, uint32) {
 	var newperms uint32
 
@@ -46,6 +62,11 @@ func (l *linuxStandardInit) getSessionRingParams() (string, uint32, uint32) {
 func (l *linuxStandardInit) Init() error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
+
+	if err := validateCwd(l.config.Config.Rootfs); err != nil {
+		return newSystemErrorWithCause(err, "validating cwd")
+	}
+
 	if !l.config.Config.NoNewKeyring {
 		if err := selinux.SetKeyLabel(l.config.ProcessLabel); err != nil {
 			return err

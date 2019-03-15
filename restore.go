@@ -7,6 +7,7 @@ import (
 
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/system"
+	"github.com/opencontainers/runc/libsysbox/sysbox"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -109,7 +110,11 @@ using the sysbox-runc checkpoint command.`,
 		if err := setEmptyNsMask(context, options); err != nil {
 			return err
 		}
-		status, err := startContainer(context, spec, CT_ACT_RESTORE, options)
+		shiftUids, err := sysbox.NeedUidShiftOnRootfs(spec)
+		if err != nil {
+			return err
+		}
+		status, err := startContainer(context, spec, CT_ACT_RESTORE, options, shiftUids)
 		if err != nil {
 			return err
 		}
