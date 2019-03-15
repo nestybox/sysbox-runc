@@ -31,6 +31,7 @@ type initType string
 const (
 	initSetns    initType = "setns"
 	initStandard initType = "standard"
+	initMount    initType = "mount"
 )
 
 type pid struct {
@@ -75,29 +76,41 @@ type initer interface {
 }
 
 func newContainerInit(t initType, pipe *os.File, consoleSocket *os.File, fifoFd int) (initer, error) {
-	var config *initConfig
-	if err := json.NewDecoder(pipe).Decode(&config); err != nil {
-		return nil, err
-	}
-	if err := populateProcessEnvironment(config.Env); err != nil {
-		return nil, err
-	}
-	switch t {
-	case initSetns:
-		return &linuxSetnsInit{
-			pipe:          pipe,
-			consoleSocket: consoleSocket,
-			config:        config,
+	if t == initStandard || t == initSetns {
+		var config *initConfig
+		if err := json.NewDecoder(pipe).Decode(&config); err != nil {
+			return nil, err
+		}
+		if err := populateProcessEnvironment(config.Env); err != nil {
+			return nil, err
+		}
+		switch t {
+		case initSetns:
+			return &linuxSetnsInit{
+				pipe:          pipe,
+				consoleSocket: consoleSocket,
+				config:        config,
+			}, nil
+		case initStandard:
+			return &linuxStandardInit{
+				pipe:          pipe,
+				consoleSocket: consoleSocket,
+				parentPid:     unix.Getppid(),
+				config:        config,
+				fifoFd:        fifoFd,
+			}, nil
+		}
+	} else if t == initMount {
+		var mountInfo *mountReqInfo
+		if err := json.NewDecoder(pipe).Decode(&mountInfo); err != nil {
+			return nil, err
+		}
+		return &linuxRootfsInit{
+			pipe:      pipe,
+			mountInfo: mountInfo,
 		}, nil
-	case initStandard:
-		return &linuxStandardInit{
-			pipe:          pipe,
-			consoleSocket: consoleSocket,
-			parentPid:     unix.Getppid(),
-			config:        config,
-			fifoFd:        fifoFd,
-		}, nil
 	}
+
 	return nil, fmt.Errorf("unknown init type %q", t)
 }
 
@@ -234,6 +247,27 @@ func syncParentHooks(pipe io.ReadWriter) error {
 
 	// Wait for parent to give the all-clear.
 	return readSync(pipe, procResume)
+}
+
+// sysvisor-runc:
+// syncParentDoMount signals the parent runc to perform a mount on behalf of the
+// container's init process; this is useful in cases where the container's init process
+// can't do the mount because it may not have search permissions to the bind mount
+// source. See sync.go for the sync sequence.
+func syncParentDoMount(mountInfo *mountReqInfo, pipe io.ReadWriter) error {
+	if err := writeSync(pipe, doMount); err != nil {
+		return err
+	}
+	if err := readSync(pipe, sendMountInfo); err != nil {
+		return err
+	}
+	if err := utils.WriteJSON(pipe, mountInfo); err != nil {
+		return err
+	}
+	if err := readSync(pipe, mountDone); err != nil {
+		return err
+	}
+	return nil
 }
 
 // setupUser changes the groups, gid, and uid for the user inside the container

@@ -14,6 +14,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/seccomp"
 	libcontainerUtils "github.com/opencontainers/runc/libcontainer/utils"
+	"github.com/opencontainers/runc/libsysvisor/shiftfs"
 	"github.com/opencontainers/runtime-spec/specs-go"
 
 	"golang.org/x/sys/unix"
@@ -151,6 +152,7 @@ type CreateOpts struct {
 	Spec             *specs.Spec
 	RootlessEUID     bool
 	RootlessCgroups  bool
+	ShiftUids        bool
 }
 
 // CreateLibcontainerConfig creates a new libcontainer configuration from a
@@ -186,12 +188,17 @@ func CreateLibcontainerConfig(opts *CreateOpts) (*configs.Config, error) {
 		NoNewKeyring:    opts.NoNewKeyring,
 		RootlessEUID:    opts.RootlessEUID,
 		RootlessCgroups: opts.RootlessCgroups,
+		ShiftUids:       opts.ShiftUids,
 	}
 
-	exists := false
 	for _, m := range spec.Mounts {
-		config.Mounts = append(config.Mounts, createLibcontainerMount(cwd, m))
+		mount, err := createLibcontainerMount(cwd, m)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create lib container mount: %v", err)
+		}
+		config.Mounts = append(config.Mounts, mount)
 	}
+
 	if err := createDevices(spec, config); err != nil {
 		return nil, err
 	}
@@ -199,7 +206,10 @@ func CreateLibcontainerConfig(opts *CreateOpts) (*configs.Config, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	exists := false
 	config.Cgroups = c
+
 	// set linux-specific config
 	if spec.Linux != nil {
 		if config.RootPropagation, exists = mountPropagationMapping[spec.Linux.RootfsPropagation]; !exists {
@@ -272,7 +282,9 @@ func CreateLibcontainerConfig(opts *CreateOpts) (*configs.Config, error) {
 	return config, nil
 }
 
-func createLibcontainerMount(cwd string, m specs.Mount) *configs.Mount {
+func createLibcontainerMount(cwd string, m specs.Mount) (*configs.Mount, error) {
+	var bindSrcIsDir, bindSrcMarkedShiftfs bool
+
 	flags, pgflags, data, ext := parseMountOptions(m.Options)
 	source := m.Source
 	device := m.Type
@@ -284,15 +296,38 @@ func createLibcontainerMount(cwd string, m specs.Mount) *configs.Mount {
 			source = filepath.Join(cwd, m.Source)
 		}
 	}
-	return &configs.Mount{
-		Device:           device,
-		Source:           source,
-		Destination:      m.Destination,
-		Data:             data,
-		Flags:            flags,
-		PropagationFlags: pgflags,
-		Extensions:       ext,
+
+	// sysvisor-runc: for bind mounts determine if the source is a directory and if it has
+	// been marked as a shiftfs mountpoint. We do this here so that we don't have to do
+	// this from within the container's init process (as the latter may not have search
+	// permission into the bind source).
+	if device == "bind" {
+		var err error
+		var fi os.FileInfo
+
+		fi, err = os.Stat(source)
+		if err != nil {
+			return nil, fmt.Errorf("failed to stat mount source at %s: %v", source, err)
+		}
+		bindSrcIsDir = fi.IsDir()
+
+		bindSrcMarkedShiftfs, err = shiftfs.IsMarked(source)
+		if err != nil {
+			return nil, fmt.Errorf("failed to detect shiftfs mark on %s: %v", source, err)
+		}
 	}
+
+	return &configs.Mount{
+		Device:               device,
+		Source:               source,
+		Destination:          m.Destination,
+		Data:                 data,
+		Flags:                flags,
+		PropagationFlags:     pgflags,
+		Extensions:           ext,
+		BindSrcIsDir:         bindSrcIsDir,
+		BindSrcMarkedShiftfs: bindSrcMarkedShiftfs,
+	}, nil
 }
 
 func createCgroupConfig(opts *CreateOpts) (*configs.Cgroup, error) {

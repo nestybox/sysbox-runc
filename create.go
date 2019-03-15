@@ -3,8 +3,8 @@ package main
 import (
 	"os"
 
-	"github.com/urfave/cli"
 	"github.com/opencontainers/runc/libsysvisor/sysvisor"
+	"github.com/urfave/cli"
 )
 
 var createCommand = cli.Command{
@@ -66,7 +66,11 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 		if err != nil {
 			return err
 		}
-		status, err := startContainer(context, spec, CT_ACT_CREATE, nil)
+		shiftUids, err := sysvisor.NeedUidShiftOnRootfs(spec)
+		if err != nil {
+			return err
+		}
+		status, err := startContainer(context, spec, CT_ACT_CREATE, nil, shiftUids)
 		if err != nil {
 			return err
 		}

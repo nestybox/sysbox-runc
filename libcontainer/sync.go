@@ -16,22 +16,26 @@ type syncType string
 //
 // [  child  ] <-> [   parent   ]
 //
-// procHooks   --> [run hooks]
-//             <-- procResume
+// doMount      -->
+//              <-- sendMountInfo
+// [send(info)] --> [recv(info)]
+//              <-- mountDone
 //
-// procConsole -->
-//             <-- procConsoleReq
-//  [send(fd)] --> [recv(fd)]
-//             <-- procConsoleAck
+// procHooks    --> [run hooks]
+//              <-- procResume
 //
-// procReady   --> [final setup]
-//             <-- procRun
+// procReady    --> [final setup]
+//              <-- procRun
 const (
 	procError  syncType = "procError"
 	procReady  syncType = "procReady"
 	procRun    syncType = "procRun"
 	procHooks  syncType = "procHooks"
 	procResume syncType = "procResume"
+
+	doMount       syncType = "doMount"
+	sendMountInfo syncType = "sendMountInfo"
+	mountDone     syncType = "mountDone"
 )
 
 type syncT struct {

@@ -228,7 +228,7 @@ func createPidFile(path string, process *libcontainer.Process) error {
 	return os.Rename(tmpName, path)
 }
 
-func createContainer(context *cli.Context, id string, spec *specs.Spec) (libcontainer.Container, error) {
+func createContainer(context *cli.Context, id string, spec *specs.Spec, shiftUids bool) (libcontainer.Container, error) {
 	rootlessCg, err := shouldUseRootlessCgroupManager(context)
 	if err != nil {
 		return nil, err
@@ -241,6 +241,7 @@ func createContainer(context *cli.Context, id string, spec *specs.Spec) (libcont
 		Spec:             spec,
 		RootlessEUID:     os.Geteuid() != 0,
 		RootlessCgroups:  rootlessCg,
+		ShiftUids:        shiftUids,
 	})
 	if err != nil {
 		return nil, err
@@ -408,7 +409,8 @@ const (
 	CT_ACT_RESTORE
 )
 
-func startContainer(context *cli.Context, spec *specs.Spec, action CtAct, criuOpts *libcontainer.CriuOpts) (int, error) {
+func startContainer(context *cli.Context, spec *specs.Spec, action CtAct, criuOpts *libcontainer.CriuOpts, shiftUids bool) (int, error) {
+
 	id := context.Args().First()
 	if id == "" {
 		return -1, errEmptyID
@@ -419,7 +421,7 @@ func startContainer(context *cli.Context, spec *specs.Spec, action CtAct, criuOp
 		notifySocket.setupSpec(context, spec)
 	}
 
-	container, err := createContainer(context, id, spec)
+	container, err := createContainer(context, id, spec, shiftUids)
 	if err != nil {
 		return -1, err
 	}

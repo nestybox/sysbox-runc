@@ -66,7 +66,8 @@ To start a new instance of a system container:
 
 Where "<container-id>" is your name for the instance of the system
 container that you are starting (which must be unique on the host).
-`)
+`
+)
 
 func main() {
 	app := cli.NewApp()
@@ -87,7 +88,7 @@ func main() {
 	if shouldHonorXDGRuntimeDir() {
 		if runtimeDir := os.Getenv("XDG_RUNTIME_DIR"); runtimeDir != "" {
 			root = runtimeDir + "/sysvisor-runc"
- 			// According to the XDG specification, we need to set anything in
+			// According to the XDG specification, we need to set anything in
 			// XDG_RUNTIME_DIR to have a sticky bit if we don't want it to get
 			// auto-pruned.
 			if err := os.MkdirAll(root, 0700); err != nil {

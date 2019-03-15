@@ -36,4 +36,10 @@ type Mount struct {
 
 	// Optional Command to be run after Source is mounted.
 	PostmountCmds []Command `json:"postmount_cmds"`
+
+	// For bind mounts, indicates if the source is a directory
+	BindSrcIsDir bool `json:"bind_source_is_dir,omitempty"`
+
+	// For bind mounts, indicates if the source is marked for shiftfs
+	BindSrcMarkedShiftfs bool `json:"bind_source_marked_shiftfs,omitempty"`
 }

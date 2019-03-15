@@ -32,7 +32,7 @@ group id mappings.
 
 Arguments uid and gid indicate the host user/group IDs to which the system
 container's root user/group are mapped. Size is the number of IDs that must be
-mapped; it must be set >= ` + strconv.FormatUint(uint64(syscont.IdRangeMin),10) + ` for compatibility
+mapped; it must be set >= ` + strconv.FormatUint(uint64(syscont.IdRangeMin), 10) + ` for compatibility
 with Linux distros that use id 65534 as "nobody".
 
 If the "--bundle" option is present, the uid and gid parameters must match the
@@ -119,11 +119,11 @@ rootless).
 }
 
 // getArgs parses and returns the uid, gid, and size command line arguments
-func getArgs (context *cli.Context, uid, gid, size *uint32) error {
+func getArgs(context *cli.Context, uid, gid, size *uint32) error {
 	var num [3]uint64
 	var err error
 
-	for i :=0; i < 3; i++ {
+	for i := 0; i < 3; i++ {
 		str := context.Args().Get(i)
 		num[i], err = strconv.ParseUint(str, 10, 32)
 		if err != nil {

@@ -8,38 +8,6 @@ import (
 	"github.com/opencontainers/runc/libcontainer/configs"
 )
 
-func TestCheckMountDestOnProc(t *testing.T) {
-	dest := "/rootfs/proc/sys"
-	err := checkMountDestination("/rootfs", dest)
-	if err == nil {
-		t.Fatal("destination inside proc should return an error")
-	}
-}
-
-func TestCheckMountDestOnProcChroot(t *testing.T) {
-	dest := "/rootfs/proc/"
-	err := checkMountDestination("/rootfs", dest)
-	if err != nil {
-		t.Fatal("destination inside proc when using chroot should not return an error")
-	}
-}
-
-func TestCheckMountDestInSys(t *testing.T) {
-	dest := "/rootfs//sys/fs/cgroup"
-	err := checkMountDestination("/rootfs", dest)
-	if err != nil {
-		t.Fatal("destination inside /sys should not return an error")
-	}
-}
-
-func TestCheckMountDestFalsePositive(t *testing.T) {
-	dest := "/rootfs/sysfiles/fs/cgroup"
-	err := checkMountDestination("/rootfs", dest)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestNeedsSetupDev(t *testing.T) {
 	config := &configs.Config{
 		Mounts: []*configs.Mount{

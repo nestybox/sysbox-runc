@@ -327,12 +327,14 @@ func (p *initProcess) start() error {
 	if err := p.manager.ApplyChildCgroup(childPid); err != nil {
 		return newSystemErrorWithCause(err, "applying cgroup configuration for process")
 	}
+
 	if p.intelRdtManager != nil {
 		if err := p.intelRdtManager.Apply(childPid); err != nil {
 			return newSystemErrorWithCause(err, "applying Intel RDT configuration for process")
 		}
 	}
-	// Now it's time to setup cgroup namesapce
+
+	// Now it's time to setup cgroup namespace
 	if p.config.Config.Namespaces.Contains(configs.NEWCGROUP) && p.config.Config.Namespaces.PathOf(configs.NEWCGROUP) == "" {
 		if _, err := p.parentPipe.Write([]byte{createCgroupns}); err != nil {
 			return newSystemErrorWithCause(err, "sending synchronization value to init process")
@@ -340,7 +342,7 @@ func (p *initProcess) start() error {
 	}
 
 	// sysvisor-runc: register the container with sysvisor-fs (must be done before
-	// prestart hooks).
+	// prestart hooks so that sysvisor-fs is ready to respond by the time the hooks run).
 	if p.container.sysvisorfs {
 		data := &sysvisorGrpc.ContainerData{
 			Id:       p.container.id,
@@ -369,6 +371,7 @@ func (p *initProcess) start() error {
 	if err := p.sendConfig(); err != nil {
 		return newSystemErrorWithCause(err, "sending config to init process")
 	}
+
 	var (
 		sentRun    bool
 		sentResume bool
@@ -435,6 +438,20 @@ func (p *initProcess) start() error {
 				return newSystemErrorWithCause(err, "writing syncT 'resume'")
 			}
 			sentResume = true
+		case doMount:
+			var mountInfo mountReqInfo
+			if err := writeSync(p.parentPipe, sendMountInfo); err != nil {
+				return newSystemErrorWithCause(err, "writing syncT 'mountInfoReq'")
+			}
+			if err := json.NewDecoder(p.parentPipe).Decode(&mountInfo); err != nil {
+				return newSystemErrorWithCause(err, "receiving / decoding mountInfo'")
+			}
+			if err := p.container.initMount(childPid, &mountInfo); err != nil {
+				return newSystemErrorWithCausef(err, "initMount")
+			}
+			if err := writeSync(p.parentPipe, mountDone); err != nil {
+				return newSystemErrorWithCause(err, "writing syncT 'mountDone'")
+			}
 		default:
 			return newSystemError(fmt.Errorf("invalid JSON payload from child"))
 		}

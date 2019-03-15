@@ -199,6 +199,9 @@ type Config struct {
 	// RootlessCgroups is set when unlikely to have the full access to cgroups.
 	// When RootlessCgroups is set, cgroups errors are ignored.
 	RootlessCgroups bool `json:"rootless_cgroups,omitempty"`
+
+	// ShiftUids indicates if the container uses uid/gid shifting via the shiftfs kernel module.
+	ShiftUids bool `json:"shift_uids,omitempty"`
 }
 
 type Hooks struct {
