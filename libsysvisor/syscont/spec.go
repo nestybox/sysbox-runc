@@ -3,17 +3,17 @@
 package syscont
 
 import (
+	"bytes"
 	"fmt"
 	"os"
-	"bytes"
 	"path/filepath"
-	"syscall"
-	"strings"
 	"reflect"
+	"strings"
+	"syscall"
 
-	"github.com/sirupsen/logrus"
+	mapset "github.com/deckarep/golang-set"
 	"github.com/opencontainers/runtime-spec/specs-go"
-	"github.com/deckarep/golang-set"
+	"github.com/sirupsen/logrus"
 
 	"golang.org/x/sys/unix"
 )
@@ -21,90 +21,90 @@ import (
 // sysvisorfsMounts is a list of system container mounts backed by sysvisor-fs
 // (please keep in alphabetical order)
 var sysvisorfsMounts = []specs.Mount{
-	// specs.Mount{
-	// 	Destination: "/proc/cpuinfo",
-	// 	Source:      "/var/lib/sysvisorfs/proc/cpuinfo",
-	// 	Type:        "bind",
-	// 	Options:     []string{"rbind", "rprivate"}
-	// },
-	// specs.Mount{
-	// 	Destination: "/proc/cgroups",
-	// 	Source:      "/var/lib/sysvisorfs/proc/cgroups",
-	// 	Type:        "bind",
-	// 	Options:     []string{"rbind", "rprivate"},
-	// },
-	// specs.Mount{
-	// 	Destination: "/proc/devices",
-	// 	Source:      "/var/lib/sysvisorfs/proc/devices",
-	// 	Type:        "bind",
-	// 	Options:     []string{"rbind", "rprivate"},
-	// },
-	// specs.Mount{
-	// 	Destination: "/proc/diskstats",
-	// 	Source:      "/var/lib/sysvisorfs/proc/diskstats",
-	// 	Type:        "bind",
-	// 	Options:     []string{"rbind", "rprivate"},
-	// },
-	// specs.Mount{
-	// 	Destination: "/proc/loadavg",
-	// 	Source:      "/var/lib/sysvisorfs/proc/loadavg",
-	// 	Type:        "bind",
-	// 	Options:     []string{"rbind", "rprivate"},
-	// },
-	// specs.Mount{
-	// 	Destination: "/proc/meminfo",
-	// 	Source:      "/var/lib/sysvisorfs/proc/meminfo",
-	// 	Type:        "bind",
-	// 	Options:     []string{"rbind", "rprivate"},
-	// },
-	// specs.Mount{
-	// 	Destination: "/proc/pagetypeinfo",
-	// 	Source:      "/var/lib/sysvisorfs/proc/pagetypeinfo",
-	// 	Type:        "bind",
-	// 	Options:     []string{"rbind", "rprivate"},
-	// },
-	// specs.Mount{
-	// 	Destination: "/proc/partitions",
-	// 	Source:      "/var/lib/sysvisorfs/proc/partitions",
-	// 	Type:        "bind",
-	// 	Options:     []string{"rbind", "rprivate"},
-	// },
-	// specs.Mount{
-	// 	Destination: "/proc/stat",
-	// 	Source:      "/var/lib/sysvisorfs/proc/stat",
-	// 	Type:        "bind",
-	// 	Options:     []string{"rbind", "rprivate"},
-	// },
-	// specs.Mount{
-	// 	Destination: "/proc/swaps",
-	// 	Source:      "/var/lib/sysvisorfs/proc/swaps",
-	// 	Type:        "bind",
-	// 	Options:     []string{"rbind", "rprivate"},
-	// },
-	// specs.Mount{
-	// 	Destination: "/proc/sys",
-	// 	Source:      "/var/lib/sysvisorfs/proc/sys",
-	// 	Type:        "bind",
-	// 	Options:     []string{"rbind", "rprivate"},
-	// },
-	// specs.Mount{
-	// 	Destination: "/proc/uptime",
-	// 	Source:      "/var/lib/sysvisorfs/proc/uptime",
-	// 	Type:        "bind",
-	// 	Options:     []string{"rbind", "rprivate"},
-	// },
+	specs.Mount{
+		Destination: "/proc/cpuinfo",
+		Source:      "/var/lib/sysvisorfs/proc/cpuinfo",
+		Type:        "bind",
+		Options:     []string{"rbind", "rprivate"},
+	},
+	specs.Mount{
+		Destination: "/proc/cgroups",
+		Source:      "/var/lib/sysvisorfs/proc/cgroups",
+		Type:        "bind",
+		Options:     []string{"rbind", "rprivate"},
+	},
+	specs.Mount{
+		Destination: "/proc/devices",
+		Source:      "/var/lib/sysvisorfs/proc/devices",
+		Type:        "bind",
+		Options:     []string{"rbind", "rprivate"},
+	},
+	specs.Mount{
+		Destination: "/proc/diskstats",
+		Source:      "/var/lib/sysvisorfs/proc/diskstats",
+		Type:        "bind",
+		Options:     []string{"rbind", "rprivate"},
+	},
+	specs.Mount{
+		Destination: "/proc/loadavg",
+		Source:      "/var/lib/sysvisorfs/proc/loadavg",
+		Type:        "bind",
+		Options:     []string{"rbind", "rprivate"},
+	},
+	specs.Mount{
+		Destination: "/proc/meminfo",
+		Source:      "/var/lib/sysvisorfs/proc/meminfo",
+		Type:        "bind",
+		Options:     []string{"rbind", "rprivate"},
+	},
+	specs.Mount{
+		Destination: "/proc/pagetypeinfo",
+		Source:      "/var/lib/sysvisorfs/proc/pagetypeinfo",
+		Type:        "bind",
+		Options:     []string{"rbind", "rprivate"},
+	},
+	specs.Mount{
+		Destination: "/proc/partitions",
+		Source:      "/var/lib/sysvisorfs/proc/partitions",
+		Type:        "bind",
+		Options:     []string{"rbind", "rprivate"},
+	},
+	specs.Mount{
+		Destination: "/proc/stat",
+		Source:      "/var/lib/sysvisorfs/proc/stat",
+		Type:        "bind",
+		Options:     []string{"rbind", "rprivate"},
+	},
+	specs.Mount{
+		Destination: "/proc/swaps",
+		Source:      "/var/lib/sysvisorfs/proc/swaps",
+		Type:        "bind",
+		Options:     []string{"rbind", "rprivate"},
+	},
+	specs.Mount{
+		Destination: "/proc/sys",
+		Source:      "/var/lib/sysvisorfs/proc/sys",
+		Type:        "bind",
+		Options:     []string{"rbind", "rprivate"},
+	},
+	specs.Mount{
+		Destination: "/proc/uptime",
+		Source:      "/var/lib/sysvisorfs/proc/uptime",
+		Type:        "bind",
+		Options:     []string{"rbind", "rprivate"},
+	},
 }
 
 // sysvisorRwPaths list the paths within the sys container's rootfs
 // that must have read-write permission
-var sysvisorRwPaths = []string {
+var sysvisorRwPaths = []string{
 	"/proc",
 	"/proc/sys",
 }
 
 // sysvisorExposedPaths list the paths within the sys container's rootfs
 // that must not be masked
-var sysvisorExposedPaths = []string {
+var sysvisorExposedPaths = []string{
 	"/proc",
 	"/proc/sys",
 }
@@ -245,11 +245,11 @@ func cfgCapabilities(p *specs.Process) {
 
 	// In a sys container, the root process has all capabilities
 	if uid == 0 {
-		caps.Bounding = linuxCaps;
-		caps.Effective = linuxCaps;
-		caps.Inheritable = linuxCaps;
-		caps.Permitted = linuxCaps;
-		caps.Ambient = linuxCaps;
+		caps.Bounding = linuxCaps
+		caps.Effective = linuxCaps
+		caps.Inheritable = linuxCaps
+		caps.Permitted = linuxCaps
+		caps.Ambient = linuxCaps
 		logrus.Debugf("enabled all capabilities in the process spec")
 	}
 }
@@ -341,7 +341,7 @@ func cfgSeccomp(seccomp *specs.LinuxSeccomp) error {
 	}
 
 	supportedArch := false
-	for _, arch:= range seccomp.Architectures {
+	for _, arch := range seccomp.Architectures {
 		if arch == specs.ArchX86_64 {
 			supportedArch = true
 		}
@@ -351,11 +351,11 @@ func cfgSeccomp(seccomp *specs.LinuxSeccomp) error {
 	}
 
 	// we don't yet support specs with default trap & trace actions
-	if (seccomp.DefaultAction != specs.ActAllow &&
-		 seccomp.DefaultAction != specs.ActErrno &&
-		 seccomp.DefaultAction != specs.ActKill) {
-		 return fmt.Errorf("spec seccomp default actions other than allow, errno, and kill are not supported")
-	 }
+	if seccomp.DefaultAction != specs.ActAllow &&
+		seccomp.DefaultAction != specs.ActErrno &&
+		seccomp.DefaultAction != specs.ActKill {
+		return fmt.Errorf("spec seccomp default actions other than allow, errno, and kill are not supported")
+	}
 
 	// categorize syscalls per seccomp actions
 	allowSet := mapset.NewSet()
@@ -365,12 +365,12 @@ func cfgSeccomp(seccomp *specs.LinuxSeccomp) error {
 	for _, syscall := range seccomp.Syscalls {
 		for _, name := range syscall.Names {
 			switch syscall.Action {
-				case specs.ActAllow:
-				   allowSet.Add(name)
-				case specs.ActErrno:
-				   errnoSet.Add(name)
-				case specs.ActKill:
-				   killSet.Add(name)
+			case specs.ActAllow:
+				allowSet.Add(name)
+			case specs.ActErrno:
+				errnoSet.Add(name)
+			case specs.ActKill:
+				killSet.Add(name)
 			}
 		}
 	}
@@ -383,7 +383,7 @@ func cfgSeccomp(seccomp *specs.LinuxSeccomp) error {
 
 	// seccomp syscall lsit may be a whitelist or blacklist
 	whitelist := (seccomp.DefaultAction == specs.ActErrno ||
-		           seccomp.DefaultAction == specs.ActKill)
+		seccomp.DefaultAction == specs.ActKill)
 
 	// diffset is the set of syscalls that needs adding (for whitelist) or removing (for blacklist)
 	diffSet := mapset.NewSet()
@@ -399,7 +399,7 @@ func cfgSeccomp(seccomp *specs.LinuxSeccomp) error {
 		for syscallName := range diffSet.Iter() {
 			str := fmt.Sprintf("%v", syscallName)
 			sc := specs.LinuxSyscall{
-				Names: []string{str},
+				Names:  []string{str},
 				Action: specs.ActAllow,
 			}
 			seccomp.Syscalls = append(seccomp.Syscalls, sc)
@@ -415,8 +415,8 @@ func cfgSeccomp(seccomp *specs.LinuxSeccomp) error {
 				if diffSet.Contains(scName) {
 					// Remove this syscall
 					sc.Names = append(sc.Names[:i], sc.Names[i+1:]...)
-					}
 				}
+			}
 			if sc.Names != nil {
 				newSyscalls = append(newSyscalls, sc)
 			}
@@ -474,7 +474,7 @@ func cfgLibModMount(spec *specs.Spec, doFhsCheck bool) error {
 			return nil
 		}
 
-		if (m.Destination == mount.Destination) {
+		if m.Destination == mount.Destination {
 			logrus.Debugf("honoring container spec override for mount of %s", m.Destination)
 			return nil
 		}
@@ -503,11 +503,11 @@ func checkRootFilesys(rootPath string) error {
 		}
 	}
 
-	logrus.Debugf("system container root path is not on one of these filesystems: " +
-		           "%v; running an inner docker container won't work " +
-		           "unless a host volume is mounted on the system " +
-		           "container's /var/lib/docker",
-		           reflect.ValueOf(SupportedRootFs).MapKeys())
+	logrus.Debugf("system container root path is not on one of these filesystems: "+
+		"%v; running an inner docker container won't work "+
+		"unless a host volume is mounted on the system "+
+		"container's /var/lib/docker",
+		reflect.ValueOf(SupportedRootFs).MapKeys())
 
 	return nil
 }
