@@ -67,8 +67,7 @@ func destroy(c *linuxContainer) error {
 	//
 	if c.sysvisorfs {
 		regInfo := &pb.ContainerData{
-			Id:      c.id,
-			InitPid: cntrInitPid,
+			Id: c.id,
 		}
 		if err := sysvisor.SendContainerUnregistration(regInfo); err != nil {
 			return newSystemErrorWithCause(err, "unregistering with sysvisor-fs")
