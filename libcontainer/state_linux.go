@@ -7,12 +7,10 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/nestybox/sysbox-ipc/sysboxFsGrpc"
 	"github.com/opencontainers/runc/libcontainer/configs"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
-
-	"github.com/opencontainers/runc/libsysbox/sysbox"
-	pb "github.com/opencontainers/runc/libsysbox/sysbox_protobuf"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
@@ -64,9 +62,16 @@ func destroy(c *linuxContainer) error {
 	}
 	c.state = &stoppedState{c: c}
 
-	// Unregister container from sysbox-fs (must be done after post-stop hooks).
+	//
+	// If sysbox feature is enabled, proceed to unregister this container
+	// from sysbox-fs end. Notice that this must be done after post-stop
+	// hooks are executed.
+	//
 	if c.sysboxfs {
-		if err := sysbox.SendContainerUnregistration(&pb.ContainerData{Id: c.id}); err != nil {
+		data := &sysboxFsGrpc.ContainerData{
+			Id: c.id,
+		}
+		if err := sysboxFsGrpc.SendContainerUnregistration(data); err != nil {
 			return newSystemErrorWithCause(err, "unregistering with sysbox-fs")
 		}
 	}

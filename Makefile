@@ -53,6 +53,7 @@ release:
 dbuild: runcimage
 	$(CONTAINER_ENGINE) run $(CONTAINER_ENGINE_RUN_FLAGS) \
 		--privileged --rm \
+		-v $(CURDIR)/../sysbox-ipc:/go/src/nestybox/sysbox-ipc \
 		-v $(CURDIR):/go/src/$(PROJECT) \
 		$(RUNC_IMAGE) make clean all
 
@@ -77,6 +78,7 @@ unittest: runcimage
 	$(CONTAINER_ENGINE) run $(CONTAINER_ENGINE_RUN_FLAGS) \
 		-t --privileged --rm \
 		-v /lib/modules:/lib/modules:ro \
+		-v $(CURDIR)/../sysbox-ipc:/go/src/nestybox/sysbox-ipc \
 		-v $(CURDIR):/go/src/$(PROJECT) \
 		$(RUNC_IMAGE) make localunittest TESTFLAGS=$(TESTFLAGS)
 
@@ -87,6 +89,7 @@ integration: runcimage
 	$(CONTAINER_ENGINE) run $(CONTAINER_ENGINE_RUN_FLAGS) \
 		-t --privileged --rm \
 		-v /lib/modules:/lib/modules:ro \
+		-v $(CURDIR)/../sysbox-ipc:/go/src/nestybox/sysbox-ipc \
 		-v $(CURDIR):/go/src/$(PROJECT) \
 		$(RUNC_IMAGE) make localintegration TESTPATH=$(TESTPATH)
 
@@ -96,6 +99,7 @@ localintegration: all
 rootlessintegration: runcimage
 	$(CONTAINER_ENGINE) run $(CONTAINER_ENGINE_RUN_FLAGS) \
 		-t --privileged --rm \
+		-v $(CURDIR)/../sysbox-ipc:/go/src/nestybox/sysbox-ipc \
 		-v $(CURDIR):/go/src/$(PROJECT) \
 		-e ROOTLESS_TESTPATH \
 		$(RUNC_IMAGE) make localrootlessintegration
@@ -107,6 +111,7 @@ shell: runcimage
 	$(CONTAINER_ENGINE) run $(CONTAINER_ENGINE_RUN_FLAGS) \
 		-ti --privileged --rm \
 		-v /lib/modules:/lib/modules:ro \
+		-v $(CURDIR)/../sysbox-ipc:/go/src/nestybox/sysbox-ipc \
 		-v $(CURDIR):/go/src/$(PROJECT) \
 		$(RUNC_IMAGE) bash
 

@@ -132,6 +132,6 @@ function teardown() {
 	echo hello >preserve-fds.test
 	# fd 3 is used by bats, so we use 4
 	exec 4<preserve-fds.test
-	output=$(__runc exec --preserve-fds=2 test_busybox cat /proc/self/fd/4)
+	output=$(__runc --no-sysboxfs exec --preserve-fds=2 test_busybox cat /proc/self/fd/4)
 	[[ "${output}" == "hello" ]]
 }

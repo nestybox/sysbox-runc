@@ -20,17 +20,20 @@ import (
 	"time"
 
 	securejoin "github.com/cyphar/filepath-securejoin"
-	"github.com/golang/protobuf/proto"
+	"github.com/nestybox/sysbox-ipc/sysboxFsGrpc"
+
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/intelrdt"
 	"github.com/opencontainers/runc/libcontainer/system"
 	"github.com/opencontainers/runc/libcontainer/utils"
-	"github.com/opencontainers/runc/libsysbox/sysbox"
+
 	"github.com/opencontainers/runtime-spec/specs-go"
 
 	"github.com/checkpoint-restore/go-criu/v4"
 	criurpc "github.com/checkpoint-restore/go-criu/v4/rpc"
+
+	"github.com/golang/protobuf/proto"
 
 	errorsf "github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -375,8 +378,12 @@ func (c *linuxContainer) start(process *Process) error {
 
 	// sysbox-runc: send the creation-timestamp to sysbox-fs.
 	if c.sysboxfs {
-		if err := sysbox.SendContainerCreationTime(c.created); err != nil {
-			return newSystemErrorWithCause(err, "setting container creation time with sysbox-fs")
+		data := &sysboxFsGrpc.ContainerData{
+			Id:    c.id,
+			Ctime: c.created,
+		}
+		if err := sysboxFsGrpc.SendContainerUpdate(data); err != nil {
+			return newSystemErrorWithCause(err, "setting container creation-time with sysbox-fs")
 		}
 	}
 
@@ -1462,8 +1469,8 @@ func (c *linuxContainer) criuApplyCgroups(pid int, req *criurpc.CriuReq) error {
 	if cgroups.IsCgroup2UnifiedMode() {
 		return nil
 	}
-	// the stuff below is cgroupv1-specific
 
+	// the stuff below is cgroupv1-specific
 	path := fmt.Sprintf("/proc/%d/cgroup", pid)
 	cgroupsPaths, err := cgroups.ParseCgroupFile(path)
 	if err != nil {

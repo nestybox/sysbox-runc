@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/nestybox/sysbox-ipc/sysboxFsGrpc"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/cgroups/fs2"
 	"github.com/opencontainers/runc/libcontainer/configs"
@@ -23,9 +24,6 @@ import (
 
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
-
-	"github.com/opencontainers/runc/libsysbox/sysbox"
-	pb "github.com/opencontainers/runc/libsysbox/sysbox_protobuf"
 
 	"golang.org/x/sys/unix"
 )
@@ -402,12 +400,12 @@ func (p *initProcess) start() (retErr error) {
 	// sysbox-runc: register the container with sysbox-fs (must be done before
 	// prestart hooks).
 	if p.container.sysboxfs {
-		regInfo := &pb.ContainerData{
+		data := &sysboxFsGrpc.ContainerData{
 			Id:       p.container.id,
 			InitPid:  int32(childPid),
 			Hostname: p.container.config.Hostname,
 		}
-		if err := sysbox.SendContainerRegistration(regInfo); err != nil {
+		if err := sysboxFsGrpc.SendContainerRegistration(data); err != nil {
 			return newSystemErrorWithCause(err, "registering with sysbox-fs")
 		}
 	}

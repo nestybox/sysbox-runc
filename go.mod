@@ -14,6 +14,7 @@ require (
 	github.com/golang/protobuf v1.4.3
 	github.com/moby/sys/mountinfo v0.4.0
 	github.com/mrunalp/fileutils v0.5.0
+	github.com/nestybox/sysbox-ipc v0.0.0-00010101000000-000000000000
 	github.com/opencontainers/runtime-spec v1.0.3-0.20200929063507-e6143ca7d51d
 	github.com/opencontainers/selinux v1.6.0
 	github.com/pkg/errors v0.9.1
@@ -27,3 +28,7 @@ require (
 	golang.org/x/sys v0.0.0-20201107080550-4d91cf3a1aaf
 	google.golang.org/grpc v1.33.2
 )
+
+replace github.com/nestybox/sysbox-ipc => ../sysbox-ipc
+
+replace github.com/opencontainers/runc => ./

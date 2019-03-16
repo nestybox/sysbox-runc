@@ -14,18 +14,19 @@ import (
 	mapset "github.com/deckarep/golang-set"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
+
 	"golang.org/x/sys/unix"
 )
 
 // sysboxfsMounts is a list of system container mounts backed by sysbox-fs
 // (please keep in alphabetical order)
 var sysboxfsMounts = []specs.Mount{
-	// specs.Mount{
-	// 	Destination: "/proc/cpuinfo",
-	// 	Source:      "/var/lib/sysboxfs/proc/cpuinfo",
-	// 	Type:        "bind",
-	// 	Options:     []string{"rbind", "rprivate"}
-	// },
+	specs.Mount{
+		Destination: "/proc/cpuinfo",
+		Source:      "/var/lib/sysboxfs/proc/cpuinfo",
+		Type:        "bind",
+		Options:     []string{"rbind", "rprivate"},
+	},
 	// specs.Mount{
 	// 	Destination: "/proc/cgroups",
 	// 	Source:      "/var/lib/sysboxfs/proc/cgroups",
@@ -80,18 +81,18 @@ var sysboxfsMounts = []specs.Mount{
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
-	// specs.Mount{
-	// 	Destination: "/proc/sys",
-	// 	Source:      "/var/lib/sysboxfs/proc/sys",
-	// 	Type:        "bind",
-	// 	Options:     []string{"rbind", "rprivate"},
-	// },
-	// specs.Mount{
-	// 	Destination: "/proc/uptime",
-	// 	Source:      "/var/lib/sysboxfs/proc/uptime",
-	// 	Type:        "bind",
-	// 	Options:     []string{"rbind", "rprivate"},
-	// },
+	specs.Mount{
+		Destination: "/proc/sys",
+		Source:      "/var/lib/sysboxfs/proc/sys",
+		Type:        "bind",
+		Options:     []string{"rbind", "rprivate"},
+	},
+	specs.Mount{
+		Destination: "/proc/uptime",
+		Source:      "/var/lib/sysboxfs/proc/uptime",
+		Type:        "bind",
+		Options:     []string{"rbind", "rprivate"},
+	},
 }
 
 // sysboxRwPaths list the paths within the sys container's rootfs
