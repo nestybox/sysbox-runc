@@ -66,10 +66,10 @@ func destroy(c *linuxContainer) error {
 	// hooks are executed.
 	//
 	if c.sysvisorfs {
-		regInfo := &pb.ContainerData{
+		data := &pb.ContainerData{
 			Id: c.id,
 		}
-		if err := sysvisor.SendContainerUnregistration(regInfo); err != nil {
+		if err := sysvisor.SendContainerUnregistration(data); err != nil {
 			return newSystemErrorWithCause(err, "unregistering with sysvisor-fs")
 		}
 	}

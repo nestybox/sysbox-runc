@@ -1,8 +1,8 @@
 package sysvisor
 
 import (
-	"fmt"
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -82,9 +82,30 @@ func SendContainerUnregistration(data *pb.ContainerData) error {
 }
 
 //
-// Sends creation-time attribute to sysvisor-fs end.
+// Sends a container-update message to sysvisor-fs end. At this point, we are
+// only utilizing this message for a particular case, update the container
+// creation-time attribute, but this function can serve more general purposes
+// in the future.
 //
-func SendContainerCreationTime(time time.Time) error {
-	// TBD
+func SendContainerUpdate(data *pb.ContainerData) error {
+
+	// Set up sysvisorfs pipeline.
+	conn := sysvisorfs_connect()
+	if conn == nil {
+		return fmt.Errorf("failed to connect with sysvisor-fs")
+	}
+	defer conn.Close()
+
+	cntrChanIntf := pb.NewContainerStateChannelClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	_, err := cntrChanIntf.ContainerUpdate(ctx, data)
+	if err != nil {
+		return fmt.Errorf("failed to send container-update message to ",
+			"sysvisor-fs: %v", err)
+	}
+
 	return nil
 }

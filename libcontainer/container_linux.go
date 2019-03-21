@@ -27,6 +27,8 @@ import (
 	"github.com/opencontainers/runc/libcontainer/utils"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/opencontainers/runc/libsysvisor/sysvisor"
+	pb "github.com/opencontainers/runc/libsysvisor/sysvisor-protobuf"
+	"github.com/golang/protobuf/ptypes"
 
 	criurpc "github.com/checkpoint-restore/go-criu/rpc"
 	"github.com/golang/protobuf/proto"
@@ -351,8 +353,17 @@ func (c *linuxContainer) start(process *Process) error {
 
 	// sysvisor-runc: send the creation-timestamp to sysvisor-fs.
 	if c.sysvisorfs {
-		if err := sysvisor.SendContainerCreationTime(c.created); err != nil {
-			return newSystemErrorWithCause(err, "setting container creation time with sysvisor-fs")
+		creationTime, err := ptypes.TimestampProto(c.created)
+		if err != nil {
+			return err
+		}
+
+		data := &pb.ContainerData{
+			Id:       c.id,
+			Ctime:    creationTime,
+		}
+		if err := sysvisor.SendContainerUpdate(data); err != nil {
+			return newSystemErrorWithCause(err, "setting container creation-time with sysvisor-fs")
 		}
 	}
 

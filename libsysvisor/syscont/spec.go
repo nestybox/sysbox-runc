@@ -21,12 +21,12 @@ import (
 // sysvisorfsMounts is a list of system container mounts backed by sysvisor-fs
 // (please keep in alphabetical order)
 var sysvisorfsMounts = []specs.Mount{
-	// specs.Mount{
-	// 	Destination: "/proc/cpuinfo",
-	//  	Source:      "/var/lib/sysvisorfs/proc/cpuinfo",
-	//  	Type:        "bind",
-	//  	Options:     []string{"rbind", "rprivate"},
-	// },
+	specs.Mount{
+		Destination: "/proc/cpuinfo",
+		Source:      "/var/lib/sysvisorfs/proc/cpuinfo",
+		Type:        "bind",
+		Options:     []string{"rbind", "rprivate"},
+	},
 	// specs.Mount{
 	// 	Destination: "/proc/cgroups",
 	// 	Source:      "/var/lib/sysvisorfs/proc/cgroups",
@@ -81,18 +81,18 @@ var sysvisorfsMounts = []specs.Mount{
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
-	// specs.Mount{
-	// 	Destination: "/proc/sys",
-	// 	Source:      "/var/lib/sysvisorfs/proc/sys",
-	// 	Type:        "bind",
-	// 	Options:     []string{"rbind", "rprivate"},
-	// },
-	// specs.Mount{
-	// 	Destination: "/proc/uptime",
-	// 	Source:      "/var/lib/sysvisorfs/proc/uptime",
-	// 	Type:        "bind",
-	// 	Options:     []string{"rbind", "rprivate"},
-	// },
+	specs.Mount{
+		Destination: "/proc/sys",
+		Source:      "/var/lib/sysvisorfs/proc/sys",
+		Type:        "bind",
+		Options:     []string{"rbind", "rprivate"},
+	},
+	specs.Mount{
+		Destination: "/proc/uptime",
+		Source:      "/var/lib/sysvisorfs/proc/uptime",
+		Type:        "bind",
+		Options:     []string{"rbind", "rprivate"},
+	},
 }
 
 // sysvisorRwPaths list the paths within the sys container's rootfs
