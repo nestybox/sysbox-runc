@@ -20,15 +20,13 @@ import (
 	"time"
 
 	"github.com/cyphar/filepath-securejoin"
+	"github.com/nestybox/sysvisor/sysvisor-protobuf/sysvisorGrpc"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/intelrdt"
 	"github.com/opencontainers/runc/libcontainer/system"
 	"github.com/opencontainers/runc/libcontainer/utils"
 	"github.com/opencontainers/runtime-spec/specs-go"
-	"github.com/opencontainers/runc/libsysvisor/sysvisor"
-	pb "github.com/opencontainers/runc/libsysvisor/sysvisor-protobuf"
-	"github.com/golang/protobuf/ptypes"
 
 	criurpc "github.com/checkpoint-restore/go-criu/rpc"
 	"github.com/golang/protobuf/proto"
@@ -353,16 +351,11 @@ func (c *linuxContainer) start(process *Process) error {
 
 	// sysvisor-runc: send the creation-timestamp to sysvisor-fs.
 	if c.sysvisorfs {
-		creationTime, err := ptypes.TimestampProto(c.created)
-		if err != nil {
-			return err
+		data := &sysvisorGrpc.ContainerData{
+			Id:    c.id,
+			Ctime: c.created,
 		}
-
-		data := &pb.ContainerData{
-			Id:       c.id,
-			Ctime:    creationTime,
-		}
-		if err := sysvisor.SendContainerUpdate(data); err != nil {
+		if err := sysvisorGrpc.SendContainerUpdate(data); err != nil {
 			return newSystemErrorWithCause(err, "setting container creation-time with sysvisor-fs")
 		}
 	}
@@ -1418,7 +1411,7 @@ func (c *linuxContainer) criuApplyCgroups(pid int, req *criurpc.CriuReq) error {
 		return err
 	}
 	if err := c.cgroupManager.Set(c.config); err != nil {
-	 	return newSystemError(err)
+		return newSystemError(err)
 	}
 
 	path := fmt.Sprintf("/proc/%d/cgroup", pid)

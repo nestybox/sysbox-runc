@@ -13,13 +13,12 @@ import (
 	"strconv"
 	"syscall" // only for Signal
 
+	"github.com/nestybox/sysvisor/sysvisor-protobuf/sysvisorGrpc"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/intelrdt"
 	"github.com/opencontainers/runc/libcontainer/system"
 	"github.com/opencontainers/runc/libcontainer/utils"
-	"github.com/opencontainers/runc/libsysvisor/sysvisor"
-	pb "github.com/opencontainers/runc/libsysvisor/sysvisor-protobuf"
 
 	"golang.org/x/sys/unix"
 )
@@ -343,12 +342,12 @@ func (p *initProcess) start() error {
 	// sysvisor-runc: register the container with sysvisor-fs (must be done before
 	// prestart hooks).
 	if p.container.sysvisorfs {
-		data := &pb.ContainerData{
+		data := &sysvisorGrpc.ContainerData{
 			Id:       p.container.id,
 			InitPid:  int32(childPid),
 			Hostname: p.container.config.Hostname,
 		}
-		if err := sysvisor.SendContainerRegistration(data); err != nil {
+		if err := sysvisorGrpc.SendContainerRegistration(data); err != nil {
 			return newSystemErrorWithCause(err, "registering with sysvisor-fs")
 		}
 	}
