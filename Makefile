@@ -18,6 +18,8 @@ BUILDTAGS ?= seccomp
 COMMIT_NO := $(shell git rev-parse HEAD 2> /dev/null || true)
 COMMIT := $(if $(shell git status --porcelain --untracked-files=no),"${COMMIT_NO}-dirty","${COMMIT_NO}")
 
+SYSVISOR_PROTOBUF := github.com/nestybox/sysvisor/sysvisor-protobuf
+
 MAN_DIR := $(CURDIR)/man/man8
 MAN_PAGES = $(shell ls $(MAN_DIR)/*.8)
 MAN_PAGES_BASE = $(notdir $(MAN_PAGES))
@@ -69,25 +71,25 @@ localtest:
 	make localunittest localintegration
 
 unittest: runcimage
-	docker run ${DOCKER_RUN_PROXY} -t --privileged --rm -v /lib/modules:/lib/modules:ro -v $(CURDIR):/go/src/$(PROJECT) $(RUNC_IMAGE) make localunittest TESTFLAGS=${TESTFLAGS}
+	docker run ${DOCKER_RUN_PROXY} -t --privileged --rm -v $(CURDIR):/go/src/$(PROJECT) -v /lib/modules:/lib/modules:ro -v $(GOPATH)/src/$(SYSVISOR_PROTOBUF):/go/src/$(SYSVISOR_PROTOBUF):ro $(RUNC_IMAGE) make localunittest TESTFLAGS=${TESTFLAGS}
 
 localunittest: all
 	$(GO) test -timeout 3m -tags "$(BUILDTAGS)" ${TESTFLAGS} -v $(allpackages)
 
 integration: runcimage
-	docker run ${DOCKER_RUN_PROXY} -t --privileged --rm -v /lib/modules:/lib/modules:ro -v $(CURDIR):/go/src/$(PROJECT) $(RUNC_IMAGE) make localintegration TESTPATH=${TESTPATH}
+	docker run ${DOCKER_RUN_PROXY} -t --privileged --rm -v $(CURDIR):/go/src/$(PROJECT) -v /lib/modules:/lib/modules:ro -v $(GOPATH)/src/$(SYSVISOR_PROTOBUF):/go/src/$(SYSVISOR_PROTOBUF):ro $(RUNC_IMAGE) make localintegration TESTPATH=${TESTPATH}
 
 localintegration: all
 	bats -t tests/integration${TESTPATH}
 
 rootlessintegration: runcimage
-	docker run ${DOCKER_RUN_PROXY} -t --privileged --rm -v $(CURDIR):/go/src/$(PROJECT) $(RUNC_IMAGE) make localrootlessintegration
+	docker run ${DOCKER_RUN_PROXY} -t --privileged --rm -v $(CURDIR):/go/src/$(PROJECT) -v /lib/modules:/lib/modules:ro -v $(GOPATH)/src/$(SYSVISOR_PROTOBUF):/go/src/$(SYSVISOR_PROTOBUF):ro $(RUNC_IMAGE) make localrootlessintegration
 
 localrootlessintegration: all
 	tests/rootless.sh
 
 shell: runcimage
-	docker run ${DOCKER_RUN_PROXY} -ti --privileged --rm -v $(CURDIR):/go/src/$(PROJECT) $(RUNC_IMAGE) bash
+	docker run ${DOCKER_RUN_PROXY} -ti --privileged --rm -v $(CURDIR):/go/src/$(PROJECT)  -v /lib/modules:/lib/modules:ro -v $(GOPATH)/src/$(SYSVISOR_PROTOBUF):/go/src/$(SYSVISOR_PROTOBUF):ro $(RUNC_IMAGE) bash
 
 install:
 	install -D -m0755 $(RUNC_TARGET) $(BINDIR)/$(RUNC_TARGET)
