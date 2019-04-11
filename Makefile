@@ -69,10 +69,10 @@ runcimage:
 
 # Note: sysbox-runc does not support rootless mode, so rootless integration tests are not invoked as part of test or localtest
 test:
-	make unittest integration
+	make unittest integration integration-shiftuid
 
 localtest:
-	make localunittest localintegration
+	make localunittest localintegration localintegration-shiftuid
 
 unittest: runcimage
 	$(CONTAINER_ENGINE) run $(CONTAINER_ENGINE_RUN_FLAGS) \
@@ -93,8 +93,19 @@ integration: runcimage
 		-v $(CURDIR):/go/src/$(PROJECT) \
 		$(RUNC_IMAGE) make localintegration TESTPATH=$(TESTPATH)
 
+integration-shiftuid: runcimage
+	$(CONTAINER_ENGINE) run $(CONTAINER_ENGINE_RUN_FLAGS) \
+		-t --privileged --rm \
+		-v /lib/modules:/lib/modules:ro \
+		-v $(CURDIR)/../sysbox-ipc:/go/src/nestybox/sysbox-ipc \
+		-v $(CURDIR):/go/src/$(PROJECT) \
+		$(RUNC_IMAGE) make localintegration-shiftuid TESTPATH=$(TESTPATH)
+
 localintegration: all
 	bats -t tests/integration$(TESTPATH)
+
+localintegration-shiftuid: all
+	SHIFT_UIDS=true bats -t tests/integration${TESTPATH}
 
 rootlessintegration: runcimage
 	$(CONTAINER_ENGINE) run $(CONTAINER_ENGINE_RUN_FLAGS) \

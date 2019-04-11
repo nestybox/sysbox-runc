@@ -78,6 +78,9 @@ function runc_spec() {
 	fi
 
         # sysbox-runc: sys container spec requires id mappings
+        #
+        # TODO: this is no longer necessary as sysbox allocates ID mappings when not provided
+        #
         runc spec "${args[@]}" "$UID_MAP" "$GID_MAP" "$ID_MAP_SIZE"
 
 	# Always add additional mappings if we have idmaps.
@@ -493,8 +496,10 @@ function setup_busybox() {
 	fi
 	tar --exclude './dev/*' -C "$BUSYBOX_BUNDLE"/rootfs -xf "$BUSYBOX_IMAGE"
 
-        # sysbox-runc: set bundle ownership to match system container's uid/gid map (see runc_spec())
-        chown -R "$UID_MAP":"$GID_MAP" "$BUSYBOX_BUNDLE"
+        # sysbox-runc: set bundle ownership to match system container's uid/gid map
+        if [ -z "$SHIFT_UIDS" ]; then
+            chown -R "$UID_MAP":"$GID_MAP" "$BUSYBOX_BUNDLE"
+        fi
 
 	cd "$BUSYBOX_BUNDLE"
 
@@ -506,8 +511,10 @@ function setup_hello() {
 	mkdir -p "$HELLO_BUNDLE"/rootfs
 	tar --exclude './dev/*' -C "$HELLO_BUNDLE"/rootfs -xf "$HELLO_IMAGE"
 
-        # sysbox-runc: set bundle ownership to match system container's uid/gid map (see runc_spec())
-        chown -R "$UID_MAP":"$GID_MAP" "$HELLO_BUNDLE"
+        # sysbox-runc: set bundle ownership to match system container's uid/gid map
+        if [ -z "$SHIFT_UIDS" ]; then
+            chown -R "$UID_MAP":"$GID_MAP" "$HELLO_BUNDLE"
+        fi
 
 	cd "$HELLO_BUNDLE"
 	runc_spec
