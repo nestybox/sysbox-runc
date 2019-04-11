@@ -65,10 +65,10 @@ runcimage:
 
 # Note: sysvisor-runc does not support rootles mode, so rootless integration tests are not invoked as part of test or localtest
 test:
-	make unittest integration
+	make unittest integration integration-shiftuid
 
 localtest:
-	make localunittest localintegration
+	make localunittest localintegration localintegration-shiftuid
 
 unittest: runcimage
 	docker run ${DOCKER_RUN_PROXY} -t --privileged --rm -v $(CURDIR):/go/src/$(PROJECT) -v /lib/modules:/lib/modules:ro -v $(GOPATH)/src/$(SYSVISOR_PROTOBUF):/go/src/$(SYSVISOR_PROTOBUF):ro $(RUNC_IMAGE) make localunittest TESTFLAGS=${TESTFLAGS}
@@ -79,8 +79,14 @@ localunittest: all
 integration: runcimage
 	docker run ${DOCKER_RUN_PROXY} -t --privileged --rm -v $(CURDIR):/go/src/$(PROJECT) -v /lib/modules:/lib/modules:ro -v $(GOPATH)/src/$(SYSVISOR_PROTOBUF):/go/src/$(SYSVISOR_PROTOBUF):ro $(RUNC_IMAGE) make localintegration TESTPATH=${TESTPATH}
 
+integration-shiftuid: runcimage
+	docker run ${DOCKER_RUN_PROXY} -t --privileged --rm -v $(CURDIR):/go/src/$(PROJECT) -v /lib/modules:/lib/modules:ro -v $(GOPATH)/src/$(SYSVISOR_PROTOBUF):/go/src/$(SYSVISOR_PROTOBUF):ro $(RUNC_IMAGE) make localintegration-shiftuid TESTPATH=${TESTPATH}
+
 localintegration: all
 	bats -t tests/integration${TESTPATH}
+
+localintegration-shiftuid: all
+	SHIFT_UIDS=true bats -t tests/integration${TESTPATH}
 
 rootlessintegration: runcimage
 	docker run ${DOCKER_RUN_PROXY} -t --privileged --rm -v $(CURDIR):/go/src/$(PROJECT) -v /lib/modules:/lib/modules:ro -v $(GOPATH)/src/$(SYSVISOR_PROTOBUF):/go/src/$(SYSVISOR_PROTOBUF):ro $(RUNC_IMAGE) make localrootlessintegration
