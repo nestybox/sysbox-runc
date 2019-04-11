@@ -932,14 +932,17 @@ func validateCwd(rootfs string) error {
 // sysvisor-runc: effectRootfsMount ensure the calling process sees the effects of a previous rootfs
 // mount. It does this by reopening the rootfs directory.
 func effectRootfsMount() error {
-	// Per the Linux FHS, /bin is required on a Linux host and thus will always be present
-	// in a system container
-	if err := os.Chdir("bin"); err != nil {
+
+	// The method for reopening the rootfs directory is pretty lame, but I could not find
+	// any other. Note that per the Linux FHS, /dev is required on a Linux host and thus
+	// will always be present in a system container
+	if err := os.Chdir("dev"); err != nil {
 		return newSystemErrorWithCause(err, "chdir bin")
 	}
 	if err := os.Chdir(".."); err != nil {
 		return newSystemErrorWithCause(err, "chdir ..")
 	}
+
 	return nil
 }
 
