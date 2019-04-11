@@ -16,6 +16,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/intelrdt"
 	"github.com/opencontainers/runc/libcontainer/specconv"
 	"github.com/opencontainers/runc/libcontainer/utils"
+	"github.com/opencontainers/runc/libsysvisor/sysvisor"
 	"github.com/opencontainers/runtime-spec/specs-go"
 
 	"github.com/coreos/go-systemd/activation"
@@ -410,6 +411,12 @@ const (
 )
 
 func startContainer(context *cli.Context, spec *specs.Spec, action CtAct, criuOpts *libcontainer.CriuOpts, shiftUids bool) (int, error) {
+
+	if shiftUids {
+		if err := sysvisor.KernelModSupported("shiftfs"); err != nil {
+			return -1, fmt.Errorf("container requires uid shifting but error was found: %v", err)
+		}
+	}
 
 	id := context.Args().First()
 	if id == "" {

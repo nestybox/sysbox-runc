@@ -1,8 +1,11 @@
 package sysvisor
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
+	"strings"
 	"syscall"
 
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -103,4 +106,27 @@ func NeedUidShiftOnRootfs(spec *specs.Spec) (bool, error) {
 	}
 
 	return false, nil
+}
+
+// KernelModSupported returns nil if the given module is loaded in the kernel.
+func KernelModSupported(mod string) error {
+
+	// Load the module (if present in directory /lib/modules/`uname -r`)
+	exec.Command("modprobe", mod).Run()
+
+	// Check if the module is in the kernel
+	f, err := os.Open("/proc/filesystems")
+	if err != nil {
+		return fmt.Errorf("failed to open /proc/filesystems to check for %s module", mod)
+	}
+	defer f.Close()
+
+	s := bufio.NewScanner(f)
+	for s.Scan() {
+		if strings.Contains(s.Text(), mod) {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("%s module is not loaded in the kernel", mod)
 }
