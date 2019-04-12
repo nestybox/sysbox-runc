@@ -7,7 +7,9 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/nestybox/sysvisor/sysvisor-protobuf/sysvisorGrpc"
 	"github.com/opencontainers/runc/libcontainer/configs"
+
 	"github.com/sirupsen/logrus"
 
 	"golang.org/x/sys/unix"
@@ -57,6 +59,21 @@ func destroy(c *linuxContainer) error {
 		err = herr
 	}
 	c.state = &stoppedState{c: c}
+
+	//
+	// If sysvisor feature is enabled, proceed to unregister this container
+	// from sysvisor-fs end. Notice that this must be done after post-stop
+	// hooks are executed.
+	//
+	if c.sysvisorfs {
+		data := &sysvisorGrpc.ContainerData{
+			Id: c.id,
+		}
+		if err := sysvisorGrpc.SendContainerUnregistration(data); err != nil {
+			return newSystemErrorWithCause(err, "unregistering with sysvisor-fs")
+		}
+	}
+
 	return err
 }
 

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/deckarep/golang-set"
+	mapset "github.com/deckarep/golang-set"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 
@@ -27,6 +27,7 @@ var sysvisorfsMounts = []specs.Mount{
 		Type:        "bind",
 		Options:     []string{"rbind", "rprivate"},
 	},
+
 	// specs.Mount{
 	// 	Destination: "/proc/cgroups",
 	// 	Source:      "/var/lib/sysvisorfs/proc/cgroups",
@@ -81,18 +82,19 @@ var sysvisorfsMounts = []specs.Mount{
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
-	// specs.Mount{
-	// 	Destination: "/proc/sys",
-	// 	Source:      "/var/lib/sysvisorfs/proc/sys",
-	// 	Type:        "bind",
-	// 	Options:     []string{"rbind", "rprivate"},
-	// },
-	// specs.Mount{
-	// 	Destination: "/proc/uptime",
-	// 	Source:      "/var/lib/sysvisorfs/proc/uptime",
-	// 	Type:        "bind",
-	// 	Options:     []string{"rbind", "rprivate"},
-	// },
+
+	specs.Mount{
+		Destination: "/proc/sys",
+		Source:      "/var/lib/sysvisorfs/proc/sys",
+		Type:        "bind",
+		Options:     []string{"rbind", "rprivate"},
+	},
+	specs.Mount{
+		Destination: "/proc/uptime",
+		Source:      "/var/lib/sysvisorfs/proc/uptime",
+		Type:        "bind",
+		Options:     []string{"rbind", "rprivate"},
+	},
 }
 
 // sysvisorRwPaths list the paths within the sys container's rootfs

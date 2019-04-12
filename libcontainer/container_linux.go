@@ -19,20 +19,16 @@ import (
 	"syscall" // only for SysProcAttr and Signal
 	"time"
 
+	criurpc "github.com/checkpoint-restore/go-criu/rpc"
 	"github.com/cyphar/filepath-securejoin"
+	"github.com/golang/protobuf/proto"
 	"github.com/nestybox/sysvisor/sysvisor-protobuf/sysvisorGrpc"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/intelrdt"
-	"github.com/opencontainers/runc/libcontainer/mount"
 	"github.com/opencontainers/runc/libcontainer/system"
 	"github.com/opencontainers/runc/libcontainer/utils"
 	"github.com/opencontainers/runtime-spec/specs-go"
-
-	"github.com/opencontainers/runc/libsysvisor/sysvisor"
-
-	criurpc "github.com/checkpoint-restore/go-criu/rpc"
-	"github.com/golang/protobuf/proto"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink/nl"
 	"golang.org/x/sys/unix"
@@ -233,131 +229,6 @@ func (c *linuxContainer) Set(config configs.Config) error {
 	c.config = &config
 	_, err = c.updateState(nil)
 	return err
-}
-
-// sysvisor-runc:
-//
-// isMarkedForShiftfs checks if the given directory has a shiftfs mark
-func isMarkedForShiftfs(path string) (bool, error) {
-	mountinfo, err := mount.GetMounts()
-	if err != nil {
-		return false, fmt.Errorf("failed to get mountinfo: %v", err)
-	}
-
-	alreadyMarked := false
-	for _, info := range mountinfo {
-		mountPath := filepath.Join(info.Root, info.Mountpoint)
-		if strings.Contains(path, mountPath) && (info.Fstype == "shiftfs") {
-			opts := strings.Split(info.VfsOpts, ",")
-			for _, opt := range opts {
-				if opt == "mark" {
-					alreadyMarked = true
-				}
-			}
-		}
-	}
-
-	return alreadyMarked, nil
-}
-
-type shiftfsAction int
-
-const (
-	setMark shiftfsAction = iota
-	clearMark
-	doMount
-	doUnmount
-)
-
-// sysvisor-runc:
-//
-// applyShiftfsOnPath performs the given shiftfs action on the given path.
-func applyShiftfsOnPath(path string, action shiftfsAction) error {
-	var (
-		err    error
-		marked bool
-		fi     os.FileInfo
-	)
-
-	// shiftfs marks and mounts must be applied on directories
-	fi, err = os.Stat(path)
-	if err != nil {
-		return fmt.Errorf("failed to stat %s: %v", path, err)
-	}
-	if !fi.IsDir() {
-		path = filepath.Dir(path)
-	}
-
-	if action == setMark || action == clearMark {
-		marked, err = isMarkedForShiftfs(path)
-		if err != nil {
-			return err
-		}
-	}
-
-	switch action {
-	case setMark:
-		if !marked {
-			if err = unix.Mount(path, path, "shiftfs", 0, "mark"); err != nil {
-				return fmt.Errorf("failed to set shiftfs mark on %s: %v", path, err)
-			}
-		}
-	case clearMark:
-		if marked {
-			if err = unix.Unmount(path, 0); err != nil {
-				return fmt.Errorf("failed to remove shiftfs mark on %s: %v", path, err)
-			}
-		}
-	case doMount:
-		if err = unix.Mount(path, path, "shiftfs", 0, ""); err != nil {
-			return fmt.Errorf("failed to mount shiftfs over %s: %v", path, err)
-		}
-	case doUnmount:
-		if err = unix.Unmount(path, 0); err != nil {
-			return fmt.Errorf("failed to unmount %s: %v", path, err)
-		}
-	}
-
-	return nil
-}
-
-// sysvisor-runc:
-//
-// markShiftfsOnDocker sets or clears shiftfs marks on host paths that Docker commonly
-// bind mounts into a container.
-func markShiftfsOnDocker(mounts []*configs.Mount, action shiftfsAction) error {
-
-	// Docker sets up the container spec with bind mounts for
-	// /etc/resolv.conf, /etc/hostname, and /etc/hosts. The source of these is in a host
-	// directory managed by Docker, outside of the container's rootfs.
-	//
-	// This host directory is not accessible by the sys container's init process
-	// because it's owned by true root with 0700 permissions. Thus, the init process
-	// will fail to do the bind mounts (see prepareBindMount() in rootfs_linux.go) since
-	// it can't stat the source.
-	//
-	// To overcome this when using shiftfs, we temporarily mark the host directory holding
-	// these docker files as a shiftfs mountpoint. Corresponding code in rootfs_linux.go
-	// performs the actual shiftfs mount from inside the container while setting up
-	// the bind-mounts.
-	//
-	// By using shiftfs, the container's init process will have access to the host
-	// directory since container-root = host-root on shiftfs mountpoints. Thus,
-	// the init process will be able to stat and bind-mount the above mentioned
-	// files from the host Docker directory into the container's /etc directory.
-	//
-	// Once the bind mounts in the rootfs are setup, we remove the shiftfs mountpoint
-	// on the above mentioned host directories.
-
-	for _, mnt := range mounts {
-		if mnt.Device == "bind" || strings.Contains(mnt.Source, "/var/lib/docker/") {
-			if err := applyShiftfsOnPath(mnt.Source, action); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
 }
 
 func (c *linuxContainer) Start(process *Process) error {
