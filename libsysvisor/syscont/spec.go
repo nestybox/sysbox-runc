@@ -84,8 +84,8 @@ var sysvisorfsMounts = []specs.Mount{
 	// },
 
 	specs.Mount{
-		Destination: "/proc/sys",
-		Source:      "/var/lib/sysvisorfs/proc/sys",
+		Destination: "/proc/sys/net/ipv6/conf/all/disable_ipv6",
+		Source:      "/var/lib/sysvisorfs/proc/sys/net/ipv6/conf/all/disable_ipv6",
 		Type:        "bind",
 		Options:     []string{"rbind", "rprivate"},
 	},
