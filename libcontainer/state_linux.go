@@ -8,8 +8,10 @@ import (
 	"path/filepath"
 
 	"github.com/nestybox/sysbox-ipc/sysboxFsGrpc"
+	"github.com/nestybox/sysbox-ipc/sysboxMgrGrpc"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runtime-spec/specs-go"
+
 	"github.com/sirupsen/logrus"
 
 	"golang.org/x/sys/unix"
@@ -61,11 +63,9 @@ func destroy(c *linuxContainer) error {
 	}
 	c.state = &stoppedState{c: c}
 
-	//
 	// If sysbox feature is enabled, proceed to unregister this container
 	// from sysbox-fs end. Notice that this must be done after post-stop
 	// hooks are executed.
-	//
 	if c.sysboxfs {
 		data := &sysboxFsGrpc.ContainerData{
 			Id: c.id,
@@ -73,6 +73,13 @@ func destroy(c *linuxContainer) error {
 		if err := sysboxFsGrpc.SendContainerUnregistration(data); err != nil {
 			return newSystemErrorWithCause(err, "unregistering with sysbox-fs")
 		}
+	}
+
+	// Release container uid(gid) range (ignore "not-found" errors since this container may
+	// not have required uid(gid) allocation)
+	err = sysboxMgrGrpc.UidFree(uint32(c.config.UidMappings[0].HostID))
+	if err != nil && err.Error() != "notFound" {
+		return fmt.Errorf("failed to free container uid %v: %v", c.config.UidMappings[0], err)
 	}
 
 	return err
