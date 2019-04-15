@@ -202,15 +202,31 @@ func cfgNamespaces(spec *specs.Spec) error {
 	return nil
 }
 
-// allocateIdMappings performs uid and gid allocation for the system container
-func allocateIdMappings(spec *specs.Spec) error {
+// allocateIDMappings performs uid and gid allocation for the system container
+func allocateIDMappings(spec *specs.Spec) error {
 
-	// TODO: for now we fake a uid/gid mapping; in the future we need to perform actual allocation
-	// of uids/gids such that it's exclusive for each system container
+	// TODO: in the future the exhaust and re-alloc policy should be configurable
+	idExhaustPolicy := uidAlloc.Reuse
+
+	allocator, err := uidAlloc.New("sysvisor")
+	if err != nil {
+		return fmt.Errof("failed to create uid allocator: %v", err)
+	}
+
+	id, err := allocator.Alloc(IdRangeMin)
+	if err.Error() == "exhaust" {
+		if idExhaustPolicy == uidAlloc.Reuse {
+			id, err = allocator.ReAlloc(IdRangeMin)
+		}
+	}
+	if err != nil {
+		return fmt.Errorf("id allocation failed: %v", err)
+	}
+
 	idMap := specs.LinuxIDMapping{
 		ContainerID: 0,
-		HostID:      231072,
-		Size:        65536,
+		HostID:      id,
+		Size:        IdRangeMin,
 	}
 
 	spec.Linux.UIDMappings = append(spec.Linux.UIDMappings, idMap)
@@ -249,7 +265,7 @@ func validateIDMappings(spec *specs.Spec) error {
 // such mappings.
 func cfgIDMappings(spec *specs.Spec) error {
 	if len(spec.Linux.UIDMappings) == 0 && len(spec.Linux.GIDMappings) == 0 {
-		return allocateIdMappings(spec)
+		return allocateIDMappings(spec)
 	}
 	return validateIDMappings(spec)
 }

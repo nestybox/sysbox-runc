@@ -9,6 +9,7 @@ import (
 
 	"github.com/nestybox/sysvisor/sysvisor-protobuf/sysvisorFsGrpc"
 	"github.com/opencontainers/runc/libcontainer/configs"
+	"github.com/opencontainers/runc/libsysvisor/uidAlloc"
 
 	"github.com/sirupsen/logrus"
 
@@ -60,11 +61,9 @@ func destroy(c *linuxContainer) error {
 	}
 	c.state = &stoppedState{c: c}
 
-	//
 	// If sysvisor feature is enabled, proceed to unregister this container
 	// from sysvisor-fs end. Notice that this must be done after post-stop
 	// hooks are executed.
-	//
 	if c.sysvisorfs {
 		data := &sysvisorFsGrpc.ContainerData{
 			Id: c.id,
@@ -72,6 +71,14 @@ func destroy(c *linuxContainer) error {
 		if err := sysvisorFsGrpc.SendContainerUnregistration(data); err != nil {
 			return newSystemErrorWithCause(err, "unregistering with sysvisor-fs")
 		}
+	}
+
+	// Release container uid(gid) range (ignore "notFound" errors since this container may
+	// not have required uid(gid) allocation)
+	allocator := uidAlloc.New("sysvisor")
+	err := allocator.Free(c.config.UidMappings[0].HostID)
+	if err != nil && err.Error() != "notFound" {
+		return fmt.Errorf("failed to free container uid %v: %v", c.config.UidMappings[0], err)
 	}
 
 	return err
