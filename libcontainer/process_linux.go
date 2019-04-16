@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"syscall" // only for Signal
 
-	"github.com/nestybox/sysvisor/sysvisor-protobuf/sysvisorGrpc"
+	"github.com/nestybox/sysvisor/sysvisor-protobuf/sysvisorFsGrpc"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/intelrdt"
@@ -344,12 +344,12 @@ func (p *initProcess) start() error {
 	// sysvisor-runc: register the container with sysvisor-fs (must be done before
 	// prestart hooks so that sysvisor-fs is ready to respond by the time the hooks run).
 	if p.container.sysvisorfs {
-		data := &sysvisorGrpc.ContainerData{
+		data := &sysvisorFsGrpc.ContainerData{
 			Id:       p.container.id,
 			InitPid:  int32(childPid),
 			Hostname: p.container.config.Hostname,
 		}
-		if err := sysvisorGrpc.SendContainerRegistration(data); err != nil {
+		if err := sysvisorFsGrpc.SendContainerRegistration(data); err != nil {
 			return newSystemErrorWithCause(err, "registering with sysvisor-fs")
 		}
 	}

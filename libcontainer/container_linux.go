@@ -22,7 +22,7 @@ import (
 	criurpc "github.com/checkpoint-restore/go-criu/rpc"
 	"github.com/cyphar/filepath-securejoin"
 	"github.com/golang/protobuf/proto"
-	"github.com/nestybox/sysvisor/sysvisor-protobuf/sysvisorGrpc"
+	"github.com/nestybox/sysvisor/sysvisor-protobuf/sysvisorFsGrpc"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/intelrdt"
@@ -350,11 +350,11 @@ func (c *linuxContainer) start(process *Process) error {
 
 	// sysvisor-runc: send the creation-timestamp to sysvisor-fs.
 	if c.sysvisorfs {
-		data := &sysvisorGrpc.ContainerData{
+		data := &sysvisorFsGrpc.ContainerData{
 			Id:    c.id,
 			Ctime: c.created,
 		}
-		if err := sysvisorGrpc.SendContainerUpdate(data); err != nil {
+		if err := sysvisorFsGrpc.SendContainerUpdate(data); err != nil {
 			return newSystemErrorWithCause(err, "setting container creation-time with sysvisor-fs")
 		}
 	}

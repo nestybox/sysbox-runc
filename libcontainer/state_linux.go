@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/nestybox/sysvisor/sysvisor-protobuf/sysvisorGrpc"
+	"github.com/nestybox/sysvisor/sysvisor-protobuf/sysvisorFsGrpc"
 	"github.com/opencontainers/runc/libcontainer/configs"
 
 	"github.com/sirupsen/logrus"
@@ -66,10 +66,10 @@ func destroy(c *linuxContainer) error {
 	// hooks are executed.
 	//
 	if c.sysvisorfs {
-		data := &sysvisorGrpc.ContainerData{
+		data := &sysvisorFsGrpc.ContainerData{
 			Id: c.id,
 		}
-		if err := sysvisorGrpc.SendContainerUnregistration(data); err != nil {
+		if err := sysvisorFsGrpc.SendContainerUnregistration(data); err != nil {
 			return newSystemErrorWithCause(err, "unregistering with sysvisor-fs")
 		}
 	}
