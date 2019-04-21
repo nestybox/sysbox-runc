@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	mapset "github.com/deckarep/golang-set"
+	"github.com/nestybox/sysvisor/sysvisor-protobuf/sysvisorMgrGrpc"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 
@@ -205,20 +206,7 @@ func cfgNamespaces(spec *specs.Spec) error {
 // allocateIDMappings performs uid and gid allocation for the system container
 func allocateIDMappings(spec *specs.Spec) error {
 
-	// TODO: in the future the exhaust and re-alloc policy should be configurable
-	idExhaustPolicy := uidAlloc.Reuse
-
-	allocator, err := uidAlloc.New("sysvisor")
-	if err != nil {
-		return fmt.Errof("failed to create uid allocator: %v", err)
-	}
-
-	id, err := allocator.Alloc(IdRangeMin)
-	if err.Error() == "exhaust" {
-		if idExhaustPolicy == uidAlloc.Reuse {
-			id, err = allocator.ReAlloc(IdRangeMin)
-		}
-	}
+	id, err := sysvisorMgrGrpc.UidAlloc(IdRangeMin)
 	if err != nil {
 		return fmt.Errorf("id allocation failed: %v", err)
 	}

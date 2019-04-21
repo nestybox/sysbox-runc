@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 
 	"github.com/nestybox/sysvisor/sysvisor-protobuf/sysvisorFsGrpc"
+	"github.com/nestybox/sysvisor/sysvisor-protobuf/sysvisorMgrGrpc"
 	"github.com/opencontainers/runc/libcontainer/configs"
-	"github.com/opencontainers/runc/libsysvisor/uidAlloc"
 
 	"github.com/sirupsen/logrus"
 
@@ -73,10 +73,9 @@ func destroy(c *linuxContainer) error {
 		}
 	}
 
-	// Release container uid(gid) range (ignore "notFound" errors since this container may
+	// Release container uid(gid) range (ignore "not-found" errors since this container may
 	// not have required uid(gid) allocation)
-	allocator := uidAlloc.New("sysvisor")
-	err := allocator.Free(c.config.UidMappings[0].HostID)
+	err = sysvisorMgrGrpc.UidFree(uint32(c.config.UidMappings[0].HostID))
 	if err != nil && err.Error() != "notFound" {
 		return fmt.Errorf("failed to free container uid %v: %v", c.config.UidMappings[0], err)
 	}
