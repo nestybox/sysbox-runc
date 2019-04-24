@@ -206,19 +206,25 @@ func cfgNamespaces(spec *specs.Spec) error {
 // allocateIDMappings performs uid and gid allocation for the system container
 func allocateIDMappings(spec *specs.Spec) error {
 
-	id, err := sysvisorMgrGrpc.UidAlloc(IdRangeMin)
+	uid, gid, err := sysvisorMgrGrpc.SubidAlloc(uint64(IdRangeMin))
 	if err != nil {
 		return fmt.Errorf("id allocation failed: %v", err)
 	}
 
-	idMap := specs.LinuxIDMapping{
+	uidMap := specs.LinuxIDMapping{
 		ContainerID: 0,
-		HostID:      id,
+		HostID:      uid,
 		Size:        IdRangeMin,
 	}
 
-	spec.Linux.UIDMappings = append(spec.Linux.UIDMappings, idMap)
-	spec.Linux.GIDMappings = append(spec.Linux.GIDMappings, idMap)
+	gidMap := specs.LinuxIDMapping{
+		ContainerID: 0,
+		HostID:      gid,
+		Size:        IdRangeMin,
+	}
+
+	spec.Linux.UIDMappings = append(spec.Linux.UIDMappings, uidMap)
+	spec.Linux.GIDMappings = append(spec.Linux.GIDMappings, gidMap)
 
 	return nil
 }
@@ -235,13 +241,13 @@ func validateIDMappings(spec *specs.Spec) error {
 	}
 
 	uidMap := spec.Linux.UIDMappings[0]
-	gidMap := spec.Linux.UIDMappings[0]
-	if uidMap != gidMap {
-		return fmt.Errorf("sysvisor-runc requires user namespace uid and gid mappings be identical; found %v and %v", uidMap, gidMap)
-	}
-
 	if uidMap.ContainerID != 0 || uidMap.Size < IdRangeMin {
 		return fmt.Errorf("sysvisor-runc requires uid mapping specify a container with at least %d uids starting at uid 0; found %v", IdRangeMin, uidMap)
+	}
+
+	gidMap := spec.Linux.GIDMappings[0]
+	if gidMap.ContainerID != 0 || gidMap.Size < IdRangeMin {
+		return fmt.Errorf("sysvisor-runc requires gid mapping specify a container with at least %d gids starting at gid 0; found %v", IdRangeMin, gidMap)
 	}
 
 	return nil
