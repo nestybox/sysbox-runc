@@ -75,11 +75,14 @@ func destroy(c *linuxContainer) error {
 		}
 	}
 
-	// Release container uid(gid) range (ignore "not-found" errors since this container may
+	// Release container uid and gid range (ignore "not-found" errors since this container may
 	// not have required uid(gid) allocation)
-	err = sysboxMgrGrpc.UidFree(uint32(c.config.UidMappings[0].HostID))
+	subuid := uint32(c.config.UidMappings[0].HostID)
+	subgid := uint32(c.config.GidMappings[0].HostID)
+
+	err = sysboxMgrGrpc.SubidFree(subuid, subgid)
 	if err != nil && err.Error() != "notFound" {
-		return fmt.Errorf("failed to free container uid %v: %v", c.config.UidMappings[0], err)
+		return fmt.Errorf("failed to free container subuid %v and subgid %v: %v", subuid, subgid, err)
 	}
 
 	return err
