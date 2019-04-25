@@ -76,16 +76,8 @@ func destroy(c *linuxContainer) error {
 
 	// if using sysbox-mgr, release the container's uid and gid range
 	if c.sysboxMgr {
-		subuid := uint32(c.config.UidMappings[0].HostID)
-		subgid := uint32(c.config.GidMappings[0].HostID)
-
-		// TODO: this is a bug; may cause unexpected freeing of uid/gid; need to have a flag
-		// in the container state indicating if sysbox-mgr performed uid/gid alloc for this
-		// container
-
-		err = sysboxMgrGrpc.SubidFree(subuid, subgid)
-		if err != nil && err.Error() != "notFound" {
-			return fmt.Errorf("failed to free container subuid %v and subgid %v: %v", subuid, subgid, err)
+		if err := sysboxMgrGrpc.Unregister(c.id); err != nil {
+			return fmt.Errorf("failed to free container subuid and subgid: %v", err)
 		}
 	}
 

@@ -45,6 +45,7 @@ const (
 	Allow
 	Trace
 	Log
+	Notify
 )
 
 // Operator is a comparison operator to be used when matching syscall arguments in Seccomp
@@ -74,6 +75,12 @@ type Syscall struct {
 	Action   Action `json:"action"`
 	ErrnoRet *uint  `json:"errnoRet"`
 	Args     []*Arg `json:"args"`
+}
+
+// ShiftfsMount describes a shiftfs mount point
+type ShiftfsMount struct {
+	Source   string
+	Readonly bool
 }
 
 // TODO Windows. Many of these fields should be factored out into those parts
@@ -174,6 +181,9 @@ type Config struct {
 	// A default action to be taken if no rules match is also given.
 	Seccomp *Seccomp `json:"seccomp"`
 
+	// sysbox-runc: Seccomp notification actions for syscall trapping inside the sys container.
+	SeccompNotif *Seccomp `json:"seccomp_notif"`
+
 	// NoNewPrivileges controls whether processes in the container can gain additional privileges.
 	NoNewPrivileges bool `json:"no_new_privileges,omitempty"`
 
@@ -207,6 +217,17 @@ type Config struct {
 
 	// ShiftUids indicates if the container uses uid/gid shifting via the shiftfs kernel module.
 	ShiftUids bool `json:"shift_uids,omitempty"`
+
+	// ShiftfsMounts is a list of directories on which shiftfs needs to be mounted
+	ShiftfsMounts []ShiftfsMount `json:"shiftfs_mounts,omitempty"`
+
+	// SwitchDockerDns indicates if the containers should change the IP address
+	// of Docker DNS hosts with localhost addresses.
+	SwitchDockerDns bool `json:"switch_docker_dns,omitempty"`
+
+	// FsState slice is utilized to host file-system state (e.g. dir, file, softlinks,
+	// etc) to be created in container's rootfs during initialization.
+	FsState []FsEntry `json:"fs_state,omitempty"`
 }
 
 type HookName string
