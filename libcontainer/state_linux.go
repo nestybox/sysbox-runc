@@ -74,16 +74,11 @@ func destroy(c *linuxContainer) error {
 
 	// if using sysvisor-mgr, release the container's uid and gid range
 	if c.sysvisorMgr {
-		subuid := uint32(c.config.UidMappings[0].HostID)
-		subgid := uint32(c.config.GidMappings[0].HostID)
-
-		// TODO: this is a bug; may cause unexpected freeing of uid/gid; need to have a flag
-		// in the container state indicating if sysvisor-mgr performed uid/gid alloc for this
-		// container
-
-		err = sysvisorMgrGrpc.SubidFree(subuid, subgid)
-		if err != nil && err.Error() != "notFound" {
-			return fmt.Errorf("failed to free container subuid %v and subgid %v: %v", subuid, subgid, err)
+		err = sysvisorMgrGrpc.SubidFree(c.id)
+		// allow "not-found" errors because this container may not have required subid
+		// allocation in the first place
+		if err != nil && err.Error() != "not-found" {
+			return fmt.Errorf("failed to free container subuid and subgid: %v", err)
 		}
 	}
 

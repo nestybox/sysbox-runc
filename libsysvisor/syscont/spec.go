@@ -15,6 +15,7 @@ import (
 	"github.com/nestybox/sysvisor/sysvisor-protobuf/sysvisorMgrGrpc"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
+	"github.com/urfave/cli"
 
 	"golang.org/x/sys/unix"
 )
@@ -207,8 +208,8 @@ func cfgNamespaces(spec *specs.Spec) error {
 	return nil
 }
 
-// allocateIDMappings performs uid and gid allocation for the system container
-func allocateIDMappings(spec *specs.Spec, noSysvisorMgr bool) error {
+// allocIDMappings performs uid and gid allocation for the system container
+func allocIDMappings(id string, spec *specs.Spec, noSysvisorMgr bool) error {
 	var uid, gid uint32
 	var err error
 
@@ -216,9 +217,9 @@ func allocateIDMappings(spec *specs.Spec, noSysvisorMgr bool) error {
 		uid = defaultUid
 		gid = defaultGid
 	} else {
-		uid, gid, err = sysvisorMgrGrpc.SubidAlloc(uint64(IdRangeMin))
+		uid, gid, err = sysvisorMgrGrpc.SubidAlloc(id, uint64(IdRangeMin))
 		if err != nil {
-			return fmt.Errorf("id allocation failed: %v", err)
+			return fmt.Errorf("subid allocation failed: %v", err)
 		}
 	}
 
@@ -268,9 +269,9 @@ func validateIDMappings(spec *specs.Spec) error {
 // are not present, it allocates them. Note that we don't disallow mappings
 // that map to the host root UID (i.e., we honor the ID config). Some runc tests use
 // such mappings.
-func cfgIDMappings(spec *specs.Spec, noSysvisorMgr bool) error {
+func cfgIDMappings(id string, spec *specs.Spec, noSysvisorMgr bool) error {
 	if len(spec.Linux.UIDMappings) == 0 && len(spec.Linux.GIDMappings) == 0 {
-		return allocateIDMappings(spec, noSysvisorMgr)
+		return allocIDMappings(id, spec, noSysvisorMgr)
 	}
 	return validateIDMappings(spec)
 }
@@ -572,7 +573,11 @@ func ConvertProcessSpec(p *specs.Process) error {
 }
 
 // ConvertSpec converts the given container spec to a system container spec.
-func ConvertSpec(spec *specs.Spec, noSysvisorFs, noSysvisorMgr bool) error {
+func ConvertSpec(context *cli.Context, spec *specs.Spec) error {
+
+	noSysvisorFs := context.GlobalBool("no-sysvisor-fs")
+	noSysvisorMgr := context.GlobalBool("no-sysvisor-mgr")
+	id := context.Args().First()
 
 	if err := checkSpec(spec); err != nil {
 		return fmt.Errorf("invalid or unsupported system container spec: %v", err)
@@ -586,7 +591,7 @@ func ConvertSpec(spec *specs.Spec, noSysvisorFs, noSysvisorMgr bool) error {
 		return fmt.Errorf("invalid namespace config: %v", err)
 	}
 
-	if err := cfgIDMappings(spec, noSysvisorMgr); err != nil {
+	if err := cfgIDMappings(id, spec, noSysvisorMgr); err != nil {
 		return fmt.Errorf("invalid user/group ID config: %v", err)
 	}
 
