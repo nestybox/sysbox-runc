@@ -59,7 +59,7 @@ function runc() {
 
 # Raw wrapper for runc.
 function __runc() {
-	"$RUNC" ${RUNC_USE_SYSTEMD+--systemd-cgroup} --root "$ROOT" --no-sysboxfs "$@"
+	"$RUNC" ${RUNC_USE_SYSTEMD+--systemd-cgroup} --root "$ROOT" --no-sysbox-fs --no-sysbox-mgr "$@"
 }
 
 # Wrapper for runc spec, which takes only one argument (the bundle path).

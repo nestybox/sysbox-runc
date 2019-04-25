@@ -177,12 +177,21 @@ func CriuPath(criupath string) func(*LinuxFactory) error {
 	}
 }
 
-// Sysboxfs returns an option func that configures a LinuxFactory to
+// SysboxFs returns an option func that configures a LinuxFactory to
 // return containers that use sysbox-fs for emulating parts of the
 // container's rootfs
-func Sysboxfs(enable bool) func(*LinuxFactory) error {
+func SysboxFs(enable bool) func(*LinuxFactory) error {
 	return func(l *LinuxFactory) error {
-		l.Sysboxfs = enable
+		l.SysboxFs = enable
+		return nil
+	}
+}
+
+// SysboxMgr returns an option func that configures a LinuxFactory to
+// return containers that use sysbox-mgr services (e.g., uid/gid allocation).
+func SysboxMgr(enable bool) func(*LinuxFactory) error {
+	return func(l *LinuxFactory) error {
+		l.SysboxMgr = enable
 		return nil
 	}
 }
@@ -245,9 +254,12 @@ type LinuxFactory struct {
 	// NewIntelRdtManager returns an initialized Intel RDT manager for a single container.
 	NewIntelRdtManager func(config *configs.Config, id string, path string) intelrdt.Manager
 
-	// Sysboxfs indicates if sysboxfs is used to emulate parts of
+	// SysboxFs indicates if sysbox-fs is used to emulate parts of
 	// the container's rootfs (e.g., /proc)
-	Sysboxfs bool
+	SysboxFs bool
+
+	// SysboxMgr indicates if sysbox-mgr services (e.g., uid/gid allocation) are used.
+	SysboxMgr bool
 }
 
 func (l *LinuxFactory) Create(id string, config *configs.Config) (Container, error) {
@@ -285,7 +297,8 @@ func (l *LinuxFactory) Create(id string, config *configs.Config) (Container, err
 		newuidmapPath: l.NewuidmapPath,
 		newgidmapPath: l.NewgidmapPath,
 		cgroupManager: l.NewCgroupsManager(config.Cgroups, nil),
-		sysboxfs:      l.Sysboxfs,
+		sysboxFs:      l.SysboxFs,
+		sysboxMgr:     l.SysboxMgr,
 	}
 	if intelrdt.IsCATEnabled() || intelrdt.IsMBAEnabled() {
 		c.intelRdtManager = l.NewIntelRdtManager(config, id, "")
@@ -328,7 +341,8 @@ func (l *LinuxFactory) Load(id string) (Container, error) {
 		cgroupManager:        l.NewCgroupsManager(state.Config.Cgroups, state.CgroupPaths),
 		root:                 containerRoot,
 		created:              state.Created,
-		sysboxfs:             l.Sysboxfs,
+		sysboxFs:             l.SysboxFs,
+		sysboxMgr:            l.SysboxMgr,
 	}
 	c.state = &loadedState{c: c}
 	if err := c.refreshState(); err != nil {

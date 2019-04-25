@@ -19,9 +19,16 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// sysboxfsMounts is a list of system container mounts backed by sysbox-fs
+// UID & GID Mapping Constants
+const (
+	IdRangeMin uint32 = 65536
+	defaultUid uint32 = 231072
+	defaultGid uint32 = 231072
+)
+
+// sysboxFsMounts is a list of system container mounts backed by sysbox-fs
 // (please keep in alphabetical order)
-var sysboxfsMounts = []specs.Mount{
+var sysboxFsMounts = []specs.Mount{
 	specs.Mount{
 		Destination: "/proc/cpuinfo",
 		Source:      "/var/lib/sysboxfs/proc/cpuinfo",
@@ -154,9 +161,6 @@ var linuxCaps = []string{
 	"CAP_AUDIT_READ",
 }
 
-// IdRangeMin represents the minimum uid/gid range required by a sys container instance
-var IdRangeMin uint32 = 65536
-
 // SupportedRootFs is the list of supported filesystems for backing the system container's
 // root path
 var SupportedRootFs = map[string]int64{
@@ -205,11 +209,18 @@ func cfgNamespaces(spec *specs.Spec) error {
 }
 
 // allocateIDMappings performs uid and gid allocation for the system container
-func allocateIDMappings(spec *specs.Spec) error {
+func allocateIDMappings(spec *specs.Spec, noSysboxMgr bool) error {
+	var uid, gid uint32
+	var err error
 
-	uid, gid, err := sysboxMgrGrpc.SubidAlloc(uint64(IdRangeMin))
-	if err != nil {
-		return fmt.Errorf("id allocation failed: %v", err)
+	if noSysboxMgr {
+		uid = defaultUid
+		gid = defaultGid
+	} else {
+		uid, gid, err = sysboxMgrGrpc.SubidAlloc(uint64(IdRangeMin))
+		if err != nil {
+			return fmt.Errorf("id allocation failed: %v", err)
+		}
 	}
 
 	uidMap := specs.LinuxIDMapping{
@@ -258,9 +269,9 @@ func validateIDMappings(spec *specs.Spec) error {
 // are not present, it allocates them. Note that we don't disallow mappings
 // that map to the host root UID (i.e., we honor the ID config). Some runc tests use
 // such mappings.
-func cfgIDMappings(spec *specs.Spec) error {
+func cfgIDMappings(spec *specs.Spec, noSysboxMgr bool) error {
 	if len(spec.Linux.UIDMappings) == 0 && len(spec.Linux.GIDMappings) == 0 {
-		return allocateIDMappings(spec)
+		return allocateIDMappings(spec, noSysboxMgr)
 	}
 	return validateIDMappings(spec)
 }
@@ -315,8 +326,8 @@ func cfgReadonlyPaths(spec *specs.Spec) {
 	spec.Linux.ReadonlyPaths = specPaths
 }
 
-// cfgSysboxfsMounts adds the sysbox-fs mounts to the containers config.
-func cfgSysboxfsMounts(spec *specs.Spec) {
+// cfgSysboxFsMounts adds the sysbox-fs mounts to the containers config.
+func cfgSysboxFsMounts(spec *specs.Spec) {
 
 	// disallow all mounts over /proc/* or /sys/* (except for /sys/fs/cgroup);
 	// only sysbox-fs mounts are allowed there.
@@ -330,8 +341,8 @@ func cfgSysboxfsMounts(spec *specs.Spec) {
 		}
 	}
 
-	// add sysboxfs mounts to the config
-	for _, mount := range sysboxfsMounts {
+	// add sysbox-fs mounts to the config
+	for _, mount := range sysboxFsMounts {
 		spec.Mounts = append(spec.Mounts, mount)
 		logrus.Debugf("added sysbox-fs mount %s to spec", mount.Destination)
 	}
@@ -562,7 +573,7 @@ func ConvertProcessSpec(p *specs.Process) error {
 }
 
 // ConvertSpec converts the given container spec to a system container spec.
-func ConvertSpec(spec *specs.Spec, noSysboxfs bool) error {
+func ConvertSpec(spec *specs.Spec, noSysboxFs, noSysboxMgr bool) error {
 
 	if err := checkSpec(spec); err != nil {
 		return fmt.Errorf("invalid or unsupported system container spec: %v", err)
@@ -576,7 +587,7 @@ func ConvertSpec(spec *specs.Spec, noSysboxfs bool) error {
 		return fmt.Errorf("invalid namespace config: %v", err)
 	}
 
-	if err := cfgIDMappings(spec); err != nil {
+	if err := cfgIDMappings(spec, noSysboxMgr); err != nil {
 		return fmt.Errorf("invalid user/group ID config: %v", err)
 	}
 
@@ -588,7 +599,7 @@ func ConvertSpec(spec *specs.Spec, noSysboxfs bool) error {
 		return fmt.Errorf("failed to setup /lib/module/<kernel-version> mount: %v", err)
 	}
 
-	if !noSysboxfs {
+	if !noSysboxFs {
 		cfgMaskedPaths(spec)
 		cfgReadonlyPaths(spec)
 		cfgSysboxfsMounts(spec)

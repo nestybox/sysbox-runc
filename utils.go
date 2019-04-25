@@ -76,8 +76,9 @@ func setupSpec(context *cli.Context) (*specs.Spec, error) {
 		return nil, err
 	}
 
-	noSysboxfs := context.GlobalBool("no-sysboxfs")
-	if err := syscont.ConvertSpec(spec, noSysboxfs); err != nil {
+	noSysboxFs := context.GlobalBool("no-sysbox-fs")
+	noSysboxMgr := context.GlobalBool("no-sysbox-mgr")
+	if err := syscont.ConvertSpec(spec, noSysboxFs, noSysboxMgr); err != nil {
 		return nil, fmt.Errorf("error in system container spec: %v", err)
 	}
 

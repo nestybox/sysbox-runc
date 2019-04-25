@@ -74,13 +74,15 @@ func loadFactory(context *cli.Context) (libcontainer.Factory, error) {
 		newgidmap = ""
 	}
 
-	sysboxfs := !context.GlobalBool("no-sysboxfs")
+	sysboxFs := !context.GlobalBool("no-sysbox-fs")
+	sysboxMgr := !context.GlobalBool("no-sysbox-mgr")
 
 	return libcontainer.New(abs, cgroupManager, intelRdtManager,
 		libcontainer.CriuPath(context.GlobalString("criu")),
 		libcontainer.NewuidmapPath(newuidmap),
 		libcontainer.NewgidmapPath(newgidmap),
-		libcontainer.Sysboxfs(sysboxfs))
+		libcontainer.SysboxFs(sysboxFs),
+		libcontainer.SysboxMgr(sysboxMgr))
 }
 
 // getContainer returns the specified container instance by loading it from state

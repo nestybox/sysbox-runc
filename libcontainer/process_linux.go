@@ -400,7 +400,7 @@ func (p *initProcess) start() (retErr error) {
 
 	// sysbox-runc: register the container with sysbox-fs (must be done before
 	// prestart hooks so that sysbox-fs is ready to respond by the time the hooks run).
-	if p.container.sysboxfs {
+	if p.container.sysboxFs {
 		data := &sysboxFsGrpc.ContainerData{
 			Id:       p.container.id,
 			InitPid:  int32(childPid),
