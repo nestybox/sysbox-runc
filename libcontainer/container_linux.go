@@ -80,6 +80,12 @@ type State struct {
 
 	// Intel RDT "resource control" filesystem path
 	IntelRdtPath string `json:"intel_rdt_path"`
+
+	// SysvisorFs indicates if container uses sysvisor-fs services
+	SysvisorFs bool `json:"sysvisor_fs"`
+
+	// SysvisorMgr indicates if container uses sysvisor-mgr services
+	SysvisorMgr bool `json:"sysvisor_mgr"`
 }
 
 // Container is a libcontainer container object.
@@ -1865,6 +1871,8 @@ func (c *linuxContainer) currentState() (*State, error) {
 		IntelRdtPath:        intelRdtPath,
 		NamespacePaths:      make(map[configs.NamespaceType]string),
 		ExternalDescriptors: externalDescriptors,
+		SysvisorFs:          c.sysvisorFs,
+		SysvisorMgr:         c.sysvisorMgr,
 	}
 	if pid > 0 {
 		for _, ns := range c.config.Namespaces {
