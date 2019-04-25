@@ -19,9 +19,16 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// sysvisorfsMounts is a list of system container mounts backed by sysvisor-fs
+// UID & GID Mapping Constants
+const (
+	IdRangeMin uint32 = 65536
+	defaultUid uint32 = 231072
+	defaultGid uint32 = 231072
+)
+
+// sysvisorFsMounts is a list of system container mounts backed by sysvisor-fs
 // (please keep in alphabetical order)
-var sysvisorfsMounts = []specs.Mount{
+var sysvisorFsMounts = []specs.Mount{
 	specs.Mount{
 		Destination: "/proc/cpuinfo",
 		Source:      "/var/lib/sysvisorfs/proc/cpuinfo",
@@ -153,9 +160,6 @@ var linuxCaps = []string{
 	"CAP_AUDIT_READ",
 }
 
-// IdRangeMin represents the minimum uid/gid range required by a sys container instance
-var IdRangeMin uint32 = 65536
-
 // SupportedRootFs is the list of supported filesystems for backing the system container's
 // root path
 var SupportedRootFs = map[string]int64{
@@ -204,11 +208,18 @@ func cfgNamespaces(spec *specs.Spec) error {
 }
 
 // allocateIDMappings performs uid and gid allocation for the system container
-func allocateIDMappings(spec *specs.Spec) error {
+func allocateIDMappings(spec *specs.Spec, noSysvisorMgr bool) error {
+	var uid, gid uint32
+	var err error
 
-	uid, gid, err := sysvisorMgrGrpc.SubidAlloc(uint64(IdRangeMin))
-	if err != nil {
-		return fmt.Errorf("id allocation failed: %v", err)
+	if noSysvisorMgr {
+		uid = defaultUid
+		gid = defaultGid
+	} else {
+		uid, gid, err = sysvisorMgrGrpc.SubidAlloc(uint64(IdRangeMin))
+		if err != nil {
+			return fmt.Errorf("id allocation failed: %v", err)
+		}
 	}
 
 	uidMap := specs.LinuxIDMapping{
@@ -257,9 +268,9 @@ func validateIDMappings(spec *specs.Spec) error {
 // are not present, it allocates them. Note that we don't disallow mappings
 // that map to the host root UID (i.e., we honor the ID config). Some runc tests use
 // such mappings.
-func cfgIDMappings(spec *specs.Spec) error {
+func cfgIDMappings(spec *specs.Spec, noSysvisorMgr bool) error {
 	if len(spec.Linux.UIDMappings) == 0 && len(spec.Linux.GIDMappings) == 0 {
-		return allocateIDMappings(spec)
+		return allocateIDMappings(spec, noSysvisorMgr)
 	}
 	return validateIDMappings(spec)
 }
@@ -314,8 +325,8 @@ func cfgReadonlyPaths(spec *specs.Spec) {
 	spec.Linux.ReadonlyPaths = specPaths
 }
 
-// cfgSysvisorfsMounts adds the sysvisor-fs mounts to the containers config.
-func cfgSysvisorfsMounts(spec *specs.Spec) {
+// cfgSysvisorFsMounts adds the sysvisor-fs mounts to the containers config.
+func cfgSysvisorFsMounts(spec *specs.Spec) {
 
 	// disallow all mounts over /proc/* or /sys/* (except for /sys/fs/cgroup);
 	// only sysvisor-fs mounts are allowed there.
@@ -329,8 +340,8 @@ func cfgSysvisorfsMounts(spec *specs.Spec) {
 		}
 	}
 
-	// add sysvisorfs mounts to the config
-	for _, mount := range sysvisorfsMounts {
+	// add sysvisor-fs mounts to the config
+	for _, mount := range sysvisorFsMounts {
 		spec.Mounts = append(spec.Mounts, mount)
 		logrus.Debugf("added sysvisor-fs mount %s to spec", mount.Destination)
 	}
@@ -561,7 +572,7 @@ func ConvertProcessSpec(p *specs.Process) error {
 }
 
 // ConvertSpec converts the given container spec to a system container spec.
-func ConvertSpec(spec *specs.Spec, noSysvisorfs bool) error {
+func ConvertSpec(spec *specs.Spec, noSysvisorFs, noSysvisorMgr bool) error {
 
 	if err := checkSpec(spec); err != nil {
 		return fmt.Errorf("invalid or unsupported system container spec: %v", err)
@@ -575,7 +586,7 @@ func ConvertSpec(spec *specs.Spec, noSysvisorfs bool) error {
 		return fmt.Errorf("invalid namespace config: %v", err)
 	}
 
-	if err := cfgIDMappings(spec); err != nil {
+	if err := cfgIDMappings(spec, noSysvisorMgr); err != nil {
 		return fmt.Errorf("invalid user/group ID config: %v", err)
 	}
 
@@ -587,10 +598,10 @@ func ConvertSpec(spec *specs.Spec, noSysvisorfs bool) error {
 		return fmt.Errorf("failed to setup /lib/module/<kernel-version> mount: %v", err)
 	}
 
-	if !noSysvisorfs {
+	if !noSysvisorFs {
 		cfgMaskedPaths(spec)
 		cfgReadonlyPaths(spec)
-		cfgSysvisorfsMounts(spec)
+		cfgSysvisorFsMounts(spec)
 	}
 
 	if err := cfgSeccomp(spec.Linux.Seccomp); err != nil {

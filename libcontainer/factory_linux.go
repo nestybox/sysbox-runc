@@ -127,12 +127,21 @@ func CriuPath(criupath string) func(*LinuxFactory) error {
 	}
 }
 
-// Sysvisorfs returns an option func that configures a LinuxFactory to
+// SysvisorFs returns an option func that configures a LinuxFactory to
 // return containers that use sysvisor-fs for emulating parts of the
 // container's rootfs
-func Sysvisorfs(enable bool) func(*LinuxFactory) error {
+func SysvisorFs(enable bool) func(*LinuxFactory) error {
 	return func(l *LinuxFactory) error {
-		l.Sysvisorfs = enable
+		l.SysvisorFs = enable
+		return nil
+	}
+}
+
+// SysvisorMgr returns an option func that configures a LinuxFactory to
+// return containers that use sysvisor-mgr services (e.g., uid/gid allocation).
+func SysvisorMgr(enable bool) func(*LinuxFactory) error {
+	return func(l *LinuxFactory) error {
+		l.SysvisorMgr = enable
 		return nil
 	}
 }
@@ -195,9 +204,12 @@ type LinuxFactory struct {
 	// NewIntelRdtManager returns an initialized Intel RDT manager for a single container.
 	NewIntelRdtManager func(config *configs.Config, id string, path string) intelrdt.Manager
 
-	// Sysvisorfs indicates if sysvisorfs is used to emulate parts of
+	// SysvisorFs indicates if sysvisor-fs is used to emulate parts of
 	// the container's rootfs (e.g., /proc)
-	Sysvisorfs bool
+	SysvisorFs bool
+
+	// SysvisorMgr indicates if sysvisor-mgr services (e.g., uid/gid allocation) are used.
+	SysvisorMgr bool
 }
 
 func (l *LinuxFactory) Create(id string, config *configs.Config) (Container, error) {
@@ -235,7 +247,8 @@ func (l *LinuxFactory) Create(id string, config *configs.Config) (Container, err
 		newuidmapPath: l.NewuidmapPath,
 		newgidmapPath: l.NewgidmapPath,
 		cgroupManager: l.NewCgroupsManager(config.Cgroups, nil),
-		sysvisorfs:    l.Sysvisorfs,
+		sysvisorFs:    l.SysvisorFs,
+		sysvisorMgr:   l.SysvisorMgr,
 	}
 	if intelrdt.IsCatEnabled() || intelrdt.IsMbaEnabled() {
 		c.intelRdtManager = l.NewIntelRdtManager(config, id, "")
@@ -278,7 +291,8 @@ func (l *LinuxFactory) Load(id string) (Container, error) {
 		cgroupManager:        l.NewCgroupsManager(state.Config.Cgroups, state.CgroupPaths),
 		root:                 containerRoot,
 		created:              state.Created,
-		sysvisorfs:           l.Sysvisorfs,
+		sysvisorFs:           l.SysvisorFs,
+		sysvisorMgr:          l.SysvisorMgr,
 	}
 	c.state = &loadedState{c: c}
 	if err := c.refreshState(); err != nil {

@@ -343,7 +343,7 @@ func (p *initProcess) start() error {
 
 	// sysvisor-runc: register the container with sysvisor-fs (must be done before
 	// prestart hooks so that sysvisor-fs is ready to respond by the time the hooks run).
-	if p.container.sysvisorfs {
+	if p.container.sysvisorFs {
 		data := &sysvisorFsGrpc.ContainerData{
 			Id:       p.container.id,
 			InitPid:  int32(childPid),

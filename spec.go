@@ -95,8 +95,10 @@ rootless).
 			return err
 		}
 
-		noSysvisorfs := context.GlobalBool("no-sysvisorfs")
-		if err := syscont.ConvertSpec(spec, noSysvisorfs); err != nil {
+		noSysvisorFs := context.GlobalBool("no-sysvisor-fs")
+		noSysvisorMgr := context.GlobalBool("no-sysvisor-mgr")
+
+		if err := syscont.ConvertSpec(spec, noSysvisorFs, noSysvisorMgr); err != nil {
 			return err
 		}
 

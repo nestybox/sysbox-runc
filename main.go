@@ -135,8 +135,12 @@ func main() {
 			Usage: "ignore cgroup permission errors ('true', 'false', or 'auto')",
 		},
 		cli.BoolFlag{
-			Name:  "no-sysvisorfs",
+			Name:  "no-sysvisor-fs",
 			Usage: "do not interact with sysvisor-fs; meant for testing and debugging.",
+		},
+		cli.BoolFlag{
+			Name:  "no-sysvisor-mgr",
+			Usage: "do not interact with sysvisor-mgr; meant for testing and debugging.",
 		},
 	}
 	app.Commands = []cli.Command{
