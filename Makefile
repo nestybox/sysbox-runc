@@ -63,7 +63,7 @@ man:
 runcimage:
 	docker build ${DOCKER_BUILD_PROXY} -t $(RUNC_IMAGE) .
 
-# Note: sysvisor-runc does not support rootles mode, so rootless integration tests are not invoked as part of test or localtest
+# Note: sysvisor-runc does not support rootless mode, so rootless integration tests are not invoked as part of test or localtest
 test:
 	make unittest integration integration-shiftuid
 
