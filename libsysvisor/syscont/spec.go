@@ -467,6 +467,21 @@ func cfgSeccomp(seccomp *specs.LinuxSeccomp) error {
 	return nil
 }
 
+// cfgAppArmor sets up the apparmor config for sys containers
+func cfgAppArmor(spec *specs.Spec) error {
+
+	// The default docker profile is too restrictive for sys containers (e.g., preveting
+	// mounts, write access to /proc/sys/*, etc). For now, we simply ignore any apparmor
+	// profile in the container's config.
+	//
+	// TODO: In the near future, we should develop an apparmor profile for sys-containers,
+	// and have sysvisor-mgr load it to the kernel (if apparmor is enabled on the system)
+	// and then configure the container to use that profile here.
+
+	spec.Process.ApparmorProfile = ""
+	return nil
+}
+
 // cfgLibModMount sets up a read-only bind mount of the host's "/lib/modules/<kernel-release>"
 // directory in the same path inside the system container; this allows system container
 // processes to verify the presence of modules via modprobe. System apps such as Docker and
@@ -611,6 +626,10 @@ func ConvertSpec(context *cli.Context, spec *specs.Spec) error {
 
 	if err := cfgSeccomp(spec.Linux.Seccomp); err != nil {
 		return fmt.Errorf("failed to configure seccomp: %v", err)
+	}
+
+	if err := cfgAppArmor(spec); err != nil {
+		return fmt.Errorf("failed to configure AppArmor profile: %v", err)
 	}
 
 	// TODO: ensure /proc and /sys are mounted (if not present in the container spec)
