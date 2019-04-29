@@ -468,7 +468,7 @@ func cfgSeccomp(seccomp *specs.LinuxSeccomp) error {
 }
 
 // cfgAppArmor sets up the apparmor config for sys containers
-func cfgAppArmor(spec *specs.Spec) error {
+func cfgAppArmor(p *specs.Process) error {
 
 	// The default docker profile is too restrictive for sys containers (e.g., preveting
 	// mounts, write access to /proc/sys/*, etc). For now, we simply ignore any apparmor
@@ -478,7 +478,7 @@ func cfgAppArmor(spec *specs.Spec) error {
 	// and have sysvisor-mgr load it to the kernel (if apparmor is enabled on the system)
 	// and then configure the container to use that profile here.
 
-	spec.Process.ApparmorProfile = ""
+	p.ApparmorProfile = ""
 	return nil
 }
 
@@ -584,6 +584,11 @@ func checkSpec(spec *specs.Spec) error {
 // Configure the container's process spec for system containers
 func ConvertProcessSpec(p *specs.Process) error {
 	cfgCapabilities(p)
+	
+	if err := cfgAppArmor(p); err != nil {
+		return fmt.Errorf("failed to configure AppArmor profile: %v", err)
+	}
+	
 	return nil
 }
 
@@ -626,10 +631,6 @@ func ConvertSpec(context *cli.Context, spec *specs.Spec) error {
 
 	if err := cfgSeccomp(spec.Linux.Seccomp); err != nil {
 		return fmt.Errorf("failed to configure seccomp: %v", err)
-	}
-
-	if err := cfgAppArmor(spec); err != nil {
-		return fmt.Errorf("failed to configure AppArmor profile: %v", err)
 	}
 
 	// TODO: ensure /proc and /sys are mounted (if not present in the container spec)
