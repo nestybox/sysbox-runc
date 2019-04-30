@@ -16,12 +16,12 @@ function teardown() {
   runc run -d --console-socket $CONSOLE_SOCKET test_busybox
   [ "$status" -eq 0 ]
 
-  # verify /sys/fs/cgroup has root:root ownership
+  # verify /sys/fs/cgroup has root:root ownership; skip the rdma cgroup since runc does not yet support it.
   #
   # (dev note: single quotes in a single-quote delimited script is '\'' ; use
   # 'echo' instead of 'sh -c' to see shell interpretation)
 
-  runc exec test_busybox sh -c 'ls -l /sys/fs/cgroup/ | awk '\''{print $3}'\'' | tr '\''\n'\'' '\'' '\'' '
+  runc exec test_busybox sh -c 'ls -l /sys/fs/cgroup/ | grep -v rdma | awk '\''{print $3}'\'' | tr '\''\n'\'' '\'' '\'' '
   [ "$status" -eq 0 ]
 
   for i in ${lines[0]}
@@ -29,7 +29,7 @@ function teardown() {
     [ "$i" == "root" ]
   done
 
-  runc exec test_busybox sh -c 'ls -l /sys/fs/cgroup/ | awk '\''{print $4}'\'' | tr '\''\n'\'' '\'' '\'' '
+  runc exec test_busybox sh -c 'ls -l /sys/fs/cgroup/ | grep -v rdma | awk '\''{print $4}'\'' | tr '\''\n'\'' '\'' '\'' '
   [ "$status" -eq 0 ]
 
   for i in ${lines[0]}
