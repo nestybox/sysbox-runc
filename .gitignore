@@ -9,7 +9,7 @@ GRTAGS
 GTAGS
 
 # Ignore protobuf auto-generated code
-libsysvisor/sysvisor-protobuf
+libsysvisor/sysvisor-ipc
 
 # Ignore virtual-studio-code metadata
 .vscode

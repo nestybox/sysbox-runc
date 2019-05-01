@@ -22,7 +22,7 @@ import (
 	criurpc "github.com/checkpoint-restore/go-criu/rpc"
 	"github.com/cyphar/filepath-securejoin"
 	"github.com/golang/protobuf/proto"
-	"github.com/nestybox/sysvisor/sysvisor-protobuf/sysvisorFsGrpc"
+	"github.com/nestybox/sysvisor/sysvisor-ipc/sysvisorFsGrpc"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/intelrdt"

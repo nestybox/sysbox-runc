@@ -18,7 +18,7 @@ BUILDTAGS ?= seccomp
 COMMIT_NO := $(shell git rev-parse HEAD 2> /dev/null || true)
 COMMIT := $(if $(shell git status --porcelain --untracked-files=no),"${COMMIT_NO}-dirty","${COMMIT_NO}")
 
-SYSVISOR_PROTOBUF := github.com/nestybox/sysvisor/sysvisor-protobuf
+SYSVISOR_PROTOBUF := github.com/nestybox/sysvisor/sysvisor-ipc
 
 MAN_DIR := $(CURDIR)/man/man8
 MAN_PAGES = $(shell ls $(MAN_DIR)/*.8)

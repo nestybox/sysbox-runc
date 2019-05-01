@@ -12,7 +12,7 @@ import (
 	"syscall"
 
 	mapset "github.com/deckarep/golang-set"
-	"github.com/nestybox/sysvisor/sysvisor-protobuf/sysvisorMgrGrpc"
+	"github.com/nestybox/sysvisor/sysvisor-ipc/sysvisorMgrGrpc"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"

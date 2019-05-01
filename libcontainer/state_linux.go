@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/nestybox/sysvisor/sysvisor-protobuf/sysvisorFsGrpc"
-	"github.com/nestybox/sysvisor/sysvisor-protobuf/sysvisorMgrGrpc"
+	"github.com/nestybox/sysvisor/sysvisor-ipc/sysvisorFsGrpc"
+	"github.com/nestybox/sysvisor/sysvisor-ipc/sysvisorMgrGrpc"
 	"github.com/opencontainers/runc/libcontainer/configs"
 
 	"github.com/sirupsen/logrus"
