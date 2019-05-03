@@ -28,80 +28,82 @@ const (
 	defaultGid uint32 = 231072
 )
 
+var SysboxFsDir = "/var/lib/sysboxfs"
+
 // sysboxFsMounts is a list of system container mounts backed by sysbox-fs
 // (please keep in alphabetical order)
 var sysboxFsMounts = []specs.Mount{
 	specs.Mount{
 		Destination: "/proc/cpuinfo",
-		Source:      "/var/lib/sysboxfs/proc/cpuinfo",
+		Source:      filepath.Join(SysboxFsDir, "proc/cpuinfo"),
 		Type:        "bind",
 		Options:     []string{"rbind", "rprivate"},
 	},
 
 	// specs.Mount{
 	// 	Destination: "/proc/cgroups",
-	// 	Source:      "/var/lib/sysboxfs/proc/cgroups",
+	// 	Source:      filepath.Join(SysboxFsDir, "proc/cgroups"),
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/devices",
-	// 	Source:      "/var/lib/sysboxfs/proc/devices",
+	// 	Source:      filepath.Join(SysboxFsDir, "proc/devices"),
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/diskstats",
-	// 	Source:      "/var/lib/sysboxfs/proc/diskstats",
+	// 	Source:      filepath.Join(SysboxFsDir, "proc/diskstats"),
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/loadavg",
-	// 	Source:      "/var/lib/sysboxfs/proc/loadavg",
+	// 	Source:      filepath.Join(SysboxFsDir, "proc/loadavg"),
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/meminfo",
-	// 	Source:      "/var/lib/sysboxfs/proc/meminfo",
+	// 	Source:      filepath.Join(SysboxFsDir, "proc/meminfo"),
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/pagetypeinfo",
-	// 	Source:      "/var/lib/sysboxfs/proc/pagetypeinfo",
+	// 	Source:      filepath.Join(SysboxFsDir, "proc/pagetypeinfo"),
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/partitions",
-	// 	Source:      "/var/lib/sysboxfs/proc/partitions",
+	// 	Source:      filepath.Join(SysboxFsDir, "proc/partitions"),
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/stat",
-	// 	Source:      "/var/lib/sysboxfs/proc/stat",
+	// 	Source:      filepath.Join(SysboxFsDir, "proc/stat"),
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/swaps",
-	// 	Source:      "/var/lib/sysboxfs/proc/swaps",
+	// 	Source:      filepath.Join(SysboxFsDir, "proc/swaps"),
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 
 	specs.Mount{
 		Destination: "/proc/sys",
-		Source:      "/var/lib/sysboxfs/proc/sys",
+		Source:      filepath.Join(SysboxFsDir, "proc/sys"),
 		Type:        "bind",
 		Options:     []string{"rbind", "rprivate"},
 	},
 	specs.Mount{
 		Destination: "/proc/uptime",
-		Source:      "/var/lib/sysboxfs/proc/uptime",
+		Source:      filepath.Join(SysboxFsDir, "proc/uptime"),
 		Type:        "bind",
 		Options:     []string{"rbind", "rprivate"},
 	},

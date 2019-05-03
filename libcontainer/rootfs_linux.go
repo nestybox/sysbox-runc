@@ -22,7 +22,6 @@ import (
 	"github.com/opencontainers/runc/libcontainer/utils"
 	libcontainerUtils "github.com/opencontainers/runc/libcontainer/utils"
 
-	"github.com/opencontainers/runc/libsysbox/shiftfs"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/opencontainers/selinux/go-selinux/label"
 
@@ -52,18 +51,8 @@ func prepareRootfs(pipe io.ReadWriter, iConfig *initConfig) (err error) {
 	}
 
 	if config.ShiftUids {
-		if err := markShiftfsOnRootfs(config.Rootfs, pipe); err != nil {
-			return newSystemErrorWithCause(err, "marking shiftfs on rootfs")
-		}
-
-		if err := shiftfs.Mount("."); err != nil {
-			return newSystemErrorWithCausef(err, "shiftfs mount failed")
-		}
-
-		// Ensure the prior mount takes effect; otherwise the rootfs setup that follows
-		// fails (e.g., pivot_root() reports an invalid argument error)
-		if err := effectRootfsMount(); err != nil {
-			return newSystemErrorWithCause(err, "effecting rootfs mount")
+		if err := mountShiftfsOnRootfs(config.Rootfs, pipe); err != nil {
+			return newSystemErrorWithCause(err, "mounting shiftfs on rootfs")
 		}
 	}
 
@@ -226,7 +215,7 @@ func prepareBindMount(m *configs.Mount, rootfs string, absDestPath bool) (err er
 	return nil
 }
 
-func mountCgroupV1(m *configs.Mount, rootfs, mountLabel string, enableCgroupns bool, pipe io.ReadWriter) error {
+func mountCgroupV1(m *configs.Mount, rootfs, mountLabel string, enableCgroupns, shiftfs bool, pipe io.ReadWriter) error {
 	binds, err := getCgroupMounts(m)
 	if err != nil {
 		return err
@@ -247,12 +236,13 @@ func mountCgroupV1(m *configs.Mount, rootfs, mountLabel string, enableCgroupns b
 		PropagationFlags: m.PropagationFlags,
 	}
 
-	if err := mountToRootfs(tmpfs, rootfs, mountLabel, enableCgroupns, pipe); err != nil {
+	if err := mountToRootfs(tmpfs, rootfs, mountLabel, enableCgroupns, shiftfs, pipe); err != nil {
 		return err
 	}
 	for _, b := range binds {
 		if enableCgroupns {
-			subsystemPath := filepath.Join(rootfs, b.Destination)
+			// sysbox-runc: use relative path (as otherwise we may not have permission to mkdir)
+			subsystemPath := b.Destination
 			if err := os.MkdirAll(subsystemPath, 0755); err != nil {
 				return err
 			}
@@ -271,7 +261,7 @@ func mountCgroupV1(m *configs.Mount, rootfs, mountLabel string, enableCgroupns b
 				return err
 			}
 		} else {
-			if err := mountToRootfs(b, rootfs, mountLabel, enableCgroupns, pipe); err != nil {
+			if err := mountToRootfs(b, rootfs, mountLabel, enableCgroupns, shiftfs, pipe); err != nil {
 				return err
 			}
 		}
@@ -281,7 +271,7 @@ func mountCgroupV1(m *configs.Mount, rootfs, mountLabel string, enableCgroupns b
 			// symlink(2) is very dumb, it will just shove the path into
 			// the link and doesn't do any checks or relative path
 			// conversion. Also, don't error out if the cgroup already exists.
-			if err := os.Symlink(mc, filepath.Join(rootfs, m.Destination, ss)); err != nil && !os.IsExist(err) {
+			if err := os.Symlink(mc, filepath.Join(m.Destination, ss)); err != nil && !os.IsExist(err) {
 				return err
 			}
 		}
@@ -307,7 +297,7 @@ func mountCgroupV2(m *configs.Mount, rootfs, mountLabel string, enableCgroupns b
 	return nil
 }
 
-func mountToRootfs(m *configs.Mount, rootfs, mountLabel string, enableCgroupns bool, pipe io.ReadWriter) error {
+func mountToRootfs(m *configs.Mount, rootfs, mountLabel string, enableCgroupns, shiftfs bool, pipe io.ReadWriter) error {
 	var (
 		dest = m.Destination
 	)
@@ -398,25 +388,24 @@ func mountToRootfs(m *configs.Mount, rootfs, mountLabel string, enableCgroupns b
 		return nil
 	case "bind":
 		// sysbox-runc: in order to support uid shifting on bind mounts, we handle bind
-		// mounts differently than OCI runc; in particular, we mount shiftfs on the bind
-		// mount source if we see it's marked for shiftfs, and we perform the actual bind
-		// mount by asking the parent runc to spawn a helper child process which enters the
+		// mounts differently than the OCI runc; in particular, we perform the bind mount by
+		// asking the parent runc to spawn a helper child process which enters the
 		// container's mount namespace only and performs the mount. The helper process is
 		// used to overcome the problem whereby the container's init process has no search
 		// permission to the bind mount source. Since this helper is not in the container's
 		// user namespace, it has true root credentials and thus can access the bind mount
-		// source yet perform the mount in the container's mount namespace.
-		if m.BindSrcMarkedShiftfs {
-			shiftfs.Mount(m.Source)
-		}
+		// source yet perform the mount in the container's mount namespace. In addition, if
+		// uid shifting is in place, we request the parent runc to mount shiftfs on the bind
+		// mount source.
 		if err := prepareBindMount(m, rootfs, false); err != nil {
 			return err
 		}
 		mountInfo := &mountReqInfo{
-			Op:     "bind",
-			Rootfs: rootfs,
-			Mount:  *m,
-			Label:  mountLabel,
+			Op:      bind,
+			Mount:   *m,
+			Label:   mountLabel,
+			Rootfs:  rootfs,
+			Shiftfs: shiftfs,
 		}
 		if err := syncParentDoMount(mountInfo, pipe); err != nil {
 			return newSystemErrorWithCause(err, "sync parent do mount")
@@ -425,7 +414,7 @@ func mountToRootfs(m *configs.Mount, rootfs, mountLabel string, enableCgroupns b
 		if cgroups.IsCgroup2UnifiedMode() {
 			return mountCgroupV2(m, rootfs, mountLabel, enableCgroupns)
 		}
-		return mountCgroupV1(m, rootfs, mountLabel, enableCgroupns, pipe)
+		return mountCgroupV1(m, rootfs, mountLabel, enableCgroupns, shiftfs, pipe)
 	default:
 		// ensure that the destination of the mount is resolved of symlinks at mount time because
 		// any previous mounts can invalidate the next mount's destination.
@@ -980,7 +969,7 @@ func doMounts(config *configs.Config, pipe io.ReadWriter) error {
 				return newSystemErrorWithCause(err, "running premount command")
 			}
 		}
-		if err := mountToRootfs(m, config.Rootfs, config.MountLabel, true, pipe); err != nil {
+		if err := mountToRootfs(m, config.Rootfs, config.MountLabel, true, config.ShiftUids, pipe); err != nil {
 			return newSystemErrorWithCausef(err, "mounting %q to rootfs %q at %q", m.Source, config.Rootfs, m.Destination)
 		}
 		for _, postcmd := range m.PostmountCmds {
@@ -1024,17 +1013,14 @@ func effectRootfsMount() error {
 	return nil
 }
 
-// sysbox-runc: markShiftfsOnRootfs places a shiftfs mark over the container's rootfs.
-// Since the shiftfs mark must be done by true root, markShitfsOnRootfs requests the
-// parent runc to place the mark. This will allow the container init process to later
-// mount shiftfs on the rootfs.
-func markShiftfsOnRootfs(rootfs string, pipe io.ReadWriter) error {
+// sysbox-runc: mountShiftfsOnRootfs mounts shiftfs over the container's rootfs.
+// Since the shiftfs mount must be done by true root, mountShitfsOnRootfs requests the
+// parent runc to do the mount.
+func mountShiftfsOnRootfs(rootfs string, pipe io.ReadWriter) error {
 	mountInfo := &mountReqInfo{
-		Op:     "markShiftfs",
-		Rootfs: rootfs,
-		Mount: configs.Mount{
-			Source: rootfs,
-		},
+		Op:      shiftRootfs,
+		Rootfs:  rootfs,
+		Shiftfs: true,
 	}
 
 	err := syncParentDoMount(mountInfo, pipe)

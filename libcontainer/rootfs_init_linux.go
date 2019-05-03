@@ -3,9 +3,11 @@ package libcontainer
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 
 	"github.com/opencontainers/runc/libsysbox/shiftfs"
+	"github.com/opencontainers/runc/libsysbox/syscont"
 	"github.com/opencontainers/selinux/go-selinux/label"
 	"golang.org/x/sys/unix"
 )
@@ -25,15 +27,46 @@ func (l *linuxRootfsInit) Init() error {
 	defer runtime.UnlockOSThread()
 
 	switch l.mountInfo.Op {
-	case markShiftfs:
-		source := l.mountInfo.Mount.Source
-		if err := shiftfs.Mark(source); err != nil {
-			return newSystemErrorWithCausef(err, "marking shiftfs on %s", source)
+	case shiftRootfs:
+		source := l.mountInfo.Rootfs
+		pid := l.mountInfo.Pid
+
+		if l.mountInfo.Shiftfs {
+			if err := shiftfs.Mount(source, pid); err != nil {
+				return newSystemErrorWithCausef(err, "mounting shiftfs on rootfs")
+			}
 		}
 	case bind:
 		rootfs := l.mountInfo.Rootfs
 		m := &l.mountInfo.Mount
 		mountLabel := l.mountInfo.Label
+
+		// Only mount shiftfs on bind sources outside of the rootfs (except for sysbox-fs,
+		// since sysbox-fs emulates file ownership & permissions)
+		if l.mountInfo.Shiftfs &&
+			!filepath.HasPrefix(m.Source, rootfs) &&
+			!filepath.HasPrefix(m.Source, syscont.SysboxFsDir) {
+
+			// If the bind source is not a directory, mount shiftfs on the directory above
+			// the bind source. This is safe because the container does not have access to
+			// the full directory, only the bind mounted file.
+			fi, err := os.Stat(m.Source)
+			if err != nil {
+				return newSystemErrorWithCausef(err, "failed to stat %s: %v", m.Source, err)
+			}
+
+			var source string
+			if fi.IsDir() {
+				source = m.Source
+			} else {
+				source = filepath.Dir(m.Source)
+			}
+
+			pid := l.mountInfo.Pid
+			if err := shiftfs.Mount(source, pid); err != nil {
+				return newSystemErrorWithCausef(err, "mounting shiftfs on bind source %s", source)
+			}
+		}
 
 		// The call to mountPropagate below requires that the process cwd be the rootfs directory
 		if err := unix.Chdir(rootfs); err != nil {
