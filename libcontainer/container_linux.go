@@ -2145,6 +2145,7 @@ func (c *linuxContainer) initMount(childPid int, mountInfo *mountReqInfo) error 
 	cmd.Process = process
 
 	// send the mount info to the rootfsInitProcess
+	mountInfo.Pid = childPid
 	if err := utils.WriteJSON(parentPipe, mountInfo); err != nil {
 		return newSystemErrorWithCause(err, "writing init mount info to pipe")
 	}

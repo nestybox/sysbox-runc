@@ -39,7 +39,4 @@ type Mount struct {
 
 	// For bind mounts, indicates if the source is a directory
 	BindSrcIsDir bool `json:"bind_source_is_dir,omitempty"`
-
-	// For bind mounts, indicates if the source is marked for shiftfs
-	BindSrcMarkedShiftfs bool `json:"bind_source_marked_shiftfs,omitempty"`
 }

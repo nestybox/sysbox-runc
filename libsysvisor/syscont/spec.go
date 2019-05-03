@@ -29,77 +29,80 @@ const (
 
 // sysvisorFsMounts is a list of system container mounts backed by sysvisor-fs
 // (please keep in alphabetical order)
+
+var SysvisorFsDir = "/var/lib/sysvisorfs"
+
 var sysvisorFsMounts = []specs.Mount{
 	specs.Mount{
 		Destination: "/proc/cpuinfo",
-		Source:      "/var/lib/sysvisorfs/proc/cpuinfo",
+		Source:      filepath.Join(SysvisorFsDir, "proc/cpuinfo"),
 		Type:        "bind",
 		Options:     []string{"rbind", "rprivate"},
 	},
 
 	// specs.Mount{
 	// 	Destination: "/proc/cgroups",
-	// 	Source:      "/var/lib/sysvisorfs/proc/cgroups",
+	// 	Source:      filepath.Join(SysvisorFsDir, "proc/cgroups"),
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/devices",
-	// 	Source:      "/var/lib/sysvisorfs/proc/devices",
+	// 	Source:      filepath.Join(SysvisorFsDir, "proc/devices"),
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/diskstats",
-	// 	Source:      "/var/lib/sysvisorfs/proc/diskstats",
+	// 	Source:      filepath.Join(SysvisorFsDir, "proc/diskstats"),
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/loadavg",
-	// 	Source:      "/var/lib/sysvisorfs/proc/loadavg",
+	// 	Source:      filepath.Join(SysvisorFsDir, "proc/loadavg"),
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/meminfo",
-	// 	Source:      "/var/lib/sysvisorfs/proc/meminfo",
+	// 	Source:      filepath.Join(SysvisorFsDir, "proc/meminfo"),
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/pagetypeinfo",
-	// 	Source:      "/var/lib/sysvisorfs/proc/pagetypeinfo",
+	// 	Source:      filepath.Join(SysvisorFsDir, "proc/pagetypeinfo"),
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/partitions",
-	// 	Source:      "/var/lib/sysvisorfs/proc/partitions",
+	// 	Source:      filepath.Join(SysvisorFsDir, "proc/partitions"),
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/stat",
-	// 	Source:      "/var/lib/sysvisorfs/proc/stat",
+	// 	Source:      filepath.Join(SysvisorFsDir, "proc/stat"),
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/swaps",
-	// 	Source:      "/var/lib/sysvisorfs/proc/swaps",
+	// 	Source:      filepath.Join(SysvisorFsDir, "proc/swaps"),
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	specs.Mount{
 		Destination: "/proc/sys",
-		Source:      "/var/lib/sysvisorfs/proc/sys",
+		Source:      filepath.Join(SysvisorFsDir, "proc/sys"),
 		Type:        "bind",
 		Options:     []string{"rbind", "rprivate"},
 	},
 	specs.Mount{
 		Destination: "/proc/uptime",
-		Source:      "/var/lib/sysvisorfs/proc/uptime",
+		Source:      filepath.Join(SysvisorFsDir, "proc/uptime"),
 		Type:        "bind",
 		Options:     []string{"rbind", "rprivate"},
 	},

@@ -14,7 +14,6 @@ import (
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/seccomp"
 	libcontainerUtils "github.com/opencontainers/runc/libcontainer/utils"
-	"github.com/opencontainers/runc/libsysvisor/shiftfs"
 	"github.com/opencontainers/runtime-spec/specs-go"
 
 	"golang.org/x/sys/unix"
@@ -283,7 +282,7 @@ func CreateLibcontainerConfig(opts *CreateOpts) (*configs.Config, error) {
 }
 
 func createLibcontainerMount(cwd string, m specs.Mount) (*configs.Mount, error) {
-	var bindSrcIsDir, bindSrcMarkedShiftfs bool
+	var bindSrcIsDir bool
 
 	flags, pgflags, data, ext := parseMountOptions(m.Options)
 	source := m.Source
@@ -297,10 +296,9 @@ func createLibcontainerMount(cwd string, m specs.Mount) (*configs.Mount, error) 
 		}
 	}
 
-	// sysvisor-runc: for bind mounts determine if the source is a directory and if it has
-	// been marked as a shiftfs mountpoint. We do this here so that we don't have to do
-	// this from within the container's init process (as the latter may not have search
-	// permission into the bind source).
+	// sysvisor-runc: for bind mounts determine if the source is a directory. We do this
+	// here so that we don't have to do this from within the container's init process (as
+	// the latter may not have search permission into the bind source).
 	if device == "bind" {
 		var err error
 		var fi os.FileInfo
@@ -310,23 +308,17 @@ func createLibcontainerMount(cwd string, m specs.Mount) (*configs.Mount, error) 
 			return nil, fmt.Errorf("failed to stat mount source at %s: %v", source, err)
 		}
 		bindSrcIsDir = fi.IsDir()
-
-		bindSrcMarkedShiftfs, err = shiftfs.IsMarked(source)
-		if err != nil {
-			return nil, fmt.Errorf("failed to detect shiftfs mark on %s: %v", source, err)
-		}
 	}
 
 	return &configs.Mount{
-		Device:               device,
-		Source:               source,
-		Destination:          m.Destination,
-		Data:                 data,
-		Flags:                flags,
-		PropagationFlags:     pgflags,
-		Extensions:           ext,
-		BindSrcIsDir:         bindSrcIsDir,
-		BindSrcMarkedShiftfs: bindSrcMarkedShiftfs,
+		Device:           device,
+		Source:           source,
+		Destination:      m.Destination,
+		Data:             data,
+		Flags:            flags,
+		PropagationFlags: pgflags,
+		Extensions:       ext,
+		BindSrcIsDir:     bindSrcIsDir,
 	}, nil
 }
 
