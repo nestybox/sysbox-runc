@@ -9,7 +9,7 @@ as well as the OCI [runtime-spec](https://github.com/opencontainers/runtime-spec
 repository.
 
 
-## Integration with other Sysvisor components
+## Integration with other Sysbox components
 
 sysbox-runc is tightly integrated with sysbox-fs and sysbox-mgr via
 gRPC. Refer to the sysbox documentation for details.

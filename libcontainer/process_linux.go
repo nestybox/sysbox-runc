@@ -398,6 +398,25 @@ func (p *initProcess) start() (retErr error) {
 		}
 	}
 
+	var (
+		uidFirst int32
+		uidSize  int32
+		gidFirst int32
+		gidSize  int32
+	)
+
+	// TODO: Enhance this logic to be capable of dealing with the entire
+	// UIDMapping/GIDMapping slices; notice that here i'm just extracting the
+	// first element.
+	if len(p.container.config.UidMappings) != 0 {
+		uidFirst = int32(p.container.config.UidMappings[0].HostID)
+		uidSize = int32(p.container.config.UidMappings[0].Size)
+	}
+	if len(p.container.config.GidMappings) != 0 {
+		gidFirst = int32(p.container.config.GidMappings[0].HostID)
+		gidSize = int32(p.container.config.GidMappings[0].Size)
+	}
+
 	// sysbox-runc: register the container with sysbox-fs (must be done before
 	// prestart hooks so that sysbox-fs is ready to respond by the time the hooks run).
 	if p.container.sysboxFs {
@@ -405,6 +424,10 @@ func (p *initProcess) start() (retErr error) {
 			Id:       p.container.id,
 			InitPid:  int32(childPid),
 			Hostname: p.container.config.Hostname,
+			UidFirst: uidFirst,
+			UidSize:  uidSize,
+			GidFirst: gidFirst,
+			GidSize:  gidSize,
 		}
 		if err := sysboxFsGrpc.SendContainerRegistration(data); err != nil {
 			return newSystemErrorWithCause(err, "registering with sysbox-fs")
