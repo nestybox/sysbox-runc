@@ -52,7 +52,7 @@ func (l *linuxRootfsInit) Init() error {
 			// the full directory, only the bind mounted file.
 			fi, err := os.Stat(m.Source)
 			if err != nil {
-				return newSystemErrorWithCausef(err, "failed to stat %s: %v", m.Source, err)
+				return newSystemErrorWithCausef(err, "stat %s: %v", m.Source, err)
 			}
 
 			var source string

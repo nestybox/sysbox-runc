@@ -15,6 +15,15 @@ func Mount(path string, pid int) error {
 		return err
 	}
 
+	// If the bind source is on tmpfs, we can't mount shiftfs on it. See sysvisor github issue #123.
+	if mounted, err := mount.MountedWithFs(path, "tmpfs"); mounted || err != nil {
+		if err != nil {
+			return err
+		} else {
+			return fmt.Errorf("mounting shiftfs on tmpfs at %s is not supported", path)
+		}
+	}
+
 	opt := fmt.Sprintf("userns=/proc/%d/ns/user", pid)
 	if err := unix.Mount(path, path, "shiftfs", 0, opt); err != nil {
 		return fmt.Errorf("failed to mount shiftfs for pid %d on %s: %v", pid, path, err)
