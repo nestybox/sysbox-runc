@@ -12,14 +12,18 @@ GOPATH="$(mktemp -d --tmpdir runc-integration-gopath.XXXXXX)"
 # Test data path.
 TESTDATA="${INTEGRATION_ROOT}/testdata"
 
+# Work dir (must not be on tmpfs)
+WORK_DIR="/root"
+chmod 777 "/root"
+
 # Busybox image
-BUSYBOX_IMAGE="$BATS_TMPDIR/busybox.tar"
-BUSYBOX_BUNDLE="$BATS_TMPDIR/busyboxtest"
+BUSYBOX_IMAGE="$WORK_DIR/busybox.tar"
+BUSYBOX_BUNDLE="$WORK_DIR/busyboxtest"
 
 # hello-world in tar format
 HELLO_FILE=$(get_hello)
 HELLO_IMAGE="$TESTDATA/$HELLO_FILE"
-HELLO_BUNDLE="$BATS_TMPDIR/hello-world"
+HELLO_BUNDLE="$WORK_DIR/hello-world"
 
 # debian image
 DEBIAN_BUNDLE="$BATS_TMPDIR/debiantest"
@@ -34,10 +38,10 @@ KERNEL_MINOR="${KERNEL_VERSION#$KERNEL_MAJOR.}"
 KERNEL_MINOR="${KERNEL_MINOR%%.*}"
 
 # Root state path.
-ROOT=$(mktemp -d "$BATS_TMPDIR/runc.XXXXXX")
+ROOT=$(mktemp -d "$WORK_DIR/runc.XXXXXX")
 
 # Path to console socket.
-CONSOLE_SOCKET="$BATS_TMPDIR/console.sock"
+CONSOLE_SOCKET="$WORK_DIR/console.sock"
 
 # Check if we're in rootless mode.
 ROOTLESS=$(id -u)
@@ -77,11 +81,8 @@ function runc_spec() {
 		args+=("--bundle" "$bundle")
 	fi
 
-        # sysbox-runc: sys container spec requires id mappings
-        #
-        # TODO: this is no longer necessary as sysbox allocates ID mappings when not provided
-        #
-        runc spec "${args[@]}" "$UID_MAP" "$GID_MAP" "$ID_MAP_SIZE"
+   # sysbox-runc: sys container spec requires id mappings
+   runc --no-sysbox-fs --no-sysbox-mgr spec "${args[@]}" "$UID_MAP" "$GID_MAP" "$ID_MAP_SIZE"
 
 	# Always add additional mappings if we have idmaps.
 	if [[ "$ROOTLESS" -ne 0 ]] && [[ "$ROOTLESS_FEATURES" == *"idmap"* ]]; then
@@ -471,17 +472,17 @@ function testcontainer() {
 
 function setup_recvtty() {
 	# We need to start recvtty in the background, so we double fork in the shell.
-	("$RECVTTY" --pid-file "$BATS_TMPDIR/recvtty.pid" --mode null "$CONSOLE_SOCKET" &) &
+	("$RECVTTY" --pid-file "$WORK_DIR/recvtty.pid" --mode null "$CONSOLE_SOCKET" &) &
 }
 
 function teardown_recvtty() {
 	# When we kill recvtty, the container will also be killed.
-	if [ -f "$BATS_TMPDIR/recvtty.pid" ]; then
-		kill -9 $(cat "$BATS_TMPDIR/recvtty.pid")
+	if [ -f "$WORK_DIR/recvtty.pid" ]; then
+		kill -9 $(cat "$WORK_DIR/recvtty.pid")
 	fi
 
 	# Clean up the files that might be left over.
-	rm -f "$BATS_TMPDIR/recvtty.pid"
+	rm -f "$WORK_DIR/recvtty.pid"
 	rm -f "$CONSOLE_SOCKET"
 }
 
@@ -496,10 +497,11 @@ function setup_busybox() {
 	fi
 	tar --exclude './dev/*' -C "$BUSYBOX_BUNDLE"/rootfs -xf "$BUSYBOX_IMAGE"
 
-        # sysbox-runc: set bundle ownership to match system container's uid/gid map
-        if [ -z "$SHIFT_UIDS" ]; then
-            chown -R "$UID_MAP":"$GID_MAP" "$BUSYBOX_BUNDLE"
-        fi
+   # sysbox-runc: set bundle ownership to match system
+   # container's uid/gid map, except if using uid-shifting
+   if [ -z "$SHIFT_UIDS" ]; then
+      chown -R "$UID_MAP":"$GID_MAP" "$BUSYBOX_BUNDLE"
+   fi
 
 	cd "$BUSYBOX_BUNDLE"
 
@@ -511,10 +513,11 @@ function setup_hello() {
 	mkdir -p "$HELLO_BUNDLE"/rootfs
 	tar --exclude './dev/*' -C "$HELLO_BUNDLE"/rootfs -xf "$HELLO_IMAGE"
 
-        # sysbox-runc: set bundle ownership to match system container's uid/gid map
-        if [ -z "$SHIFT_UIDS" ]; then
-            chown -R "$UID_MAP":"$GID_MAP" "$HELLO_BUNDLE"
-        fi
+   # sysbox-runc: set bundle ownership to match system
+   # container's uid/gid map, except if using uid-shifting
+   if [ -z "$SHIFT_UIDS" ]; then
+      chown -R "$UID_MAP":"$GID_MAP" "$HELLO_BUNDLE"
+   fi
 
 	cd "$HELLO_BUNDLE"
 	runc_spec
