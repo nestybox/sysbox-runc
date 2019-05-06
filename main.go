@@ -142,6 +142,10 @@ func main() {
 			Name:  "no-sysvisor-mgr",
 			Usage: "do not interact with sysvisor-mgr; meant for testing and debugging.",
 		},
+		cli.BoolFlag{
+			Name:  "no-distro-check",
+			Usage: "do not check distro compatibility; meant for testing and debugging.",
+		},
 	}
 	app.Commands = []cli.Command{
 		checkpointCommand,

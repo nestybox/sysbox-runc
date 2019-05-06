@@ -12,6 +12,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/utils"
 	"github.com/opencontainers/runc/libsysvisor/syscont"
+	"github.com/opencontainers/runc/libsysvisor/sysvisor"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"
@@ -101,6 +102,9 @@ following will output a list of processes running in the container:
 			return err
 		}
 		if err := revisePidFile(context); err != nil {
+			return err
+		}
+		if err := sysvisor.CheckHostConfig(context); err != nil {
 			return err
 		}
 		status, err := execProcess(context)
