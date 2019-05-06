@@ -192,6 +192,10 @@ func prepareBindMount(m *configs.Mount, rootfs string, absDestPath bool) (err er
 		return newSystemErrorWithCause(err, "validating cwd")
 	}
 
+	if err := validateBindSource(m.Source, rootfs); err != nil {
+		return newSystemErrorWithCause(err, "validating bind source")
+	}
+
 	// ensure that the destination of the bind mount is resolved of symlinks at mount time because
 	// any previous mounts can invalidate the next mount's destination.
 	// this can happen when a user specifies mounts within other mounts to cause breakouts or other
@@ -991,6 +995,27 @@ func validateCwd(rootfs string) error {
 	if cwd != rootfs {
 		return newSystemErrorWithCausef(err, "cwd %s is not container's rootfs %s", cwd, rootfs)
 	}
+	return nil
+}
+
+// sysbox-runc: validateBindSource checks if the source dir of a bind mount is allowed
+func validateBindSource(source, rootfs string) error {
+
+	// We do not allow bind mounts whose source is hierarchically above the container's
+	// rootfs (e.g., if the rootfs is at /a/b/c/d, we don't allow bind sources at
+	// /, /a, /a/b, or /a/b/c; but we do allow them at /a/x, /a/b/x, or /a/b/c/x).
+	// The reason we disallow such bind mounts is that when using uid-shifting we
+	// need to mount shiftfs on the rootfs as well as the bind sources. If we where
+	// to allow bind sources above rootfs, we would end with shiftfs-on-shiftfs
+	// which is not supported.
+	//
+	// We could choose to disallow such bind sources when using uid-shifting only, but it's
+	// simpler to always disallow them since it's not a common scenario anyway.
+
+	if strings.Contains(rootfs, source) {
+		return fmt.Errorf("bind mount with source at %v is above the container's rootfs at %v; this is not supported", source, rootfs)
+	}
+
 	return nil
 }
 
