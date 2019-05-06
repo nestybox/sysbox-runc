@@ -19,7 +19,7 @@ func init() {
 	last := capability.CAP_LAST_CAP
 	// workaround for RHEL6 which has no /proc/sys/kernel/cap_last_cap
 	if last == capability.Cap(63) {
-		last = capability.CAP_BLOCK_SUSPEND
+		last = capability.CAP_AUDIT_READ
 	}
 	for _, cap := range capability.List() {
 		if cap > last {
@@ -35,7 +35,7 @@ func newContainerCapList(capConfig *configs.Capabilities) (*containerCapabilitie
 	for _, c := range capConfig.Bounding {
 		v, ok := capabilityMap[c]
 		if !ok {
-			return nil, fmt.Errorf("unknown capability %q", c)
+			return nil, fmt.Errorf("unknown bounding capability %q", c)
 		}
 		bounding = append(bounding, v)
 	}
@@ -43,7 +43,7 @@ func newContainerCapList(capConfig *configs.Capabilities) (*containerCapabilitie
 	for _, c := range capConfig.Effective {
 		v, ok := capabilityMap[c]
 		if !ok {
-			return nil, fmt.Errorf("unknown capability %q", c)
+			return nil, fmt.Errorf("unknown effective capability %q", c)
 		}
 		effective = append(effective, v)
 	}
@@ -51,7 +51,7 @@ func newContainerCapList(capConfig *configs.Capabilities) (*containerCapabilitie
 	for _, c := range capConfig.Inheritable {
 		v, ok := capabilityMap[c]
 		if !ok {
-			return nil, fmt.Errorf("unknown capability %q", c)
+			return nil, fmt.Errorf("unknown inheritable capability %q", c)
 		}
 		inheritable = append(inheritable, v)
 	}
@@ -59,7 +59,7 @@ func newContainerCapList(capConfig *configs.Capabilities) (*containerCapabilitie
 	for _, c := range capConfig.Permitted {
 		v, ok := capabilityMap[c]
 		if !ok {
-			return nil, fmt.Errorf("unknown capability %q", c)
+			return nil, fmt.Errorf("unknown permitted capability %q", c)
 		}
 		permitted = append(permitted, v)
 	}
@@ -67,7 +67,7 @@ func newContainerCapList(capConfig *configs.Capabilities) (*containerCapabilitie
 	for _, c := range capConfig.Ambient {
 		v, ok := capabilityMap[c]
 		if !ok {
-			return nil, fmt.Errorf("unknown capability %q", c)
+			return nil, fmt.Errorf("unknown ambient capability %q", c)
 		}
 		ambient = append(ambient, v)
 	}
