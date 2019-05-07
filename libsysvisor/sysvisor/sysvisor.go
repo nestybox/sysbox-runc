@@ -17,7 +17,14 @@ import (
 
 // The kernel release is chosen based on whether it contains all kernel fixes required
 // to run sysvisor. Refer to the sysvisor github issues and search for "kernel".
-var minSupportedKernel = []int{4, 10} // 4.10
+type kernelRelease struct {major, minor int}
+var minKernel = kernelRelease{major: 4, minor: 10}  // 4.10
+
+// minKernelStr returns the minKernel as a string
+func MinKernelStr() string {
+	s := []string{strconv.Itoa(minKernel.major), strconv.Itoa(minKernel.minor)}
+	return strings.Join(s, ".")
+}
 
 // checkUnprivilegedUserns checks if the kernel is configured to allow
 // unprivileged users to create namespaces. This is necessary for
@@ -68,47 +75,52 @@ func GetKernelRelease() (string, error) {
 	return string(utsname.Release[:n]), nil
 }
 
-// checkKernelRelease checks if the host has a Linux kernel supported by Sysvisor.
-func checkKernelRelease() error {
-	kernelRel, err := GetKernelRelease()
-	if err != nil {
-		return err
-	}
+// IsKernelSupported checks if the given kernel release is supported by sysvisor.
+func IsKernelSupported(kernelRel string) (bool, error) {
 
 	// compare the major.minor numbers only
 
 	splits := strings.SplitN(kernelRel, ".", -1)
 	if len(splits) < 2 {
-		return fmt.Errorf("failed to parse kernel release %v", kernelRel)
+		return false, fmt.Errorf("failed to parse kernel release %v", kernelRel)
 	}
 
-	supported := true
-	for i := 0; i < 2; i++ {
-		num, err := strconv.Atoi(splits[0])
-		if err != nil {
-			return fmt.Errorf("failed to parse kernel release %v", kernelRel)
+	major, err := strconv.Atoi(splits[0])
+	if err != nil {
+		return false, fmt.Errorf("failed to parse kernel release %v", kernelRel)
+	}
+
+	minor, err := strconv.Atoi(splits[1])
+	if err != nil {
+		return false, fmt.Errorf("failed to parse kernel release %v", kernelRel)
+	}
+
+	supported := false
+	if major > minKernel.major {
+		supported = true
+	} else if major == minKernel.major {
+		if minor >= minKernel.minor {
+			supported = true
 		}
-		if num < minSupportedKernel[i] {
-			supported = false
-		}
 	}
 
-	if !supported {
-		rel := []string{}
-		rel = append(rel, strconv.Itoa(minSupportedKernel[0]))
-		rel = append(rel, strconv.Itoa(minSupportedKernel[1]))
-		return fmt.Errorf("kernel release %v is not supported; need >= %v", kernelRel, strings.Join(rel, "."))
-	}
-
-	return nil
+	return supported, nil
 }
 
 // CheckHostConfig checks if the host is configured appropriately to run sysvisor-runc
 func CheckHostConfig(context *cli.Context) error {
 
 	if !context.GlobalBool("no-kernel-check") {
-		if err := checkKernelRelease(); err != nil {
-			return fmt.Errorf("host is not configured properly: %v", err)
+		rel, err := GetKernelRelease()
+		if err != nil {
+			return err
+		}
+		ok, err := IsKernelSupported(rel)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("kernel release %v is not supported; need >= %v", rel, MinKernelStr())
 		}
 	}
 
