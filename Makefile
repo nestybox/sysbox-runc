@@ -6,6 +6,7 @@
 GO := go
 
 RUNC_TARGET := sysvisor-runc
+RUNC_DEBUG_TARGET := sysvisor-runc-debug
 
 SOURCES := $(shell find . 2>&1 | grep -E '.*\.(c|h|go)$$')
 PREFIX := $(DESTDIR)/usr/local
@@ -35,6 +36,9 @@ SHELL := $(shell command -v bash 2>/dev/null)
 
 $(RUNC_TARGET): $(SOURCES)
 	$(GO) build -buildmode=pie $(EXTRA_FLAGS) -ldflags "-X main.gitCommit=${COMMIT} -X main.version=${VERSION} $(EXTRA_LDFLAGS)" -tags "$(BUILDTAGS)" -o $(RUNC_TARGET) .
+
+$(RUNC_DEBUG_TARGET): $(SOURCES)
+	$(GO) build -buildmode=pie $(EXTRA_FLAGS) -ldflags "-X main.gitCommit=${COMMIT} -X main.version=${VERSION} $(EXTRA_LDFLAGS)" -tags "$(BUILDTAGS)" -gcflags="all=-N -l" -o $(RUNC_TARGET) .
 
 all: $(RUNC_TARGET) recvtty
 
