@@ -3,7 +3,6 @@
 package syscont
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,6 +12,7 @@ import (
 
 	mapset "github.com/deckarep/golang-set"
 	"github.com/nestybox/sysvisor/sysvisor-ipc/sysvisorMgrGrpc"
+	"github.com/opencontainers/runc/libsysvisor/sysvisor"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
@@ -497,13 +497,12 @@ func cfgLibModMount(spec *specs.Spec, doFhsCheck bool) error {
 		}
 	}
 
-	var utsname unix.Utsname
-	if err := unix.Uname(&utsname); err != nil {
+	kernelRel, err := sysvisor.GetKernelRelease()
+	if err != nil {
 		return err
 	}
 
-	n := bytes.IndexByte(utsname.Release[:], 0)
-	path := filepath.Join("/lib/modules/", string(utsname.Release[:n]))
+	path := filepath.Join("/lib/modules/", kernelRel)
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		logrus.Warnf("could not setup bind mount for %s: %v", path, err)
 		return nil
@@ -584,11 +583,11 @@ func checkSpec(spec *specs.Spec) error {
 // Configure the container's process spec for system containers
 func ConvertProcessSpec(p *specs.Process) error {
 	cfgCapabilities(p)
-	
+
 	if err := cfgAppArmor(p); err != nil {
 		return fmt.Errorf("failed to configure AppArmor profile: %v", err)
 	}
-	
+
 	return nil
 }
 

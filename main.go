@@ -143,8 +143,8 @@ func main() {
 			Usage: "do not interact with sysvisor-mgr; meant for testing and debugging.",
 		},
 		cli.BoolFlag{
-			Name:  "no-distro-check",
-			Usage: "do not check distro compatibility; meant for testing and debugging.",
+			Name:  "no-kernel-check",
+			Usage: "do not check kernel compatibility; meant for testing and debugging.",
 		},
 	}
 	app.Commands = []cli.Command{
