@@ -1187,9 +1187,13 @@ func (c *linuxContainer) makeCriuRestoreMountpoints(m *configs.Mount) error {
 	case "cgroup":
 		// Do nothing for cgroup, CRIU should handle it
 	case "bind":
-		// The prepareBindMount() function checks if source
+		// The prepareBindDest() function checks if source
 		// exists. So it cannot be used for other filesystem types.
-		if err := prepareBindMount(m, c.config.Rootfs, true); err != nil {
+		//
+		// sysvisor-runc: this is no longer the case; prepareBindDest() only checks the
+		// mount destination; if we need to check the mount source we need to create a
+		// function that explicitly does this.
+		if err := prepareBindDest(m, c.config.Rootfs, true); err != nil {
 			return err
 		}
 	default:
