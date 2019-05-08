@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/utils"
 	libcontainerUtils "github.com/opencontainers/runc/libcontainer/utils"
 
+	"github.com/opencontainers/runc/libsysbox/syscont"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/opencontainers/selinux/go-selinux/label"
 
@@ -46,6 +48,7 @@ func needsSetupDev(config *configs.Config) bool {
 // rootfs.
 func prepareRootfs(pipe io.ReadWriter, iConfig *initConfig) (err error) {
 	config := iConfig.Config
+
 	if err := prepareRoot(config); err != nil {
 		return newSystemErrorWithCause(err, "preparing rootfs")
 	}
@@ -53,6 +56,9 @@ func prepareRootfs(pipe io.ReadWriter, iConfig *initConfig) (err error) {
 	if config.ShiftUids {
 		if err := mountShiftfsOnRootfs(config.Rootfs, pipe); err != nil {
 			return newSystemErrorWithCause(err, "mounting shiftfs on rootfs")
+		}
+		if err := mountShiftfsOnBindSources(config, pipe); err != nil {
+			return newSystemErrorWithCause(err, "mounting shiftfs on bind sources")
 		}
 	}
 
@@ -185,15 +191,11 @@ func mountCmd(cmd configs.Command) error {
 	return nil
 }
 
-func prepareBindMount(m *configs.Mount, rootfs string, absDestPath bool) (err error) {
+func prepareBindDest(m *configs.Mount, rootfs string, absDestPath bool) (err error) {
 	var base, dest string
 
 	if err := validateCwd(rootfs); err != nil {
 		return newSystemErrorWithCause(err, "validating cwd")
-	}
-
-	if err := validateBindSource(m.Source, rootfs); err != nil {
-		return newSystemErrorWithCause(err, "validating bind source")
 	}
 
 	// ensure that the destination of the bind mount is resolved of symlinks at mount time because
@@ -395,21 +397,18 @@ func mountToRootfs(m *configs.Mount, rootfs, mountLabel string, enableCgroupns, 
 		// mounts differently than the OCI runc; in particular, we perform the bind mount by
 		// asking the parent runc to spawn a helper child process which enters the
 		// container's mount namespace only and performs the mount. The helper process is
-		// used to overcome the problem whereby the container's init process has no search
+		// needed to overcome the problem whereby the container's init process has no search
 		// permission to the bind mount source. Since this helper is not in the container's
 		// user namespace, it has true root credentials and thus can access the bind mount
-		// source yet perform the mount in the container's mount namespace. In addition, if
-		// uid shifting is in place, we request the parent runc to mount shiftfs on the bind
-		// mount source.
-		if err := prepareBindMount(m, rootfs, false); err != nil {
+		// source yet perform the mount in the container's mount namespace.
+		if err := prepareBindDest(m, rootfs, false); err != nil {
 			return err
 		}
 		mountInfo := &mountReqInfo{
-			Op:      bind,
-			Mount:   *m,
-			Label:   mountLabel,
-			Rootfs:  rootfs,
-			Shiftfs: shiftfs,
+			Op:     bind,
+			Mount:  *m,
+			Label:  mountLabel,
+			Rootfs: rootfs,
 		}
 		if err := syncParentDoMount(mountInfo, pipe); err != nil {
 			return newSystemErrorWithCause(err, "sync parent do mount")
@@ -1043,9 +1042,8 @@ func effectRootfsMount() error {
 // parent runc to do the mount.
 func mountShiftfsOnRootfs(rootfs string, pipe io.ReadWriter) error {
 	mountInfo := &mountReqInfo{
-		Op:      shiftRootfs,
-		Rootfs:  rootfs,
-		Shiftfs: true,
+		Op:     shiftRootfs,
+		Rootfs: rootfs,
 	}
 
 	err := syncParentDoMount(mountInfo, pipe)
@@ -1055,6 +1053,59 @@ func mountShiftfsOnRootfs(rootfs string, pipe io.ReadWriter) error {
 
 	if err := effectRootfsMount(); err != nil {
 		return newSystemErrorWithCause(err, "effecting rootfs mount")
+	}
+
+	return nil
+}
+
+// sysbox-runc: mountShiftfs mounts shiftfs over the source of bind mounts. Since the
+// shiftfs mount must be done by true root, it requests the parent runc to do the mount.
+func mountShiftfsOnBindSources(config *configs.Config, pipe io.ReadWriter) error {
+
+	// cleanup bind sources
+	paths := []string{}
+	for _, m := range config.Mounts {
+		if m.Device == "bind" {
+
+			// sysbox-fs handles uid(gid) shifting itself, so no need for mounting shiftfs on top
+			if filepath.HasPrefix(m.Source, syscont.SysboxFsDir) {
+				continue
+			}
+
+			// we don't support bind sources directly over rootfs
+			if err := validateBindSource(m.Source, config.Rootfs); err != nil {
+				return newSystemErrorWithCause(err, "validating bind source")
+			}
+
+			paths = append(paths, m.Source)
+		}
+	}
+
+	// To avoid shiftfs-on-shiftfs, if we see paths such as /x/y and /x/y/z, mount
+	// shiftfs on /x/y only (i.e., the base path)
+	sort.Slice(paths, func(i, j int) bool { return !filepath.HasPrefix(paths[i], paths[j]) })
+
+	basePaths := []string{paths[0]}
+	for i := 1; i < len(paths); i++ {
+		found := false
+		for _, b := range basePaths {
+			if strings.Contains(paths[i], b) {
+				found = true
+			}
+		}
+		if !found {
+			basePaths = append(basePaths, paths[i])
+		}
+	}
+
+	mountInfo := &mountReqInfo{
+		Op:    shiftBind,
+		Paths: basePaths,
+	}
+
+	err := syncParentDoMount(mountInfo, pipe)
+	if err != nil {
+		return newSystemErrorWithCause(err, "syncing with parent runc to perform mount")
 	}
 
 	return nil
