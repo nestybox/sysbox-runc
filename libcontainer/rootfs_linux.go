@@ -290,6 +290,13 @@ func mountToRootfs(m *configs.Mount, rootfs, mountLabel string, enableCgroupns, 
 		// permission to the bind mount source. Since this helper is not in the container's
 		// user namespace, it has true root credentials and thus can access the bind mount
 		// source yet perform the mount in the container's mount namespace.
+
+		// when using shiftfs, validation for bind source is done in mountShiftfsOnBindSources()
+		if !shiftfs {
+			if err := validateBindSource(m.Source, rootfs); err != nil {
+				return err
+			}
+		}
 		if err := prepareBindDest(m, rootfs, false); err != nil {
 			return err
 		}
