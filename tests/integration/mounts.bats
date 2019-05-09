@@ -14,7 +14,6 @@ function teardown() {
 
 @test "runc run [bind mount]" {
 
-	# test: bind mount source path has nothing in common with rootfs path
 	run touch /mnt/test-file
 	[ "$status" -eq 0 ]
 
@@ -35,9 +34,9 @@ function teardown() {
 	[[ "${lines[0]}" == *'ro,'* ]]
 }
 
-@test "runc run [bind mount source path] " {
+@test "runc runc [bind mount above rootfs]" {
 
-	# test: bind mount source path has something in common with rootfs path
+	# test: bind mount source path is above but not directly above rootfs
 	run mkdir bindSrc
 	[ "$status" -eq 0 ]
 
@@ -51,15 +50,15 @@ function teardown() {
 	[[ "${lines[0]}" =~ 'test-file' ]]
 }
 
-@test "runc run [bind mount invalid source path]" {
+@test "runc run [bind mount directly above rootfs]" {
 
 	update_config ' .mounts |= . + [{"source": ".", "destination": "/tmp/bind", "options": ["bind"]}] | .process.args = ["ls", "/tmp/bind/"]'
 
 	runc run test_bind_mount
-	[ "$status" -eq 1 ]
 
-	update_config ' .mounts |= . + [{"source": "/", "destination": "/tmp/bind", "options": ["bind"]}] | .process.args = ["ls", "/tmp/bind/"]'
-
-	runc run test_bind_mount
-	[ "$status" -eq 1 ]
+	if [ -z "$SHIFT_UIDS" ]; then
+      [ "$status" -eq 0 ]
+	else
+		[ "$status" -eq 1 ]
+	fi
 }

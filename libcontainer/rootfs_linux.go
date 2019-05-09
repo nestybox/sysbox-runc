@@ -19,6 +19,7 @@ import (
 	"github.com/mrunalp/fileutils"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
+	"github.com/opencontainers/runc/libcontainer/mount"
 	"github.com/opencontainers/runc/libcontainer/system"
 	"github.com/opencontainers/runc/libcontainer/utils"
 	libcontainerUtils "github.com/opencontainers/runc/libcontainer/utils"
@@ -401,13 +402,6 @@ func mountToRootfs(m *configs.Mount, rootfs, mountLabel string, enableCgroupns, 
 		// permission to the bind mount source. Since this helper is not in the container's
 		// user namespace, it has true root credentials and thus can access the bind mount
 		// source yet perform the mount in the container's mount namespace.
-
-		// when using shiftfs, validation for bind source is done in mountShiftfsOnBindSources()
-		if !shiftfs {
-			if err := validateBindSource(m.Source, rootfs); err != nil {
-				return err
-			}
-		}
 		if err := prepareBindDest(m, rootfs, false); err != nil {
 			return err
 		}
@@ -1004,22 +998,34 @@ func validateCwd(rootfs string) error {
 	return nil
 }
 
-// sysbox-runc: validateBindSource checks if the source dir of a bind mount is allowed
-func validateBindSource(source, rootfs string) error {
+// sysbox-runc: allowShiftfsBindSource checks if the source dir of a bind mount is allowed
+// when using shiftfs.
+func allowShiftfsBindSource(source, rootfs string) error {
 
-	// We do not allow bind mounts whose source is hierarchically above the container's
-	// rootfs (e.g., if the rootfs is at /a/b/c/d, we don't allow bind sources at
-	// /, /a, /a/b, or /a/b/c; but we do allow them at /a/x, /a/b/x, or /a/b/c/x).
-	// The reason we disallow such bind mounts is that when using uid-shifting we
-	// need to mount shiftfs on the rootfs as well as the bind sources. If we where
-	// to allow bind sources above rootfs, we would end with shiftfs-on-shiftfs
-	// which is not supported.
-	//
-	// We could choose to disallow such bind sources when using uid-shifting only, but it's
-	// simpler to always disallow them since it's not a common scenario anyway.
-
+	// We do not allow bind mounts whose source is directly above the container's rootfs
+	// (e.g., if the rootfs is at /a/b/c/d, we don't allow bind sources at /, /a, /a/b, or
+	// /a/b/c; but we do allow them at /a/x, /a/b/x, or /a/b/c/x). The reason we disallow
+	// such bind mounts is that when using uid-shifting we need to mount shiftfs on the
+	// rootfs as well as the bind sources. If we where to allow bind sources directly above
+	// rootfs, we would end with shiftfs-on-shiftfs which is not supported.
 	if strings.Contains(rootfs, source) {
-		return fmt.Errorf("bind mount with source at %v is above the container's rootfs at %v; this is not supported", source, rootfs)
+		return fmt.Errorf("bind mount with source at %v is above the container's rootfs at %v; this is not supported when using uid-shifting", source, rootfs)
+	}
+
+	// We don't support bind sources on tmpfs, due to problems with shiftfs-on-tmpfs mounts
+	// (see github issue #123). However, we make an exception for Docker /dev/shm mounts
+	// (i.e.bind mounts from a tmpfs dir in `/var/lib/docker/containers/<container-id>/mounts/shm`
+	// to the container's `/dev/shm`) as these are commonly used by Docker and are not
+	// affected by the github issue described above because the bind source directory is
+	// known to be initially empty.
+	if !strings.Contains(source, "/var/lib/docker/") {
+		if mounted, err := mount.MountedWithFs(source, "tmpfs"); mounted || err != nil {
+			if err != nil {
+				return err
+			} else {
+				return fmt.Errorf("bind mount with source at %v is on tmpfs and requires uid-shifting; however mounting shiftfs on tmpfs is not supported", source)
+			}
+		}
 	}
 
 	return nil
@@ -1079,8 +1085,7 @@ func mountShiftfsOnBindSources(config *configs.Config, pipe io.ReadWriter) error
 				continue
 			}
 
-			// we don't support bind sources directly over rootfs
-			if err := validateBindSource(m.Source, config.Rootfs); err != nil {
+			if err := allowShiftfsBindSource(m.Source, config.Rootfs); err != nil {
 				return newSystemErrorWithCause(err, "validating bind source")
 			}
 
@@ -1088,10 +1093,13 @@ func mountShiftfsOnBindSources(config *configs.Config, pipe io.ReadWriter) error
 		}
 	}
 
+	if len(paths) == 0 {
+		return nil
+	}
+
 	// To avoid shiftfs-on-shiftfs, if we see paths such as /x/y and /x/y/z, mount
 	// shiftfs on /x/y only (i.e., the base path)
 	sort.Slice(paths, func(i, j int) bool { return !filepath.HasPrefix(paths[i], paths[j]) })
-
 	basePaths := []string{paths[0]}
 	for i := 1; i < len(paths); i++ {
 		found := false
