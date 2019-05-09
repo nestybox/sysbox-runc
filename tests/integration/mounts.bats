@@ -58,7 +58,35 @@ function teardown() {
 
 	if [ -z "$SHIFT_UIDS" ]; then
       [ "$status" -eq 0 ]
+      [[ "${lines[0]}" =~ 'config.json' ]]
 	else
 		[ "$status" -eq 1 ]
 	fi
+}
+
+@test "bind mount below the rootfs" {
+
+  CONFIG=$(jq '.mounts |= . + [{"source": "rootfs/root", "destination": "/tmp/bind", "options": ["bind"]}] | .process.args = ["/bin/sh"]' config.json)
+  echo "${CONFIG}" >config.json
+
+  runc run -d --console-socket $CONSOLE_SOCKET test_bind_mount
+  [ "$status" -eq 0 ]
+
+  runc exec test_bind_mount touch /root/test-file.txt
+  [ "$status" -eq 0 ]
+
+  runc exec test_bind_mount ls /root
+  [ "$status" -eq 0 ]
+  [[ "${lines[0]}" =~ 'test-file.txt' ]]
+
+  runc exec test_bind_mount ls /tmp/bind
+  [ "$status" -eq 0 ]
+  [[ "${lines[0]}" =~ 'test-file.txt' ]]
+
+  runc exec test_bind_mount rm /tmp/bind/test-file.txt
+  [ "$status" -eq 0 ]
+
+  runc exec test_bind_mount ls /root
+  [ "$status" -eq 0 ]
+  [[ "${lines[0]}" =~ '' ]]
 }

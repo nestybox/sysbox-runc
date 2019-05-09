@@ -1080,6 +1080,11 @@ func mountShiftfsOnBindSources(config *configs.Config, pipe io.ReadWriter) error
 	for _, m := range config.Mounts {
 		if m.Device == "bind" {
 
+			// Don't mount shiftfs on bind sources under the container's rootfs
+			if filepath.HasPrefix(m.Source, config.Rootfs) {
+				continue
+			}
+
 			// sysbox-fs handles uid(gid) shifting itself, so no need for mounting shiftfs on top
 			if filepath.HasPrefix(m.Source, syscont.SysboxFsDir) {
 				continue
