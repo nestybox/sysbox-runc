@@ -70,7 +70,7 @@ function runc() {
 
 # Raw wrapper for runc.
 function __runc() {
-	"$RUNC" --no-sysvisor-fs --no-sysvisor-mgr --log /proc/self/fd/2 --root "$ROOT" "$@"
+	"$RUNC" --no-sysvisor-mgr --no-sysvisor-fs --log /proc/self/fd/2 --root "$ROOT" "$@"
 }
 
 # Wrapper for runc spec, which takes only one argument (the bundle path).

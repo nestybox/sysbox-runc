@@ -11,9 +11,8 @@ function teardown() {
   teardown_busybox
 }
 
-@test "runc run [bind mount]" {
+@test "bind mount" {
 
-  # test: bind mount source path has nothing in common with rootfs path
   run touch /mnt/test-file
   [ "$status" -eq 0 ]
 
@@ -25,9 +24,9 @@ function teardown() {
   [[ "${lines[0]}" =~ 'test-file' ]]
 }
 
-@test "runc run [bind mount source path] " {
+@test "bind mount above rootfs" {
 
-  # test: bind mount source path has something in common with rootfs path
+  # test: bind mount source path is above but not directly above rootfs
   run mkdir bindSrc
   [ "$status" -eq 0 ]
 
@@ -42,17 +41,16 @@ function teardown() {
   [[ "${lines[0]}" =~ 'test-file' ]]
 }
 
-@test "runc run [bind mount invalid source path]" {
+@test "bind mount directly above rootfs" {
 
   CONFIG=$(jq '.mounts |= . + [{"source": ".", "destination": "/tmp/bind", "options": ["bind"]}] | .process.args = ["ls", "/tmp/bind/"]' config.json)
   echo "${CONFIG}" >config.json
 
   runc run test_bind_mount
-  [ "$status" -eq 1 ]
 
-  CONFIG=$(jq '.mounts |= . + [{"source": "/", "destination": "/tmp/bind", "options": ["bind"]}] | .process.args = ["ls", "/tmp/bind/"]' config.json)
-  echo "${CONFIG}" >config.json
-
-  runc run test_bind_mount
-  [ "$status" -eq 1 ]
+  if [ -z "$SHIFT_UIDS" ]; then
+      [ "$status" -eq 0 ]
+  else
+    [ "$status" -eq 1 ]
+  fi
 }
