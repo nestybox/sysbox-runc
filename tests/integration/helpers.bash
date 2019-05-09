@@ -6,6 +6,8 @@ INTEGRATION_ROOT=$(dirname "$(readlink -f "$BASH_SOURCE")")
 . ${INTEGRATION_ROOT}/multi-arch.bash
 
 RUNC="${INTEGRATION_ROOT}/../../sysbox-runc"
+FLAGS="--no-sysbox-mgr --no-sysbox-fs"
+
 RECVTTY="${INTEGRATION_ROOT}/../../contrib/cmd/recvtty/recvtty"
 GOPATH="$(mktemp -d --tmpdir runc-integration-gopath.XXXXXX)"
 
@@ -63,7 +65,7 @@ function runc() {
 
 # Raw wrapper for runc.
 function __runc() {
-	"$RUNC" ${RUNC_USE_SYSTEMD+--systemd-cgroup} --root "$ROOT" --no-sysbox-fs --no-sysbox-mgr "$@"
+	"$RUNC" ${RUNC_USE_SYSTEMD+--systemd-cgroup} ${FLAGS} ${RUNC_FLAGS} --root "$ROOT" "$@"
 }
 
 # Wrapper for runc spec, which takes only one argument (the bundle path).
@@ -82,7 +84,7 @@ function runc_spec() {
 	fi
 
    # sysbox-runc: sys container spec requires id mappings
-   runc --no-sysbox-fs --no-sysbox-mgr spec "${args[@]}" "$UID_MAP" "$GID_MAP" "$ID_MAP_SIZE"
+   $RUNC ${FLAGS} spec "${args[@]}" "$UID_MAP" "$GID_MAP" "$ID_MAP_SIZE"
 
 	# Always add additional mappings if we have idmaps.
 	if [[ "$ROOTLESS" -ne 0 ]] && [[ "$ROOTLESS_FEATURES" == *"idmap"* ]]; then

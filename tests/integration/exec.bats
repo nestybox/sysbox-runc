@@ -125,6 +125,7 @@ function teardown() {
 }
 
 @test "runc exec --preserve-fds" {
+
 	# run busybox detached
 	runc run -d --console-socket "$CONSOLE_SOCKET" test_busybox
 	[ "$status" -eq 0 ]
@@ -132,6 +133,6 @@ function teardown() {
 	echo hello >preserve-fds.test
 	# fd 3 is used by bats, so we use 4
 	exec 4<preserve-fds.test
-	output=$(__runc --no-sysbox-fs --no-sysbox-mgr exec --preserve-fds=2 test_busybox cat /proc/self/fd/4)
+	output=$(__runc exec --preserve-fds=2 test_busybox cat /proc/self/fd/4)
 	[[ "${output}" == "hello" ]]
 }
