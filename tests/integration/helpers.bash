@@ -5,7 +5,6 @@ INTEGRATION_ROOT=$(dirname "$(readlink -f "$BASH_SOURCE")")
 
 . ${INTEGRATION_ROOT}/multi-arch.bash
 
-RUNC="${INTEGRATION_ROOT}/../../sysvisor-runc"
 RECVTTY="${INTEGRATION_ROOT}/../../contrib/cmd/recvtty/recvtty"
 GOPATH="$(mktemp -d --tmpdir runc-integration-gopath.XXXXXX)"
 
@@ -40,6 +39,10 @@ ROOT=$(mktemp -d "$WORK_DIR/runc.XXXXXX")
 # Path to console socket.
 CONSOLE_SOCKET="$WORK_DIR/console.sock"
 
+# runc command
+RUNC="${INTEGRATION_ROOT}/../../sysvisor-runc"
+FLAGS="--no-sysvisor-mgr --no-sysvisor-fs"
+
 # Cgroup paths
 CGROUP_MEMORY_BASE_PATH=$(grep "cgroup" /proc/self/mountinfo | gawk 'toupper($NF) ~ /\<MEMORY\>/ { print $5; exit }')
 CGROUP_CPU_BASE_PATH=$(grep "cgroup" /proc/self/mountinfo | gawk 'toupper($NF) ~ /\<CPU\>/ { print $5; exit }')
@@ -70,7 +73,7 @@ function runc() {
 
 # Raw wrapper for runc.
 function __runc() {
-	"$RUNC" --no-sysvisor-mgr --no-sysvisor-fs --log /proc/self/fd/2 --root "$ROOT" "$@"
+	$RUNC ${FLAGS} ${RUNC_FLAGS} --log /proc/self/fd/2 --root "$ROOT" "$@"
 }
 
 # Wrapper for runc spec, which takes only one argument (the bundle path).
@@ -89,7 +92,7 @@ function runc_spec() {
 	fi
 
         # sysvisor-runc: sys container spec requires id mappings
-        runc --no-sysvisor-fs --no-sysvisor-mgr spec "${args[@]}" "$UID_MAP" "$GID_MAP" "$ID_MAP_SIZE"
+        $RUNC ${FLAGS} spec "${args[@]}" "$UID_MAP" "$GID_MAP" "$ID_MAP_SIZE"
 
 	# Always add additional mappings if we have idmaps.
 	if [[ "$ROOTLESS" -ne 0 ]] && [[ "$ROOTLESS_FEATURES" == *"idmap"* ]]; then
