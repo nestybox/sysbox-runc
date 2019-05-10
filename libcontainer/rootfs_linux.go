@@ -1054,6 +1054,15 @@ func effectRootfsMount() error {
 // Since the shiftfs mount must be done by true root, mountShitfsOnRootfs requests the
 // parent runc to do the mount.
 func mountShiftfsOnRootfs(rootfs string, pipe io.ReadWriter) error {
+
+	if mounted, err := mount.MountedWithFs(rootfs, "tmpfs"); mounted || err != nil {
+		if err != nil {
+			return err
+		} else {
+			return fmt.Errorf("rootfs %v is on tmpfs and requires uid-shifting; however mounting shiftfs on tmpfs is not supported", rootfs)
+		}
+	}
+
 	mountInfo := &mountReqInfo{
 		Op:     shiftRootfs,
 		Rootfs: rootfs,
