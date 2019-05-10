@@ -2,6 +2,20 @@
 
 load helpers
 
+function setup_busybox_tmpfs() {
+  mkdir -p /tmp/busyboxtest/rootfs
+  tar --exclude './dev/*' -C /tmp/busyboxtest/rootfs -xf "$BUSYBOX_IMAGE"
+
+  # sysvisor-runc: set bundle ownership to match system
+  # container's uid/gid map, except if using uid-shifting
+  if [ -z "$SHIFT_UIDS" ]; then
+      chown -R "$UID_MAP":"$GID_MAP" /tmp/busyboxtest
+  fi
+
+  cd /tmp/busyboxtest
+  runc_spec
+}
+
 function setup() {
   teardown_busybox
   setup_busybox
@@ -81,4 +95,15 @@ function teardown() {
   runc exec test_bind_mount ls /root
   [ "$status" -eq 0 ]
   [[ "${lines[0]}" =~ '' ]]
+}
+
+@test "rootfs on tmpfs" {
+  setup_busybox_tmpfs
+
+  runc run -d --console-socket $CONSOLE_SOCKET test_bind_mount
+  if [ -z "$SHIFT_UIDS" ]; then
+      [ "$status" -eq 0 ]
+  else
+    [ "$status" -eq 1 ]
+  fi
 }
