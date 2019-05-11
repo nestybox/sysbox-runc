@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 
 	systemdDbus "github.com/coreos/go-systemd/v22/dbus"
@@ -333,8 +334,6 @@ func CreateLibcontainerConfig(opts *CreateOpts) (*configs.Config, error) {
 }
 
 func createLibcontainerMount(cwd string, m specs.Mount) (*configs.Mount, error) {
-	var bindSrcIsDir bool
-
 	flags, pgflags, data, ext := parseMountOptions(m.Options)
 	source := m.Source
 	device := m.Type
@@ -348,18 +347,32 @@ func createLibcontainerMount(cwd string, m specs.Mount) (*configs.Mount, error) 
 		}
 	}
 
-	// sysbox-runc: for bind mounts determine if the source is a directory. We do this
+	// sysbox-runc: for bind mounts, collect some info on the mount source. We do this
 	// here so that we don't have to do this from within the container's init process (as
 	// the latter may not have search permission into the bind source).
+	var bindSrcInfo configs.BindSrcInfo
+
 	if device == "bind" {
 		var err error
 		var fi os.FileInfo
 
+		// check if the bind source is a directory
 		fi, err = os.Stat(source)
 		if err != nil {
 			return nil, fmt.Errorf("failed to stat mount source at %s: %v", source, err)
 		}
-		bindSrcIsDir = fi.IsDir()
+
+		// collect the bind source ownership info
+		st, ok := fi.Sys().(*syscall.Stat_t)
+		if !ok {
+			return nil, fmt.Errorf("failed to convert to syscall.Stat_t")
+		}
+
+		bindSrcInfo = configs.BindSrcInfo{
+			IsDir: fi.IsDir(),
+			Uid:   st.Uid,
+			Gid:   st.Gid,
+		}
 	}
 
 	return &configs.Mount{
@@ -370,7 +383,7 @@ func createLibcontainerMount(cwd string, m specs.Mount) (*configs.Mount, error) 
 		Flags:            flags,
 		PropagationFlags: pgflags,
 		Extensions:       ext,
-		BindSrcIsDir:     bindSrcIsDir,
+		BindSrcInfo:      bindSrcInfo,
 	}, nil
 }
 

@@ -215,7 +215,7 @@ func prepareBindDest(m *configs.Mount, rootfs string, absDestPath bool) (err err
 
 	// update the mount with the correct dest after symlinks are resolved.
 	m.Destination = dest
-	if err = createIfNotExists(dest, m.BindSrcIsDir); err != nil {
+	if err = createIfNotExists(dest, m.BindSrcInfo.IsDir); err != nil {
 		return err
 	}
 
@@ -1031,6 +1031,40 @@ func allowShiftfsBindSource(source, rootfs string) error {
 	return nil
 }
 
+// needUidShiftOnBindSrc checks if uid/gid shifting on the given bind mount source path is
+// required to run the system container.
+func needUidShiftOnBindSrc(mount *configs.Mount, config *configs.Config) (bool, error) {
+
+	// sysbox-fs handles uid(gid) shifting itself, so no need for mounting shiftfs on top
+	if filepath.HasPrefix(mount.Source, syscont.SysboxFsDir) {
+		return false, nil
+	}
+
+	// Don't mount shiftfs on bind sources under the container's rootfs
+	if filepath.HasPrefix(mount.Source, config.Rootfs) {
+		return false, nil
+	}
+
+	// If the bind source has uid:gid ownership matching the container's root, shiftfs in
+	// not needed
+	var hostUid, hostGid uint32
+	for _, mapping := range config.UidMappings {
+		if mapping.ContainerID == 0 {
+			hostUid = uint32(mapping.HostID)
+		}
+	}
+	for _, mapping := range config.GidMappings {
+		if mapping.ContainerID == 0 {
+			hostGid = uint32(mapping.HostID)
+		}
+	}
+	if hostUid == mount.BindSrcInfo.Uid && hostGid == mount.BindSrcInfo.Gid {
+		return false, nil
+	}
+
+	return true, nil
+}
+
 // sysbox-runc: effectRootfsMount ensure the calling process sees the effects of a previous rootfs
 // mount. It does this by reopening the rootfs directory.
 func effectRootfsMount() error {
@@ -1089,13 +1123,12 @@ func mountShiftfsOnBindSources(config *configs.Config, pipe io.ReadWriter) error
 	for _, m := range config.Mounts {
 		if m.Device == "bind" {
 
-			// Don't mount shiftfs on bind sources under the container's rootfs
-			if filepath.HasPrefix(m.Source, config.Rootfs) {
-				continue
+			needShiftfs, err := needUidShiftOnBindSrc(m, config)
+			if err != nil {
+				return newSystemErrorWithCause(err, "checking bind source")
 			}
 
-			// sysbox-fs handles uid(gid) shifting itself, so no need for mounting shiftfs on top
-			if filepath.HasPrefix(m.Source, syscont.SysboxFsDir) {
+			if !needShiftfs {
 				continue
 			}
 

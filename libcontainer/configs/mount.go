@@ -6,6 +6,12 @@ const (
 	EXT_COPYUP = 1 << iota
 )
 
+type BindSrcInfo struct {
+	IsDir bool   `json:"is_dir,omitempty"`
+	Uid   uint32 `json:"uid,omitempty"`
+	Gid   uint32 `json:"gid,omitempty"`
+}
+
 type Mount struct {
 	// Source path for the mount.
 	Source string `json:"source"`
@@ -37,6 +43,6 @@ type Mount struct {
 	// Optional Command to be run after Source is mounted.
 	PostmountCmds []Command `json:"postmount_cmds"`
 
-	// For bind mounts, indicates if the source is a directory
-	BindSrcIsDir bool `json:"bind_source_is_dir,omitempty"`
+	// Bind mount source info
+	BindSrcInfo BindSrcInfo `json:"bind_src_info,omitempty"`
 }
