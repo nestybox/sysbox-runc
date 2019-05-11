@@ -17,8 +17,9 @@ import (
 
 // The kernel release is chosen based on whether it contains all kernel fixes required
 // to run sysvisor. Refer to the sysvisor github issues and search for "kernel".
-type kernelRelease struct {major, minor int}
-var minKernel = kernelRelease{major: 4, minor: 10}  // 4.10
+type kernelRelease struct{ major, minor int }
+
+var minKernel = kernelRelease{major: 4, minor: 10} // 4.10
 
 // minKernelStr returns the minKernel as a string
 func MinKernelStr() string {
@@ -169,7 +170,7 @@ func NeedUidShiftOnRootfs(spec *specs.Spec) (bool, error) {
 	rootfsGid := st.Gid
 
 	// use shifting when the rootfs is owned by true root, the containers uid/gid root
-	// mapping do not match the container's rootfs owner, and the host ID for the uid and
+	// mapping don't match the container's rootfs owner, and the host ID for the uid and
 	// gid mappings is the same.
 	if rootfsUid == 0 && rootfsGid == 0 &&
 		hostUidMap != rootfsUid && hostGidMap != rootfsGid &&

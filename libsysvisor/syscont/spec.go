@@ -268,10 +268,9 @@ func validateIDMappings(spec *specs.Spec) error {
 	return nil
 }
 
-// cfgIDMappings checks if the uid/gid mappings are present and valid; if they
-// are not present, it allocates them. Note that we don't disallow mappings
-// that map to the host root UID (i.e., we honor the ID config). Some runc tests use
-// such mappings.
+// cfgIDMappings checks if the uid/gid mappings are present and valid; if they are not
+// present, it allocates them. Note that we don't disallow mappings that map to the host
+// root UID (i.e., we always honor the ID config); some runc tests use such mappings.
 func cfgIDMappings(id string, spec *specs.Spec, noSysvisorMgr bool) error {
 	if len(spec.Linux.UIDMappings) == 0 && len(spec.Linux.GIDMappings) == 0 {
 		return allocIDMappings(id, spec, noSysvisorMgr)
