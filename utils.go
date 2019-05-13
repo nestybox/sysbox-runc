@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/opencontainers/runc/libsysvisor/syscont"
+	"github.com/opencontainers/runc/libsysvisor/sysvisor"
 	"github.com/opencontainers/runtime-spec/specs-go"
 
 	"github.com/sirupsen/logrus"
@@ -56,7 +57,7 @@ func fatal(err error) {
 }
 
 // setupSpec performs initial setup based on the cli.Context for the container
-func setupSpec(context *cli.Context) (*specs.Spec, error) {
+func setupSpec(context *cli.Context, sysMgr *sysvisor.Mgr, sysFs *sysvisor.Fs) (*specs.Spec, error) {
 	bundle := context.String("bundle")
 	if bundle != "" {
 		if err := os.Chdir(bundle); err != nil {
@@ -68,7 +69,7 @@ func setupSpec(context *cli.Context) (*specs.Spec, error) {
 		return nil, err
 	}
 
-	if err := syscont.ConvertSpec(context, spec); err != nil {
+	if err := syscont.ConvertSpec(context, sysMgr, sysFs, spec); err != nil {
 		return nil, fmt.Errorf("error in system container spec: %v", err)
 	}
 

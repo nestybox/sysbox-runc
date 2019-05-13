@@ -20,6 +20,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/intelrdt"
 	"github.com/opencontainers/runc/libcontainer/mount"
 	"github.com/opencontainers/runc/libcontainer/utils"
+	"github.com/opencontainers/runc/libsysvisor/sysvisor"
 
 	"golang.org/x/sys/unix"
 )
@@ -127,21 +128,20 @@ func CriuPath(criupath string) func(*LinuxFactory) error {
 	}
 }
 
-// SysvisorFs returns an option func that configures a LinuxFactory to
-// return containers that use sysvisor-fs for emulating parts of the
-// container's rootfs
-func SysvisorFs(enable bool) func(*LinuxFactory) error {
+// SysFs returns an option func that configures a LinuxFactory to return containers that
+// use the given sysvisor-fs for emulating parts of the container's rootfs.
+func SysFs(sysFs *sysvisor.Fs) func(*LinuxFactory) error {
 	return func(l *LinuxFactory) error {
-		l.SysvisorFs = enable
+		l.SysFs = sysFs
 		return nil
 	}
 }
 
-// SysvisorMgr returns an option func that configures a LinuxFactory to
-// return containers that use sysvisor-mgr services (e.g., uid/gid allocation).
-func SysvisorMgr(enable bool) func(*LinuxFactory) error {
+// SysMgr returns an option func that configures a LinuxFactory to return containers that
+// use the given sysvisor-mgr services.
+func SysMgr(sysMgr *sysvisor.Mgr) func(*LinuxFactory) error {
 	return func(l *LinuxFactory) error {
-		l.SysvisorMgr = enable
+		l.SysMgr = sysMgr
 		return nil
 	}
 }
@@ -170,6 +170,15 @@ func New(root string, options ...func(*LinuxFactory) error) (Factory, error) {
 			return nil, err
 		}
 	}
+
+	if l.SysMgr == nil {
+		l.SysMgr = sysvisor.NewMgr(false)
+	}
+
+	if l.SysFs == nil {
+		l.SysFs = sysvisor.NewFs(false)
+	}
+
 	return l, nil
 }
 
@@ -204,12 +213,11 @@ type LinuxFactory struct {
 	// NewIntelRdtManager returns an initialized Intel RDT manager for a single container.
 	NewIntelRdtManager func(config *configs.Config, id string, path string) intelrdt.Manager
 
-	// SysvisorFs indicates if sysvisor-fs is used to emulate parts of
-	// the container's rootfs (e.g., /proc)
-	SysvisorFs bool
+	// SysFs is the object representing the sysvisor-fs
+	SysFs *sysvisor.Fs
 
-	// SysvisorMgr indicates if sysvisor-mgr services (e.g., uid/gid allocation) are used.
-	SysvisorMgr bool
+	// SysMgr is the object representing the sysvisor-mgr
+	SysMgr *sysvisor.Mgr
 }
 
 func (l *LinuxFactory) Create(id string, config *configs.Config) (Container, error) {
@@ -247,9 +255,10 @@ func (l *LinuxFactory) Create(id string, config *configs.Config) (Container, err
 		newuidmapPath: l.NewuidmapPath,
 		newgidmapPath: l.NewgidmapPath,
 		cgroupManager: l.NewCgroupsManager(config.Cgroups, nil),
-		sysvisorFs:    l.SysvisorFs,
-		sysvisorMgr:   l.SysvisorMgr,
+		sysMgr:        l.SysMgr,
+		sysFs:         l.SysFs,
 	}
+
 	if intelrdt.IsCatEnabled() || intelrdt.IsMbaEnabled() {
 		c.intelRdtManager = l.NewIntelRdtManager(config, id, "")
 	}
@@ -291,9 +300,10 @@ func (l *LinuxFactory) Load(id string) (Container, error) {
 		cgroupManager:        l.NewCgroupsManager(state.Config.Cgroups, state.CgroupPaths),
 		root:                 containerRoot,
 		created:              state.Created,
-		sysvisorFs:           state.SysvisorFs,
-		sysvisorMgr:          state.SysvisorMgr,
+		sysFs:                &state.SysFs,
+		sysMgr:               &state.SysMgr,
 	}
+
 	c.state = &loadedState{c: c}
 	if err := c.refreshState(); err != nil {
 		return nil, err

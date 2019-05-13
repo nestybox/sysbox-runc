@@ -8,6 +8,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/system"
 	"github.com/opencontainers/runc/libsysvisor/sysvisor"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -94,7 +95,14 @@ using the sysvisor-runc checkpoint command.`,
 		},
 	},
 	Action: func(context *cli.Context) error {
-		if err := checkArgs(context, 1, exactArgs); err != nil {
+		var (
+			err       error
+			spec      *specs.Spec
+			shiftUids bool
+			status    int
+		)
+
+		if err = checkArgs(context, 1, exactArgs); err != nil {
 			return err
 		}
 		// XXX: Currently this is untested with rootless containers.
@@ -102,19 +110,29 @@ using the sysvisor-runc checkpoint command.`,
 			logrus.Warn("runc restore is untested with rootless containers")
 		}
 
-		spec, err := setupSpec(context)
+		sysMgr := sysvisor.NewMgr(!context.GlobalBool("no-sysvisor-mgr"))
+		sysFs := sysvisor.NewFs(!context.GlobalBool("no-sysvisor-fs"))
+
+		defer func() {
+			if err != nil {
+				sysFs.Unregister()
+				sysMgr.RelResources()
+			}
+		}()
+
+		spec, err = setupSpec(context, sysMgr, sysFs)
 		if err != nil {
 			return err
 		}
 		options := criuOptions(context)
-		if err := setEmptyNsMask(context, options); err != nil {
+		if err = setEmptyNsMask(context, options); err != nil {
 			return err
 		}
-		shiftUids, err := sysvisor.NeedUidShiftOnRootfs(spec)
+		shiftUids, err = sysvisor.NeedUidShiftOnRootfs(spec)
 		if err != nil {
 			return err
 		}
-		status, err := startContainer(context, spec, CT_ACT_RESTORE, options, shiftUids)
+		status, err = startContainer(context, spec, CT_ACT_RESTORE, options, shiftUids, sysMgr, sysFs)
 		if err != nil {
 			return err
 		}

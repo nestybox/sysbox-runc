@@ -13,12 +13,12 @@ import (
 	"strconv"
 	"syscall" // only for Signal
 
-	"github.com/nestybox/sysvisor/sysvisor-ipc/sysvisorFsGrpc"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/intelrdt"
 	"github.com/opencontainers/runc/libcontainer/system"
 	"github.com/opencontainers/runc/libcontainer/utils"
+	"github.com/opencontainers/runc/libsysvisor/sysvisor"
 
 	"golang.org/x/sys/unix"
 )
@@ -341,38 +341,20 @@ func (p *initProcess) start() error {
 		}
 	}
 
-	var (
-		uidFirst int32
-		uidSize  int32
-		gidFirst int32
-		gidSize  int32
-	)
-
-	// TODO: Enhance this logic to be capable of dealing with the entire
-	// UIDMapping/GIDMapping slices; notice that here i'm just extracting the
-	// first element.
-	if len(p.container.config.UidMappings) != 0 {
-		uidFirst = int32(p.container.config.UidMappings[0].HostID)
-		uidSize = int32(p.container.config.UidMappings[0].Size)
-	}
-	if len(p.container.config.GidMappings) != 0 {
-		gidFirst = int32(p.container.config.GidMappings[0].HostID)
-		gidSize = int32(p.container.config.GidMappings[0].Size)
-	}
-
 	// sysvisor-runc: register the container with sysvisor-fs (must be done before
 	// prestart hooks so that sysvisor-fs is ready to respond by the time the hooks run).
-	if p.container.sysvisorFs {
-		data := &sysvisorFsGrpc.ContainerData{
-			Id:       p.container.id,
-			InitPid:  int32(childPid),
-			Hostname: p.container.config.Hostname,
-			UidFirst: uidFirst,
-			UidSize:  uidSize,
-			GidFirst: gidFirst,
-			GidSize:  gidSize,
+	sysFs := p.container.sysFs
+	if sysFs.Enabled() {
+		c := p.container
+		info := &sysvisor.FsRegInfo{
+			Id:       c.id,
+			Hostname: c.config.Hostname,
+			Pid:      childPid,
+			Uid:      c.config.UidMappings[0].HostID,
+			Gid:      c.config.GidMappings[0].HostID,
+			IdSize:   c.config.UidMappings[0].Size,
 		}
-		if err := sysvisorFsGrpc.SendContainerRegistration(data); err != nil {
+		if err := sysFs.Register(info); err != nil {
 			return newSystemErrorWithCause(err, "registering with sysvisor-fs")
 		}
 	}
@@ -497,6 +479,7 @@ func (p *initProcess) start() error {
 		p.wait()
 		return ierr
 	}
+
 	return nil
 }
 

@@ -41,7 +41,7 @@ CONSOLE_SOCKET="$WORK_DIR/console.sock"
 
 # runc command
 RUNC="${INTEGRATION_ROOT}/../../sysvisor-runc"
-FLAGS="--no-sysvisor-mgr --no-sysvisor-fs"
+FLAGS="--no-sysvisor-mgr --no-sysvisor-fs --no-kernel-check"
 
 # Cgroup paths
 CGROUP_MEMORY_BASE_PATH=$(grep "cgroup" /proc/self/mountinfo | gawk 'toupper($NF) ~ /\<MEMORY\>/ { print $5; exit }')

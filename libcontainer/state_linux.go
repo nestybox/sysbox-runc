@@ -7,8 +7,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/nestybox/sysvisor/sysvisor-ipc/sysvisorFsGrpc"
-	"github.com/nestybox/sysvisor/sysvisor-ipc/sysvisorMgrGrpc"
 	"github.com/opencontainers/runc/libcontainer/configs"
 
 	"github.com/sirupsen/logrus"
@@ -61,24 +59,18 @@ func destroy(c *linuxContainer) error {
 	}
 	c.state = &stoppedState{c: c}
 
-	// If using sysvisor-fs, proceed to unregister this container from sysvisor-fs
-	// end. Notice that this must be done after post-stop hooks are executed.
-	if c.sysvisorFs {
-		data := &sysvisorFsGrpc.ContainerData{
-			Id: c.id,
-		}
-		if err := sysvisorFsGrpc.SendContainerUnregistration(data); err != nil {
+	// Unregister with sysvisor-fs; we do this after the post-stop hooks are executed
+	// so that sysvisor-fs is present when the the hooks run.
+	if c.sysFs.Enabled() {
+		if err := c.sysFs.Unregister(); err != nil {
 			return newSystemErrorWithCause(err, "unregistering with sysvisor-fs")
 		}
 	}
 
-	// if using sysvisor-mgr, release the container's uid and gid range
-	if c.sysvisorMgr {
-		err = sysvisorMgrGrpc.SubidFree(c.id)
-		// allow "not-found" errors because this container may not have required subid
-		// allocation in the first place
-		if err != nil && err.Error() != "not-found" {
-			return fmt.Errorf("failed to free container subuid and subgid: %v", err)
+	// release resources obtained from sysvisor-mgr
+	if c.sysMgr.Enabled() {
+		if err := c.sysMgr.RelResources(); err != nil {
+			return newSystemErrorWithCause(err, "releasing resources obtained from sysvisor-mgr")
 		}
 	}
 

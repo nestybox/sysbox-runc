@@ -22,12 +22,12 @@ import (
 	criurpc "github.com/checkpoint-restore/go-criu/rpc"
 	"github.com/cyphar/filepath-securejoin"
 	"github.com/golang/protobuf/proto"
-	"github.com/nestybox/sysvisor/sysvisor-ipc/sysvisorFsGrpc"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/intelrdt"
 	"github.com/opencontainers/runc/libcontainer/system"
 	"github.com/opencontainers/runc/libcontainer/utils"
+	"github.com/opencontainers/runc/libsysvisor/sysvisor"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink/nl"
@@ -53,8 +53,8 @@ type linuxContainer struct {
 	criuVersion          int
 	state                containerState
 	created              time.Time
-	sysvisorFs           bool
-	sysvisorMgr          bool
+	sysFs                *sysvisor.Fs
+	sysMgr               *sysvisor.Mgr
 }
 
 // State represents a running container's state
@@ -81,11 +81,11 @@ type State struct {
 	// Intel RDT "resource control" filesystem path
 	IntelRdtPath string `json:"intel_rdt_path"`
 
-	// SysvisorFs indicates if container uses sysvisor-fs services
-	SysvisorFs bool `json:"sysvisor_fs"`
+	// SysFs contains info about resources obtained from sysvisor-fs
+	SysFs sysvisor.Fs `json:"sys_fs,omitempty"`
 
-	// SysvisorMgr indicates if container uses sysvisor-mgr services
-	SysvisorMgr bool `json:"sysvisor_mgr"`
+	// SysMgr contains info about resources obtained from sysvisor-mgr
+	SysMgr sysvisor.Mgr `json:"sys_mgr,omitempty"`
 }
 
 // Container is a libcontainer container object.
@@ -356,13 +356,9 @@ func (c *linuxContainer) start(process *Process) error {
 	c.created = time.Now().UTC()
 
 	// sysvisor-runc: send the creation-timestamp to sysvisor-fs.
-	if c.sysvisorFs {
-		data := &sysvisorFsGrpc.ContainerData{
-			Id:    c.id,
-			Ctime: c.created,
-		}
-		if err := sysvisorFsGrpc.SendContainerUpdate(data); err != nil {
-			return newSystemErrorWithCause(err, "setting container creation-time with sysvisor-fs")
+	if c.sysFs.Enabled() {
+		if err := c.sysFs.SendCreationTime(c.created); err != nil {
+			return newSystemErrorWithCause(err, "sending creation timestamp to sysvisor-fs")
 		}
 	}
 
@@ -1875,9 +1871,10 @@ func (c *linuxContainer) currentState() (*State, error) {
 		IntelRdtPath:        intelRdtPath,
 		NamespacePaths:      make(map[configs.NamespaceType]string),
 		ExternalDescriptors: externalDescriptors,
-		SysvisorFs:          c.sysvisorFs,
-		SysvisorMgr:         c.sysvisorMgr,
+		SysMgr:              *c.sysMgr,
+		SysFs:               *c.sysFs,
 	}
+
 	if pid > 0 {
 		for _, ns := range c.config.Namespaces {
 			state.NamespacePaths[ns.Type] = ns.GetPath(pid)

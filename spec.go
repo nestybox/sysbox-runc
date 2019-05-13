@@ -12,6 +12,7 @@ import (
 
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libsysvisor/syscont"
+	"github.com/opencontainers/runc/libsysvisor/sysvisor"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"
@@ -95,7 +96,10 @@ rootless).
 			return err
 		}
 
-		if err := syscont.ConvertSpec(context, spec); err != nil {
+		sysMgr := sysvisor.NewMgr(!context.GlobalBool("no-sysvisor-mgr"))
+		sysFs := sysvisor.NewFs(!context.GlobalBool("no-sysvisor-fs"))
+
+		if err := syscont.ConvertSpec(context, sysMgr, sysFs, spec); err != nil {
 			return err
 		}
 

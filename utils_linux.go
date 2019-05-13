@@ -29,7 +29,7 @@ import (
 var errEmptyID = errors.New("container id cannot be empty")
 
 // loadFactory returns the configured factory instance for execing containers.
-func loadFactory(context *cli.Context) (libcontainer.Factory, error) {
+func loadFactory(context *cli.Context, sysMgr *sysvisor.Mgr, sysFs *sysvisor.Fs) (libcontainer.Factory, error) {
 	root := context.GlobalString("root")
 	abs, err := filepath.Abs(root)
 	if err != nil {
@@ -71,15 +71,12 @@ func loadFactory(context *cli.Context) (libcontainer.Factory, error) {
 		newgidmap = ""
 	}
 
-	sysvisorFs := !context.GlobalBool("no-sysvisor-fs")
-	sysvisorMgr := !context.GlobalBool("no-sysvisor-mgr")
-
 	return libcontainer.New(abs, cgroupManager, intelRdtManager,
 		libcontainer.CriuPath(context.GlobalString("criu")),
 		libcontainer.NewuidmapPath(newuidmap),
 		libcontainer.NewgidmapPath(newgidmap),
-		libcontainer.SysvisorFs(sysvisorFs),
-		libcontainer.SysvisorMgr(sysvisorMgr))
+		libcontainer.SysFs(sysFs),
+		libcontainer.SysMgr(sysMgr))
 }
 
 // getContainer returns the specified container instance by loading it from state
@@ -89,7 +86,7 @@ func getContainer(context *cli.Context) (libcontainer.Container, error) {
 	if id == "" {
 		return nil, errEmptyID
 	}
-	factory, err := loadFactory(context)
+	factory, err := loadFactory(context, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -231,7 +228,7 @@ func createPidFile(path string, process *libcontainer.Process) error {
 	return os.Rename(tmpName, path)
 }
 
-func createContainer(context *cli.Context, id string, spec *specs.Spec, shiftUids bool) (libcontainer.Container, error) {
+func createContainer(context *cli.Context, id string, spec *specs.Spec, shiftUids bool, sysMgr *sysvisor.Mgr, sysFs *sysvisor.Fs) (libcontainer.Container, error) {
 	rootlessCg, err := shouldUseRootlessCgroupManager(context)
 	if err != nil {
 		return nil, err
@@ -250,7 +247,7 @@ func createContainer(context *cli.Context, id string, spec *specs.Spec, shiftUid
 		return nil, err
 	}
 
-	factory, err := loadFactory(context)
+	factory, err := loadFactory(context, sysMgr, sysFs)
 	if err != nil {
 		return nil, err
 	}
@@ -412,7 +409,7 @@ const (
 	CT_ACT_RESTORE
 )
 
-func startContainer(context *cli.Context, spec *specs.Spec, action CtAct, criuOpts *libcontainer.CriuOpts, shiftUids bool) (int, error) {
+func startContainer(context *cli.Context, spec *specs.Spec, action CtAct, criuOpts *libcontainer.CriuOpts, shiftUids bool, sysMgr *sysvisor.Mgr, sysFs *sysvisor.Fs) (int, error) {
 
 	if shiftUids {
 		if err := sysvisor.KernelModSupported("shiftfs"); err != nil {
@@ -430,7 +427,7 @@ func startContainer(context *cli.Context, spec *specs.Spec, action CtAct, criuOp
 		notifySocket.setupSpec(context, spec)
 	}
 
-	container, err := createContainer(context, id, spec, shiftUids)
+	container, err := createContainer(context, id, spec, shiftUids, sysMgr, sysFs)
 	if err != nil {
 		return -1, err
 	}

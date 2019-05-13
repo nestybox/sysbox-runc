@@ -12,6 +12,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/intelrdt"
 	"github.com/opencontainers/runc/libcontainer/system"
+	"github.com/opencontainers/runc/libsysvisor/sysvisor"
 )
 
 type mockCgroupManager struct {
@@ -131,6 +132,8 @@ func TestGetContainerPids(t *testing.T) {
 		id:            "myid",
 		config:        &configs.Config{},
 		cgroupManager: &mockCgroupManager{allPids: []int{1, 2, 3}},
+		sysMgr:        sysvisor.NewMgr(false),
+		sysFs:         sysvisor.NewFs(false),
 	}
 	pids, err := container.Processes()
 	if err != nil {
@@ -163,6 +166,8 @@ func TestGetContainerStats(t *testing.T) {
 				MemBwSchema:   "MB:0=20;1=70",
 			},
 		},
+		sysMgr: sysvisor.NewMgr(false),
+		sysFs:  sysvisor.NewFs(false),
 	}
 	stats, err := container.Stats()
 	if err != nil {
@@ -235,6 +240,8 @@ func TestGetContainerState(t *testing.T) {
 			},
 			path: expectedIntelRdtPath,
 		},
+		sysMgr: sysvisor.NewMgr(false),
+		sysFs:  sysvisor.NewFs(false),
 	}
 	container.state = &createdState{c: container}
 	state, err := container.State()
@@ -333,6 +340,8 @@ func TestGetContainerStateAfterUpdate(t *testing.T) {
 			started: stat.StartTime,
 		},
 		cgroupManager: &mockCgroupManager{},
+		sysMgr:        sysvisor.NewMgr(false),
+		sysFs:         sysvisor.NewFs(false),
 	}
 	container.state = &createdState{c: container}
 	state, err := container.State()

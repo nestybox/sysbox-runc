@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/opencontainers/runc/libsysvisor/sysvisor"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"
 )
 
@@ -64,24 +65,42 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 		},
 	},
 	Action: func(context *cli.Context) error {
-		if err := checkArgs(context, 1, exactArgs); err != nil {
+		var (
+			err       error
+			spec      *specs.Spec
+			shiftUids bool
+			status    int
+		)
+
+		if err = checkArgs(context, 1, exactArgs); err != nil {
 			return err
 		}
-		if err := revisePidFile(context); err != nil {
+		if err = revisePidFile(context); err != nil {
 			return err
 		}
-		if err := sysvisor.CheckHostConfig(context); err != nil {
+		if err = sysvisor.CheckHostConfig(context); err != nil {
 			return err
 		}
-		spec, err := setupSpec(context)
+
+		sysMgr := sysvisor.NewMgr(!context.GlobalBool("no-sysvisor-mgr"))
+		sysFs := sysvisor.NewFs(!context.GlobalBool("no-sysvisor-fs"))
+
+		defer func() {
+			if err != nil {
+				sysFs.Unregister()
+				sysMgr.RelResources()
+			}
+		}()
+
+		spec, err = setupSpec(context, sysMgr, sysFs)
 		if err != nil {
 			return err
 		}
-		shiftUids, err := sysvisor.NeedUidShiftOnRootfs(spec)
+		shiftUids, err = sysvisor.NeedUidShiftOnRootfs(spec)
 		if err != nil {
 			return err
 		}
-		status, err := startContainer(context, spec, CT_ACT_RUN, nil, shiftUids)
+		status, err = startContainer(context, spec, CT_ACT_RUN, nil, shiftUids, sysMgr, sysFs)
 		if err == nil {
 			// exit with the container's exit status so any external supervisor is
 			// notified of the exit with the correct exit status.

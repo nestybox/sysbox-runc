@@ -132,7 +132,6 @@ func newContainerWithName(name string, config *configs.Config) (libcontainer.Con
 	if err != nil {
 		return nil, err
 	}
-
 	f, err := libcontainer.New(root, libcontainer.Cgroupfs)
 	if err != nil {
 		return nil, err
