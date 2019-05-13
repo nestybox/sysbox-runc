@@ -8,6 +8,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/system"
 	"github.com/opencontainers/runc/libsysbox/sysbox"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -94,7 +95,14 @@ using the sysbox-runc checkpoint command.`,
 		},
 	},
 	Action: func(context *cli.Context) error {
-		if err := checkArgs(context, 1, exactArgs); err != nil {
+		var (
+			err       error
+			spec      *specs.Spec
+			shiftUids bool
+			status    int
+		)
+
+		if err = checkArgs(context, 1, exactArgs); err != nil {
 			return err
 		}
 		// XXX: Currently this is untested with rootless containers.
@@ -102,19 +110,30 @@ using the sysbox-runc checkpoint command.`,
 			logrus.Warn("sysbox-runc restore is untested")
 		}
 
-		spec, err := setupSpec(context)
+		sysMgr := sysbox.NewMgr(!context.GlobalBool("no-sysbox-mgr"))
+		sysFs := sysbox.NewFs(!context.GlobalBool("no-sysbox-fs"))
+
+		defer func() {
+			if err != nil {
+				sysFs.Unregister()
+				sysMgr.RelResources()
+			}
+		}()
+
+		spec, err = setupSpec(context, sysMgr, sysFs)
 		if err != nil {
 			return err
 		}
 		options := criuOptions(context)
-		if err := setEmptyNsMask(context, options); err != nil {
+		if err = setEmptyNsMask(context, options); err != nil {
 			return err
 		}
-		shiftUids, err := sysbox.NeedUidShiftOnRootfs(spec)
+
+		shiftUids, err = sysbox.NeedUidShiftOnRootfs(spec)
 		if err != nil {
 			return err
 		}
-		status, err := startContainer(context, spec, CT_ACT_RESTORE, options, shiftUids)
+		status, err = startContainer(context, spec, CT_ACT_RESTORE, options, shiftUids, sysMgr, sysFs)
 		if err != nil {
 			return err
 		}

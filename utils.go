@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/opencontainers/runc/libsysbox/sysbox"
 	"github.com/opencontainers/runc/libsysbox/syscont"
 	"github.com/opencontainers/runtime-spec/specs-go"
 
@@ -64,7 +65,7 @@ func fatal(err error) {
 }
 
 // setupSpec performs initial setup based on the cli.Context for the container
-func setupSpec(context *cli.Context) (*specs.Spec, error) {
+func setupSpec(context *cli.Context, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs) (*specs.Spec, error) {
 	bundle := context.String("bundle")
 	if bundle != "" {
 		if err := os.Chdir(bundle); err != nil {
@@ -76,7 +77,7 @@ func setupSpec(context *cli.Context) (*specs.Spec, error) {
 		return nil, err
 	}
 
-	if err := syscont.ConvertSpec(context, spec); err != nil {
+	if err := syscont.ConvertSpec(context, sysMgr, sysFs, spec); err != nil {
 		return nil, fmt.Errorf("error in system container spec: %v", err)
 	}
 

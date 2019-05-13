@@ -12,6 +12,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/intelrdt"
 	"github.com/opencontainers/runc/libcontainer/system"
+	"github.com/opencontainers/runc/libsysbox/sysbox"
 )
 
 type mockCgroupManager struct {
@@ -159,6 +160,8 @@ func TestGetContainerPids(t *testing.T) {
 	container := &linuxContainer{
 		id:     "myid",
 		config: &configs.Config{},
+		sysMgr: sysbox.NewMgr(false),
+		sysFs:  sysbox.NewFs(false),
 		cgroupManager: &mockCgroupManager{
 			allPids: []int{1, 2, 3},
 			paths: map[string]string{
@@ -203,6 +206,8 @@ func TestGetContainerStats(t *testing.T) {
 				MemBwSchema:   "MB:0=20;1=70",
 			},
 		},
+		sysMgr: sysbox.NewMgr(false),
+		sysFs:  sysbox.NewFs(false),
 	}
 	stats, err := container.Stats()
 	if err != nil {
@@ -276,6 +281,8 @@ func TestGetContainerState(t *testing.T) {
 			},
 			path: expectedIntelRdtPath,
 		},
+		sysMgr: sysbox.NewMgr(false),
+		sysFs:  sysbox.NewFs(false),
 	}
 	container.state = &createdState{c: container}
 	state, err := container.State()
@@ -376,6 +383,8 @@ func TestGetContainerStateAfterUpdate(t *testing.T) {
 			started: stat.StartTime,
 		},
 		cgroupManager: &mockCgroupManager{},
+		sysMgr:        sysbox.NewMgr(false),
+		sysFs:         sysbox.NewFs(false),
 	}
 	container.state = &createdState{c: container}
 	state, err := container.State()

@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/nestybox/sysbox-ipc/sysboxFsGrpc"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/cgroups/fs2"
 	"github.com/opencontainers/runc/libcontainer/configs"
@@ -21,6 +20,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/logs"
 	"github.com/opencontainers/runc/libcontainer/system"
 	"github.com/opencontainers/runc/libcontainer/utils"
+	"github.com/opencontainers/runc/libsysbox/sysbox"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
@@ -398,38 +398,20 @@ func (p *initProcess) start() (retErr error) {
 		}
 	}
 
-	var (
-		uidFirst int32
-		uidSize  int32
-		gidFirst int32
-		gidSize  int32
-	)
-
-	// TODO: Enhance this logic to be capable of dealing with the entire
-	// UIDMapping/GIDMapping slices; notice that here i'm just extracting the
-	// first element.
-	if len(p.container.config.UidMappings) != 0 {
-		uidFirst = int32(p.container.config.UidMappings[0].HostID)
-		uidSize = int32(p.container.config.UidMappings[0].Size)
-	}
-	if len(p.container.config.GidMappings) != 0 {
-		gidFirst = int32(p.container.config.GidMappings[0].HostID)
-		gidSize = int32(p.container.config.GidMappings[0].Size)
-	}
-
 	// sysbox-runc: register the container with sysbox-fs (must be done before
 	// prestart hooks so that sysbox-fs is ready to respond by the time the hooks run).
-	if p.container.sysboxFs {
-		data := &sysboxFsGrpc.ContainerData{
-			Id:       p.container.id,
-			InitPid:  int32(childPid),
-			Hostname: p.container.config.Hostname,
-			UidFirst: uidFirst,
-			UidSize:  uidSize,
-			GidFirst: gidFirst,
-			GidSize:  gidSize,
+	sysFs := p.container.sysFs
+	if sysFs.Enabled() {
+		c := p.container
+		info := &sysbox.FsRegInfo{
+			Id:       c.id,
+			Hostname: c.config.Hostname,
+			Pid:      childPid,
+			Uid:      c.config.UidMappings[0].HostID,
+			Gid:      c.config.GidMappings[0].HostID,
+			IdSize:   c.config.UidMappings[0].Size,
 		}
-		if err := sysboxFsGrpc.SendContainerRegistration(data); err != nil {
+		if err := sysFs.Register(info); err != nil {
 			return newSystemErrorWithCause(err, "registering with sysbox-fs")
 		}
 	}
@@ -579,6 +561,7 @@ func (p *initProcess) start() (retErr error) {
 		p.wait()
 		return ierr
 	}
+
 	return nil
 }
 

@@ -12,7 +12,6 @@ import (
 
 	mapset "github.com/deckarep/golang-set"
 
-	"github.com/nestybox/sysbox-ipc/sysboxMgrGrpc"
 	"github.com/opencontainers/runc/libsysbox/sysbox"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
@@ -213,18 +212,18 @@ func cfgNamespaces(spec *specs.Spec) error {
 }
 
 // allocIDMappings performs uid and gid allocation for the system container
-func allocIDMappings(id string, spec *specs.Spec, noSysboxMgr bool) error {
+func allocIDMappings(id string, sysMgr *sysbox.Mgr, spec *specs.Spec) error {
 	var uid, gid uint32
 	var err error
 
-	if noSysboxMgr {
-		uid = defaultUid
-		gid = defaultGid
-	} else {
-		uid, gid, err = sysboxMgrGrpc.SubidAlloc(id, uint64(IdRangeMin))
+	if sysMgr.Enabled() {
+		uid, gid, err = sysMgr.ReqSubid(id, IdRangeMin)
 		if err != nil {
 			return fmt.Errorf("subid allocation failed: %v", err)
 		}
+	} else {
+		uid = defaultUid
+		gid = defaultGid
 	}
 
 	uidMap := specs.LinuxIDMapping{
@@ -272,9 +271,9 @@ func validateIDMappings(spec *specs.Spec) error {
 // cfgIDMappings checks if the uid/gid mappings are present and valid; if they are not
 // present, it allocates them. Note that we don't disallow mappings that map to the host
 // root UID (i.e., we always honor the ID config); some runc tests use such mappings.
-func cfgIDMappings(id string, spec *specs.Spec, noSysboxMgr bool) error {
+func cfgIDMappings(id string, sysMgr *sysbox.Mgr, spec *specs.Spec) error {
 	if len(spec.Linux.UIDMappings) == 0 && len(spec.Linux.GIDMappings) == 0 {
-		return allocIDMappings(id, spec, noSysboxMgr)
+		return allocIDMappings(id, sysMgr, spec)
 	}
 	return validateIDMappings(spec)
 }
@@ -583,6 +582,16 @@ func checkSpec(spec *specs.Spec) error {
 	return nil
 }
 
+// getSupConfig obtains supplementary config from the sysbox-mgr
+func getSupConfig(mgr *sysbox.Mgr, spec *specs.Spec) error {
+	mounts, err := mgr.ReqSupMounts()
+	if err != nil {
+		return fmt.Errorf("failed to request supplementary mounts from sysbox-mgr: %v", err)
+	}
+	spec.Mounts = append(spec.Mounts, mounts...)
+	return nil
+}
+
 // Configure the container's process spec for system containers
 func ConvertProcessSpec(p *specs.Process) error {
 	cfgCapabilities(p)
@@ -595,10 +604,7 @@ func ConvertProcessSpec(p *specs.Process) error {
 }
 
 // ConvertSpec converts the given container spec to a system container spec.
-func ConvertSpec(context *cli.Context, spec *specs.Spec) error {
-
-	noSysboxFs := context.GlobalBool("no-sysbox-fs")
-	noSysboxMgr := context.GlobalBool("no-sysbox-mgr")
+func ConvertSpec(context *cli.Context, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs, spec *specs.Spec) error {
 	id := context.Args().First()
 
 	if err := checkSpec(spec); err != nil {
@@ -613,7 +619,7 @@ func ConvertSpec(context *cli.Context, spec *specs.Spec) error {
 		return fmt.Errorf("invalid namespace config: %v", err)
 	}
 
-	if err := cfgIDMappings(id, spec, noSysboxMgr); err != nil {
+	if err := cfgIDMappings(id, sysMgr, spec); err != nil {
 		return fmt.Errorf("invalid user/group ID config: %v", err)
 	}
 
@@ -625,7 +631,7 @@ func ConvertSpec(context *cli.Context, spec *specs.Spec) error {
 		return fmt.Errorf("failed to setup /lib/module/<kernel-version> mount: %v", err)
 	}
 
-	if !noSysboxFs {
+	if sysFs.Enabled() {
 		cfgMaskedPaths(spec)
 		cfgReadonlyPaths(spec)
 		cfgSysboxFsMounts(spec)
@@ -633,6 +639,12 @@ func ConvertSpec(context *cli.Context, spec *specs.Spec) error {
 
 	if err := cfgSeccomp(spec.Linux.Seccomp); err != nil {
 		return fmt.Errorf("failed to configure seccomp: %v", err)
+	}
+
+	if sysMgr.Enabled() {
+		if err := getSupConfig(sysMgr, spec); err != nil {
+			return fmt.Errorf("failed to get supplementary config: %v", err)
+		}
 	}
 
 	// TODO: ensure /proc and /sys are mounted (if not present in the container spec)

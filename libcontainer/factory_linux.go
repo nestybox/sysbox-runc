@@ -21,6 +21,8 @@ import (
 	"github.com/opencontainers/runc/libcontainer/configs/validate"
 	"github.com/opencontainers/runc/libcontainer/intelrdt"
 	"github.com/opencontainers/runc/libcontainer/utils"
+
+	"github.com/opencontainers/runc/libsysbox/sysbox"
 	"github.com/pkg/errors"
 
 	"golang.org/x/sys/unix"
@@ -177,21 +179,20 @@ func CriuPath(criupath string) func(*LinuxFactory) error {
 	}
 }
 
-// SysboxFs returns an option func that configures a LinuxFactory to
-// return containers that use sysbox-fs for emulating parts of the
-// container's rootfs
-func SysboxFs(enable bool) func(*LinuxFactory) error {
+// SysFs returns an option func that configures a LinuxFactory to return containers that
+// use the given sysbox-fs for emulating parts of the container's rootfs.
+func SysFs(sysFs *sysbox.Fs) func(*LinuxFactory) error {
 	return func(l *LinuxFactory) error {
-		l.SysboxFs = enable
+		l.SysFs = sysFs
 		return nil
 	}
 }
 
-// SysboxMgr returns an option func that configures a LinuxFactory to
-// return containers that use sysbox-mgr services (e.g., uid/gid allocation).
-func SysboxMgr(enable bool) func(*LinuxFactory) error {
+// SysMgr returns an option func that configures a LinuxFactory to return containers that
+// use the given sysbox-mgr services.
+func SysMgr(sysMgr *sysbox.Mgr) func(*LinuxFactory) error {
 	return func(l *LinuxFactory) error {
-		l.SysboxMgr = enable
+		l.SysMgr = sysMgr
 		return nil
 	}
 }
@@ -220,6 +221,15 @@ func New(root string, options ...func(*LinuxFactory) error) (Factory, error) {
 			return nil, err
 		}
 	}
+
+	if l.SysMgr == nil {
+		l.SysMgr = sysbox.NewMgr(false)
+	}
+
+	if l.SysFs == nil {
+		l.SysFs = sysbox.NewFs(false)
+	}
+
 	return l, nil
 }
 
@@ -254,12 +264,11 @@ type LinuxFactory struct {
 	// NewIntelRdtManager returns an initialized Intel RDT manager for a single container.
 	NewIntelRdtManager func(config *configs.Config, id string, path string) intelrdt.Manager
 
-	// SysboxFs indicates if sysbox-fs is used to emulate parts of
-	// the container's rootfs (e.g., /proc)
-	SysboxFs bool
+	// SysFs is the object representing the sysbox-fs
+	SysFs *sysbox.Fs
 
-	// SysboxMgr indicates if sysbox-mgr services (e.g., uid/gid allocation) are used.
-	SysboxMgr bool
+	// SysMgr is the object representing the sysbox-mgr
+	SysMgr *sysbox.Mgr
 }
 
 func (l *LinuxFactory) Create(id string, config *configs.Config) (Container, error) {
@@ -297,9 +306,10 @@ func (l *LinuxFactory) Create(id string, config *configs.Config) (Container, err
 		newuidmapPath: l.NewuidmapPath,
 		newgidmapPath: l.NewgidmapPath,
 		cgroupManager: l.NewCgroupsManager(config.Cgroups, nil),
-		sysboxFs:      l.SysboxFs,
-		sysboxMgr:     l.SysboxMgr,
+		sysMgr:        l.SysMgr,
+		sysFs:         l.SysFs,
 	}
+
 	if intelrdt.IsCATEnabled() || intelrdt.IsMBAEnabled() {
 		c.intelRdtManager = l.NewIntelRdtManager(config, id, "")
 	}
@@ -341,9 +351,10 @@ func (l *LinuxFactory) Load(id string) (Container, error) {
 		cgroupManager:        l.NewCgroupsManager(state.Config.Cgroups, state.CgroupPaths),
 		root:                 containerRoot,
 		created:              state.Created,
-		sysboxFs:             state.SysboxFs,
-		sysboxMgr:            state.SysboxMgr,
+		sysFs:                &state.SysFs,
+		sysMgr:               &state.SysMgr,
 	}
+
 	c.state = &loadedState{c: c}
 	if err := c.refreshState(); err != nil {
 		return nil, err

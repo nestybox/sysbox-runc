@@ -7,8 +7,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/nestybox/sysbox-ipc/sysboxFsGrpc"
-	"github.com/nestybox/sysbox-ipc/sysboxMgrGrpc"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runtime-spec/specs-go"
 
@@ -63,21 +61,18 @@ func destroy(c *linuxContainer) error {
 	}
 	c.state = &stoppedState{c: c}
 
-	// If using sysbox-fs, proceed to unregister this container from sysbox-fs
-	// end. Notice that this must be done after post-stop hooks are executed.
-	if c.sysboxFs {
-		data := &sysboxFsGrpc.ContainerData{
-			Id: c.id,
-		}
-		if err := sysboxFsGrpc.SendContainerUnregistration(data); err != nil {
+	// Unregister with sysbox-fs; we do this after the post-stop hooks are executed
+	// so that sysbox-fs is present when the the hooks run.
+	if c.sysFs.Enabled() {
+		if err := c.sysFs.Unregister(); err != nil {
 			return newSystemErrorWithCause(err, "unregistering with sysbox-fs")
 		}
 	}
 
-	// if using sysbox-mgr, release the container's uid and gid range
-	if c.sysboxMgr {
-		if err := sysboxMgrGrpc.Unregister(c.id); err != nil {
-			return fmt.Errorf("failed to free container subuid and subgid: %v", err)
+	// release resources obtained from sysbox-mgr
+	if c.sysMgr.Enabled() {
+		if err := c.sysMgr.RelResources(); err != nil {
+			return newSystemErrorWithCause(err, "releasing resources obtained from sysbox-mgr")
 		}
 	}
 

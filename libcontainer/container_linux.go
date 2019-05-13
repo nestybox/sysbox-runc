@@ -20,7 +20,6 @@ import (
 	"time"
 
 	securejoin "github.com/cyphar/filepath-securejoin"
-	"github.com/nestybox/sysbox-ipc/sysboxFsGrpc"
 
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
@@ -28,6 +27,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/logs"
 	"github.com/opencontainers/runc/libcontainer/system"
 	"github.com/opencontainers/runc/libcontainer/utils"
+	"github.com/opencontainers/runc/libsysbox/sysbox"
 	"github.com/opencontainers/runtime-spec/specs-go"
 
 	"github.com/checkpoint-restore/go-criu/v4"
@@ -61,8 +61,8 @@ type linuxContainer struct {
 	criuVersion          int
 	state                containerState
 	created              time.Time
-	sysboxFs             bool
-	sysboxMgr            bool
+	sysFs                *sysbox.Fs
+	sysMgr               *sysbox.Mgr
 }
 
 // State represents a running container's state
@@ -93,11 +93,11 @@ type State struct {
 	// Intel RDT "resource control" filesystem path
 	IntelRdtPath string `json:"intel_rdt_path"`
 
-	// SysboxFs indicates if container uses sysbox-fs services
-	SysboxFs bool `json:"sysbox_fs"`
+	// SysFs contains info about resources obtained from sysbox-fs
+	SysFs sysbox.Fs `json:"sys_fs,omitempty"`
 
-	// SysboxMgr indicates if container uses sysbox-mgr services
-	SysboxMgr bool `json:"sysbox_mgr"`
+	// SysMgr contains info about resources obtained from sysbox-mgr
+	SysMgr sysbox.Mgr `json:"sys_mgr,omitempty"`
 }
 
 // Container is a libcontainer container object.
@@ -385,13 +385,9 @@ func (c *linuxContainer) start(process *Process) error {
 	c.created = time.Now().UTC()
 
 	// sysbox-runc: send the creation-timestamp to sysbox-fs.
-	if c.sysboxFs {
-		data := &sysboxFsGrpc.ContainerData{
-			Id:    c.id,
-			Ctime: c.created,
-		}
-		if err := sysboxFsGrpc.SendContainerUpdate(data); err != nil {
-			return newSystemErrorWithCause(err, "setting container creation-time with sysbox-fs")
+	if process.Init && c.sysFs.Enabled() {
+		if err := c.sysFs.SendCreationTime(c.created); err != nil {
+			return newSystemErrorWithCause(err, "sending creation timestamp to sysbox-fs")
 		}
 	}
 
@@ -1971,9 +1967,10 @@ func (c *linuxContainer) currentState() (*State, error) {
 		IntelRdtPath:        intelRdtPath,
 		NamespacePaths:      make(map[configs.NamespaceType]string),
 		ExternalDescriptors: externalDescriptors,
-		SysboxFs:            c.sysboxFs,
-		SysboxMgr:           c.sysboxMgr,
+		SysMgr:              *c.sysMgr,
+		SysFs:               *c.sysFs,
 	}
+
 	if pid > 0 {
 		for _, ns := range c.config.Namespaces {
 			state.NamespacePaths[ns.Type] = ns.GetPath(pid)
