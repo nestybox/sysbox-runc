@@ -71,8 +71,9 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 			return err
 		}
 
-		sysMgr := sysvisor.NewMgr(!context.GlobalBool("no-sysvisor-mgr"))
-		sysFs := sysvisor.NewFs(!context.GlobalBool("no-sysvisor-fs"))
+		id := context.Args().First()
+		sysMgr := sysvisor.NewMgr(id, !context.GlobalBool("no-sysvisor-mgr"))
+		sysFs := sysvisor.NewFs(id, !context.GlobalBool("no-sysvisor-fs"))
 
 		defer func() {
 			if err != nil {
@@ -81,11 +82,7 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 			}
 		}()
 
-		spec, err = setupSpec(context, sysMgr, sysFs)
-		if err != nil {
-			return err
-		}
-		shiftUids, err = sysvisor.NeedUidShiftOnRootfs(spec)
+		spec, shiftUids, err = setupSpec(context, sysMgr, sysFs)
 		if err != nil {
 			return err
 		}

@@ -211,12 +211,12 @@ func cfgNamespaces(spec *specs.Spec) error {
 }
 
 // allocIDMappings performs uid and gid allocation for the system container
-func allocIDMappings(id string, sysMgr *sysvisor.Mgr, spec *specs.Spec) error {
+func allocIDMappings(sysMgr *sysvisor.Mgr, spec *specs.Spec) error {
 	var uid, gid uint32
 	var err error
 
 	if sysMgr.Enabled() {
-		uid, gid, err = sysMgr.ReqSubid(id, IdRangeMin)
+		uid, gid, err = sysMgr.ReqSubid(IdRangeMin)
 		if err != nil {
 			return fmt.Errorf("subid allocation failed: %v", err)
 		}
@@ -270,9 +270,9 @@ func validateIDMappings(spec *specs.Spec) error {
 // cfgIDMappings checks if the uid/gid mappings are present and valid; if they are not
 // present, it allocates them. Note that we don't disallow mappings that map to the host
 // root UID (i.e., we always honor the ID config); some runc tests use such mappings.
-func cfgIDMappings(id string, sysMgr *sysvisor.Mgr, spec *specs.Spec) error {
+func cfgIDMappings(sysMgr *sysvisor.Mgr, spec *specs.Spec) error {
 	if len(spec.Linux.UIDMappings) == 0 && len(spec.Linux.GIDMappings) == 0 {
-		return allocIDMappings(id, sysMgr, spec)
+		return allocIDMappings(sysMgr, spec)
 	}
 	return validateIDMappings(spec)
 }
@@ -547,7 +547,6 @@ func checkRootFilesys(rootPath string) error {
 	if err := syscall.Statfs(rootPath, &stat); err != nil {
 		fmt.Errorf("failed to find filesystem info for container root path at %s", rootPath)
 	}
-
 	for _, magic := range SupportedRootFs {
 		if stat.Type == magic {
 			return nil
@@ -581,9 +580,59 @@ func checkSpec(spec *specs.Spec) error {
 	return nil
 }
 
-// getSupConfig obtains supplementary config from the sysvisor-mgr
-func getSupConfig(mgr *sysvisor.Mgr, spec *specs.Spec) error {
-	mounts, err := mgr.ReqSupMounts()
+// needUidShiftOnRootfs checks if uid/gid shifting on the container's rootfs is required to
+// run the system container.
+func needUidShiftOnRootfs(spec *specs.Spec) (bool, error) {
+	var hostUidMap, hostGidMap uint32
+
+	// the uid map is assumed to be present
+	for _, mapping := range spec.Linux.UIDMappings {
+		if mapping.ContainerID == 0 {
+			hostUidMap = mapping.HostID
+		}
+	}
+
+	// the gid map is assumed to be present
+	for _, mapping := range spec.Linux.GIDMappings {
+		if mapping.ContainerID == 0 {
+			hostGidMap = mapping.HostID
+		}
+	}
+
+	// find the rootfs owner
+	rootfs := spec.Root.Path
+
+	fi, err := os.Stat(rootfs)
+	if err != nil {
+		return false, err
+	}
+
+	st, ok := fi.Sys().(*syscall.Stat_t)
+	if !ok {
+		return false, fmt.Errorf("failed to convert to syscall.Stat_t")
+	}
+
+	rootfsUid := st.Uid
+	rootfsGid := st.Gid
+
+	// use shifting when the rootfs is owned by true root, the containers uid/gid root
+	// mapping don't match the container's rootfs owner, and the host ID for the uid and
+	// gid mappings is the same.
+	if rootfsUid == 0 && rootfsGid == 0 &&
+		hostUidMap != rootfsUid && hostGidMap != rootfsGid &&
+		hostUidMap == hostGidMap {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+// getSupConfig obtains supplementary config from the sysvisor-mgr for the container with the given id
+func getSupConfig(mgr *sysvisor.Mgr, spec *specs.Spec, shiftUids bool) error {
+	uid := spec.Linux.UIDMappings[0].HostID
+	gid := spec.Linux.GIDMappings[0].HostID
+
+	mounts, err := mgr.ReqSupMounts(spec.Root.Path, uid, gid, shiftUids)
 	if err != nil {
 		return fmt.Errorf("failed to request supplementary mounts from sysvisor-mgr: %v", err)
 	}
@@ -603,31 +652,30 @@ func ConvertProcessSpec(p *specs.Process) error {
 }
 
 // ConvertSpec converts the given container spec to a system container spec.
-func ConvertSpec(context *cli.Context, sysMgr *sysvisor.Mgr, sysFs *sysvisor.Fs, spec *specs.Spec) error {
-	id := context.Args().First()
+func ConvertSpec(context *cli.Context, sysMgr *sysvisor.Mgr, sysFs *sysvisor.Fs, spec *specs.Spec) (bool, error) {
 
 	if err := checkSpec(spec); err != nil {
-		return fmt.Errorf("invalid or unsupported system container spec: %v", err)
+		return false, fmt.Errorf("invalid or unsupported system container spec: %v", err)
 	}
 
 	if err := ConvertProcessSpec(spec.Process); err != nil {
-		return fmt.Errorf("failed to configure process spec: %v", err)
+		return false, fmt.Errorf("failed to configure process spec: %v", err)
 	}
 
 	if err := cfgNamespaces(spec); err != nil {
-		return fmt.Errorf("invalid namespace config: %v", err)
+		return false, fmt.Errorf("invalid namespace config: %v", err)
 	}
 
-	if err := cfgIDMappings(id, sysMgr, spec); err != nil {
-		return fmt.Errorf("invalid user/group ID config: %v", err)
+	if err := cfgIDMappings(sysMgr, spec); err != nil {
+		return false, fmt.Errorf("invalid user/group ID config: %v", err)
 	}
 
 	if err := cfgCgroups(spec); err != nil {
-		return fmt.Errorf("failed to configure cgroup mounts: %v", err)
+		return false, fmt.Errorf("failed to configure cgroup mounts: %v", err)
 	}
 
 	if err := cfgLibModMount(spec, true); err != nil {
-		return fmt.Errorf("failed to setup /lib/module/<kernel-version> mount: %v", err)
+		return false, fmt.Errorf("failed to setup /lib/module/<kernel-version> mount: %v", err)
 	}
 
 	if sysFs.Enabled() {
@@ -637,12 +685,19 @@ func ConvertSpec(context *cli.Context, sysMgr *sysvisor.Mgr, sysFs *sysvisor.Fs,
 	}
 
 	if err := cfgSeccomp(spec.Linux.Seccomp); err != nil {
-		return fmt.Errorf("failed to configure seccomp: %v", err)
+		return false, fmt.Errorf("failed to configure seccomp: %v", err)
 	}
 
+	// Must be done after cfgIDMappings()
+	shiftUids, err := needUidShiftOnRootfs(spec)
+	if err != nil {
+		return false, fmt.Errorf("error while checking for uid-shifting need: %v", err)
+	}
+
+	// Must be done after needUidShiftOnRootfs()
 	if sysMgr.Enabled() {
-		if err := getSupConfig(sysMgr, spec); err != nil {
-			return fmt.Errorf("failed to get supplementary config: %v", err)
+		if err := getSupConfig(sysMgr, spec, shiftUids); err != nil {
+			return false, fmt.Errorf("failed to get supplementary config: %v", err)
 		}
 	}
 
@@ -650,5 +705,5 @@ func ConvertSpec(context *cli.Context, sysMgr *sysvisor.Mgr, sysFs *sysvisor.Fs,
 
 	// TODO: ensure /dev is mounted
 
-	return nil
+	return shiftUids, nil
 }

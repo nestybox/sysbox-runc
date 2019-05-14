@@ -347,7 +347,6 @@ func (p *initProcess) start() error {
 	if sysFs.Enabled() {
 		c := p.container
 		info := &sysvisor.FsRegInfo{
-			Id:       c.id,
 			Hostname: c.config.Hostname,
 			Pid:      childPid,
 			Uid:      c.config.UidMappings[0].HostID,

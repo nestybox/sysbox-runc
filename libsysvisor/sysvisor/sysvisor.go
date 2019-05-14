@@ -8,9 +8,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-	"syscall"
 
-	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"
 	"golang.org/x/sys/unix"
 )
@@ -132,53 +130,6 @@ func CheckHostConfig(context *cli.Context) error {
 	// TODO: check for fuse module presence (needed by sysvisor-fs)
 
 	return nil
-}
-
-// NeedUidShiftOnRootfs checks if uid/gid shifting on the container's rootfs is required to
-// run the system container.
-func NeedUidShiftOnRootfs(spec *specs.Spec) (bool, error) {
-	var hostUidMap, hostGidMap uint32
-
-	// the uid map is assumed to be present
-	for _, mapping := range spec.Linux.UIDMappings {
-		if mapping.ContainerID == 0 {
-			hostUidMap = mapping.HostID
-		}
-	}
-
-	// the gid map is assumed to be present
-	for _, mapping := range spec.Linux.GIDMappings {
-		if mapping.ContainerID == 0 {
-			hostGidMap = mapping.HostID
-		}
-	}
-
-	// find the rootfs owner
-	rootfs := spec.Root.Path
-
-	fi, err := os.Stat(rootfs)
-	if err != nil {
-		return false, err
-	}
-
-	st, ok := fi.Sys().(*syscall.Stat_t)
-	if !ok {
-		return false, fmt.Errorf("failed to convert to syscall.Stat_t")
-	}
-
-	rootfsUid := st.Uid
-	rootfsGid := st.Gid
-
-	// use shifting when the rootfs is owned by true root, the containers uid/gid root
-	// mapping don't match the container's rootfs owner, and the host ID for the uid and
-	// gid mappings is the same.
-	if rootfsUid == 0 && rootfsGid == 0 &&
-		hostUidMap != rootfsUid && hostGidMap != rootfsGid &&
-		hostUidMap == hostGidMap {
-		return true, nil
-	}
-
-	return false, nil
 }
 
 // KernelModSupported returns nil if the given module is loaded in the kernel.

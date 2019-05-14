@@ -96,10 +96,10 @@ rootless).
 			return err
 		}
 
-		sysMgr := sysvisor.NewMgr(!context.GlobalBool("no-sysvisor-mgr"))
-		sysFs := sysvisor.NewFs(!context.GlobalBool("no-sysvisor-fs"))
+		sysMgr := sysvisor.NewMgr("", false)
+		sysFs := sysvisor.NewFs("", false)
 
-		if err := syscont.ConvertSpec(context, sysMgr, sysFs, spec); err != nil {
+		if _, err := syscont.ConvertSpec(context, sysMgr, sysFs, spec); err != nil {
 			return err
 		}
 

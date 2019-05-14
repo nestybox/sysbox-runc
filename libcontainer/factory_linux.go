@@ -172,11 +172,11 @@ func New(root string, options ...func(*LinuxFactory) error) (Factory, error) {
 	}
 
 	if l.SysMgr == nil {
-		l.SysMgr = sysvisor.NewMgr(false)
+		l.SysMgr = sysvisor.NewMgr("", false)
 	}
 
 	if l.SysFs == nil {
-		l.SysFs = sysvisor.NewFs(false)
+		l.SysFs = sysvisor.NewFs("", false)
 	}
 
 	return l, nil
