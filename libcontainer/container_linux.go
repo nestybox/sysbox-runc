@@ -356,7 +356,7 @@ func (c *linuxContainer) start(process *Process) error {
 	c.created = time.Now().UTC()
 
 	// sysvisor-runc: send the creation-timestamp to sysvisor-fs.
-	if c.sysFs.Enabled() {
+	if process.Init && c.sysFs.Enabled() {
 		if err := c.sysFs.SendCreationTime(c.created); err != nil {
 			return newSystemErrorWithCause(err, "sending creation timestamp to sysvisor-fs")
 		}
