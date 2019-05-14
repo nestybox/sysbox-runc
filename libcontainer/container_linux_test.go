@@ -160,8 +160,8 @@ func TestGetContainerPids(t *testing.T) {
 	container := &linuxContainer{
 		id:     "myid",
 		config: &configs.Config{},
-		sysMgr: sysbox.NewMgr(false),
-		sysFs:  sysbox.NewFs(false),
+		sysMgr: sysbox.NewMgr("myid", false),
+		sysFs:  sysbox.NewFs("myid", false),
 		cgroupManager: &mockCgroupManager{
 			allPids: []int{1, 2, 3},
 			paths: map[string]string{
@@ -206,8 +206,8 @@ func TestGetContainerStats(t *testing.T) {
 				MemBwSchema:   "MB:0=20;1=70",
 			},
 		},
-		sysMgr: sysbox.NewMgr(false),
-		sysFs:  sysbox.NewFs(false),
+		sysMgr: sysbox.NewMgr("myid", false),
+		sysFs:  sysbox.NewFs("myid", false),
 	}
 	stats, err := container.Stats()
 	if err != nil {
@@ -281,8 +281,8 @@ func TestGetContainerState(t *testing.T) {
 			},
 			path: expectedIntelRdtPath,
 		},
-		sysMgr: sysbox.NewMgr(false),
-		sysFs:  sysbox.NewFs(false),
+		sysMgr: sysbox.NewMgr("myid", false),
+		sysFs:  sysbox.NewFs("myid", false),
 	}
 	container.state = &createdState{c: container}
 	state, err := container.State()
@@ -383,8 +383,8 @@ func TestGetContainerStateAfterUpdate(t *testing.T) {
 			started: stat.StartTime,
 		},
 		cgroupManager: &mockCgroupManager{},
-		sysMgr:        sysbox.NewMgr(false),
-		sysFs:         sysbox.NewFs(false),
+		sysMgr:        sysbox.NewMgr("myid", false),
+		sysFs:         sysbox.NewFs("myid", false),
 	}
 	container.state = &createdState{c: container}
 	state, err := container.State()

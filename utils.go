@@ -65,23 +65,24 @@ func fatal(err error) {
 }
 
 // setupSpec performs initial setup based on the cli.Context for the container
-func setupSpec(context *cli.Context, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs) (*specs.Spec, error) {
+func setupSpec(context *cli.Context, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs) (*specs.Spec, bool, error) {
 	bundle := context.String("bundle")
 	if bundle != "" {
 		if err := os.Chdir(bundle); err != nil {
-			return nil, err
+			return nil, false, err
 		}
 	}
 	spec, err := loadSpec(specConfig)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
-	if err := syscont.ConvertSpec(context, sysMgr, sysFs, spec); err != nil {
-		return nil, fmt.Errorf("error in system container spec: %v", err)
+	shiftUids, err := syscont.ConvertSpec(context, sysMgr, sysFs, spec)
+	if err != nil {
+		return nil, false, fmt.Errorf("error in system container spec: %v", err)
 	}
 
-	return spec, nil
+	return spec, shiftUids, nil
 }
 
 func revisePidFile(context *cli.Context) error {

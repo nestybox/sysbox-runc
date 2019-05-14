@@ -223,11 +223,11 @@ func New(root string, options ...func(*LinuxFactory) error) (Factory, error) {
 	}
 
 	if l.SysMgr == nil {
-		l.SysMgr = sysbox.NewMgr(false)
+		l.SysMgr = sysbox.NewMgr("", false)
 	}
 
 	if l.SysFs == nil {
-		l.SysFs = sysbox.NewFs(false)
+		l.SysFs = sysbox.NewFs("", false)
 	}
 
 	return l, nil

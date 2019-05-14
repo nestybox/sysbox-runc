@@ -71,8 +71,9 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 			return err
 		}
 
-		sysMgr := sysbox.NewMgr(!context.GlobalBool("no-sysbox-mgr"))
-		sysFs := sysbox.NewFs(!context.GlobalBool("no-sysbox-fs"))
+		id := context.Args().First()
+		sysMgr := sysbox.NewMgr(id, !context.GlobalBool("no-sysbox-mgr"))
+		sysFs := sysbox.NewFs(id, !context.GlobalBool("no-sysbox-fs"))
 
 		defer func() {
 			if err != nil {
@@ -81,11 +82,7 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 			}
 		}()
 
-		spec, err = setupSpec(context, sysMgr, sysFs)
-		if err != nil {
-			return err
-		}
-		shiftUids, err = sysbox.NeedUidShiftOnRootfs(spec)
+		spec, shiftUids, err = setupSpec(context, sysMgr, sysFs)
 		if err != nil {
 			return err
 		}

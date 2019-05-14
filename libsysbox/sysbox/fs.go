@@ -9,7 +9,6 @@ import (
 
 // FsRegInfo contains info about a container registered with sysbox-fs
 type FsRegInfo struct {
-	Id       string
 	Hostname string
 	Pid      int
 	Uid      int
@@ -17,15 +16,18 @@ type FsRegInfo struct {
 	IdSize   int
 }
 
-// Fs represents the sysbox-fs within sysbox-runc
+// Fs is an object that encapsulates interactions with the sysbox-fs when creating or
+// destroying a container
 type Fs struct {
 	Active bool
-	Id     string
+	Id     string // container-id
+	Reg    bool   // indicates if container was registered with sysbox-mgr
 }
 
-func NewFs(enable bool) *Fs {
+func NewFs(id string, enable bool) *Fs {
 	return &Fs{
 		Active: enable,
+		Id:     id,
 	}
 }
 
@@ -33,13 +35,13 @@ func (fs *Fs) Enabled() bool {
 	return fs.Active
 }
 
-// Registers the given container info with with sysbox-fs
+// Registers container info with with sysbox-fs
 func (fs *Fs) Register(info *FsRegInfo) error {
-	if fs.Id != "" {
+	if fs.Reg {
 		return fmt.Errorf("container %v already registered", fs.Id)
 	}
 	data := &sysboxFsGrpc.ContainerData{
-		Id:       info.Id,
+		Id:       fs.Id,
 		InitPid:  int32(info.Pid),
 		Hostname: info.Hostname,
 		UidFirst: int32(info.Uid),
@@ -50,14 +52,14 @@ func (fs *Fs) Register(info *FsRegInfo) error {
 	if err := sysboxFsGrpc.SendContainerRegistration(data); err != nil {
 		return err
 	}
-	fs.Id = info.Id
+	fs.Reg = true
 	return nil
 }
 
 // Sends container creation time to sysbox-fs
 func (fs *Fs) SendCreationTime(t time.Time) error {
-	if fs.Id == "" {
-		return fmt.Errorf("no container id found")
+	if !fs.Reg {
+		return fmt.Errorf("must register container %v before", fs.Id)
 	}
 	data := &sysboxFsGrpc.ContainerData{
 		Id:    fs.Id,
@@ -69,16 +71,16 @@ func (fs *Fs) SendCreationTime(t time.Time) error {
 	return nil
 }
 
-// Unregisters the given container with with sysbox-fs
+// Unregisters the container with with sysbox-fs
 func (fs *Fs) Unregister() error {
-	if fs.Id != "" {
+	if fs.Reg {
 		data := &sysboxFsGrpc.ContainerData{
 			Id: fs.Id,
 		}
 		if err := sysboxFsGrpc.SendContainerUnregistration(data); err != nil {
 			return err
 		}
-		fs.Id = ""
+		fs.Reg = false
 	}
 	return nil
 }

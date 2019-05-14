@@ -404,7 +404,6 @@ func (p *initProcess) start() (retErr error) {
 	if sysFs.Enabled() {
 		c := p.container
 		info := &sysbox.FsRegInfo{
-			Id:       c.id,
 			Hostname: c.config.Hostname,
 			Pid:      childPid,
 			Uid:      c.config.UidMappings[0].HostID,

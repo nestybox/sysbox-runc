@@ -95,10 +95,10 @@ rootless).
 			return err
 		}
 
-		sysMgr := sysbox.NewMgr(!context.GlobalBool("no-sysbox-mgr"))
-		sysFs := sysbox.NewFs(!context.GlobalBool("no-sysbox-fs"))
+		sysMgr := sysbox.NewMgr("", false)
+		sysFs := sysbox.NewFs("", false)
 
-		if err := syscont.ConvertSpec(context, sysMgr, sysFs, spec); err != nil {
+		if _, err := syscont.ConvertSpec(context, sysMgr, sysFs, spec); err != nil {
 			return err
 		}
 
