@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"syscall"
 
@@ -16,8 +15,6 @@ import (
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
-
-	"golang.org/x/sys/unix"
 )
 
 // UID & GID Mapping Constants
@@ -162,12 +159,6 @@ var linuxCaps = []string{
 	"CAP_WAKE_ALARM",
 	"CAP_BLOCK_SUSPEND",
 	"CAP_AUDIT_READ",
-}
-
-// SupportedRootFs is the list of supported filesystems for backing the system container's
-// root path
-var SupportedRootFs = map[string]int64{
-	"btrfs": unix.BTRFS_SUPER_MAGIC,
 }
 
 // cfgNamespaces checks that the namespace config has the minimum set
@@ -540,29 +531,6 @@ func cfgLibModMount(spec *specs.Spec, doFhsCheck bool) error {
 	return nil
 }
 
-// checkRootFilesys checks if the system container's rootfs is on a
-// filesystem supported by sysbox
-func checkRootFilesys(rootPath string) error {
-
-	var stat syscall.Statfs_t
-	if err := syscall.Statfs(rootPath, &stat); err != nil {
-		fmt.Errorf("failed to find filesystem info for container root path at %s", rootPath)
-	}
-	for _, magic := range SupportedRootFs {
-		if stat.Type == magic {
-			return nil
-		}
-	}
-
-	logrus.Debugf("system container root path is not on one of these filesystems: "+
-		"%v; running an inner docker container won't work "+
-		"unless a host volume is mounted on the system "+
-		"container's /var/lib/docker",
-		reflect.ValueOf(SupportedRootFs).MapKeys())
-
-	return nil
-}
-
 // checkSpec performs some basic checks on the system container's spec
 func checkSpec(spec *specs.Spec) error {
 
@@ -572,10 +540,6 @@ func checkSpec(spec *specs.Spec) error {
 
 	if spec.Root.Readonly {
 		return fmt.Errorf("root path must be read-write but it's set to read-only")
-	}
-
-	if err := checkRootFilesys(spec.Root.Path); err != nil {
-		return err
 	}
 
 	return nil
