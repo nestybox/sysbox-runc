@@ -12,7 +12,6 @@ import (
 
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libsysvisor/syscont"
-	"github.com/opencontainers/runc/libsysvisor/sysvisor"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"
@@ -93,13 +92,6 @@ rootless).
 
 		spec, err := syscont.Example(uid, gid, size, bundle)
 		if err != nil {
-			return err
-		}
-
-		sysMgr := sysvisor.NewMgr("", false)
-		sysFs := sysvisor.NewFs("", false)
-
-		if _, err := syscont.ConvertSpec(context, sysMgr, sysFs, spec); err != nil {
 			return err
 		}
 
