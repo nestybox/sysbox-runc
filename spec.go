@@ -95,13 +95,6 @@ rootless).
 			return err
 		}
 
-		sysMgr := sysbox.NewMgr("", false)
-		sysFs := sysbox.NewFs("", false)
-
-		if _, err := syscont.ConvertSpec(context, sysMgr, sysFs, spec); err != nil {
-			return err
-		}
-
 		if bundle != "" {
 			if err := os.Chdir(bundle); err != nil {
 				return err
