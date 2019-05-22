@@ -19,7 +19,11 @@ BUILDTAGS ?= seccomp
 COMMIT_NO := $(shell git rev-parse HEAD 2> /dev/null || true)
 COMMIT := $(if $(shell git status --porcelain --untracked-files=no),"${COMMIT_NO}-dirty","${COMMIT_NO}")
 
-SYSVISOR_PROTOBUF := github.com/nestybox/sysvisor/sysvisor-ipc
+SYSIPC := github.com/nestybox/sysvisor/sysvisor-ipc
+SYSMGR_GRPC_DIR := ../sysvisor-ipc/sysvisorMgrGrpc
+SYSMGR_GRPC_SRC := $(shell find $(SYSMGR_GRPC_DIR) 2>&1 | grep -E '.*\.(c|h|go|proto)$$')
+SYSFS_GRPC_DIR := ../sysvisor-ipc/sysvisorFsGrpc
+SYSFS_GRPC_SRC := $(shell find $(SYSFS_GRPC_DIR) 2>&1 | grep -E '.*\.(c|h|go|proto)$$')
 
 MAN_DIR := $(CURDIR)/man/man8
 MAN_PAGES = $(shell ls $(MAN_DIR)/*.8)
@@ -34,10 +38,10 @@ SHELL := $(shell command -v bash 2>/dev/null)
 
 .DEFAULT: $(RUNC_TARGET)
 
-$(RUNC_TARGET): $(SOURCES)
+$(RUNC_TARGET): $(SOURCES) $(SYSMGR_GRPC_SRC) $(SYSFS_GRPC_SRC)
 	$(GO) build -buildmode=pie $(EXTRA_FLAGS) -ldflags "-X main.gitCommit=${COMMIT} -X main.version=${VERSION} $(EXTRA_LDFLAGS)" -tags "$(BUILDTAGS)" -o $(RUNC_TARGET) .
 
-$(RUNC_DEBUG_TARGET): $(SOURCES)
+$(RUNC_DEBUG_TARGET): $(SOURCES) $(SYSMGR_GRPC_SRC) $(SYSFS_GRPC_SRC)
 	$(GO) build -buildmode=pie $(EXTRA_FLAGS) -ldflags "-X main.gitCommit=${COMMIT} -X main.version=${VERSION} $(EXTRA_LDFLAGS)" -tags "$(BUILDTAGS)" -gcflags="all=-N -l" -o $(RUNC_TARGET) .
 
 all: $(RUNC_TARGET) recvtty
@@ -47,7 +51,7 @@ recvtty: contrib/cmd/recvtty/recvtty
 contrib/cmd/recvtty/recvtty: $(SOURCES)
 	$(GO) build -buildmode=pie $(EXTRA_FLAGS) -ldflags "-X main.gitCommit=${COMMIT} -X main.version=${VERSION} $(EXTRA_LDFLAGS)" -tags "$(BUILDTAGS)" -o contrib/cmd/recvtty/recvtty ./contrib/cmd/recvtty
 
-static: $(SOURCES)
+static: $(SOURCES) $(SYSMGR_GRPC_SRC) $(SYSFS_GRPC_SRC)
 	CGO_ENABLED=1 $(GO) build $(EXTRA_FLAGS) -tags "$(BUILDTAGS) netgo osusergo static_build" -installsuffix netgo -ldflags "-w -extldflags -static -X main.gitCommit=${COMMIT} -X main.version=${VERSION} $(EXTRA_LDFLAGS)" -o $(RUNC_TARGET) .
 	CGO_ENABLED=1 $(GO) build $(EXTRA_FLAGS) -tags "$(BUILDTAGS) netgo osusergo static_build" -installsuffix netgo -ldflags "-w -extldflags -static -X main.gitCommit=${COMMIT} -X main.version=${VERSION} $(EXTRA_LDFLAGS)" -o contrib/cmd/recvtty/recvtty ./contrib/cmd/recvtty
 
@@ -75,16 +79,16 @@ localtest:
 	make localunittest localintegration localintegration-shiftuid
 
 unittest: runcimage
-	docker run ${DOCKER_RUN_PROXY} -t --privileged --rm -v $(CURDIR):/go/src/$(PROJECT) -v /lib/modules:/lib/modules:ro -v $(GOPATH)/src/$(SYSVISOR_PROTOBUF):/go/src/$(SYSVISOR_PROTOBUF):ro $(RUNC_IMAGE) make localunittest TESTFLAGS=${TESTFLAGS}
+	docker run ${DOCKER_RUN_PROXY} -t --privileged --rm -v $(CURDIR):/go/src/$(PROJECT) -v /lib/modules:/lib/modules:ro -v $(GOPATH)/src/$(SYSIPC):/go/src/$(SYSIPC):ro $(RUNC_IMAGE) make localunittest TESTFLAGS=${TESTFLAGS}
 
 localunittest: all
 	$(GO) test -timeout 3m -tags "$(BUILDTAGS)" ${TESTFLAGS} -v $(allpackages)
 
 integration: runcimage
-	docker run ${DOCKER_RUN_PROXY} -t --privileged --rm -v $(CURDIR):/go/src/$(PROJECT) -v /lib/modules:/lib/modules:ro -v $(GOPATH)/src/$(SYSVISOR_PROTOBUF):/go/src/$(SYSVISOR_PROTOBUF):ro $(RUNC_IMAGE) make localintegration TESTPATH=${TESTPATH}
+	docker run ${DOCKER_RUN_PROXY} -t --privileged --rm -v $(CURDIR):/go/src/$(PROJECT) -v /lib/modules:/lib/modules:ro -v $(GOPATH)/src/$(SYSIPC):/go/src/$(SYSIPC):ro $(RUNC_IMAGE) make localintegration TESTPATH=${TESTPATH}
 
 integration-shiftuid: runcimage
-	docker run ${DOCKER_RUN_PROXY} -t --privileged --rm -v $(CURDIR):/go/src/$(PROJECT) -v /lib/modules:/lib/modules:ro -v $(GOPATH)/src/$(SYSVISOR_PROTOBUF):/go/src/$(SYSVISOR_PROTOBUF):ro $(RUNC_IMAGE) make localintegration-shiftuid TESTPATH=${TESTPATH}
+	docker run ${DOCKER_RUN_PROXY} -t --privileged --rm -v $(CURDIR):/go/src/$(PROJECT) -v /lib/modules:/lib/modules:ro -v $(GOPATH)/src/$(SYSIPC):/go/src/$(SYSIPC):ro $(RUNC_IMAGE) make localintegration-shiftuid TESTPATH=${TESTPATH}
 
 localintegration: all
 	bats -t tests/integration${TESTPATH}
@@ -93,13 +97,13 @@ localintegration-shiftuid: all
 	SHIFT_UIDS=true bats -t tests/integration${TESTPATH}
 
 rootlessintegration: runcimage
-	docker run ${DOCKER_RUN_PROXY} -t --privileged --rm -v $(CURDIR):/go/src/$(PROJECT) -v /lib/modules:/lib/modules:ro -v $(GOPATH)/src/$(SYSVISOR_PROTOBUF):/go/src/$(SYSVISOR_PROTOBUF):ro $(RUNC_IMAGE) make localrootlessintegration
+	docker run ${DOCKER_RUN_PROXY} -t --privileged --rm -v $(CURDIR):/go/src/$(PROJECT) -v /lib/modules:/lib/modules:ro -v $(GOPATH)/src/$(SYSIPC):/go/src/$(SYSIPC):ro $(RUNC_IMAGE) make localrootlessintegration
 
 localrootlessintegration: all
 	tests/rootless.sh
 
 shell: runcimage
-	docker run ${DOCKER_RUN_PROXY} -ti --privileged --rm -v $(CURDIR):/go/src/$(PROJECT)  -v /lib/modules:/lib/modules:ro -v $(GOPATH)/src/$(SYSVISOR_PROTOBUF):/go/src/$(SYSVISOR_PROTOBUF):ro $(RUNC_IMAGE) bash
+	docker run ${DOCKER_RUN_PROXY} -ti --privileged --rm -v $(CURDIR):/go/src/$(PROJECT)  -v /lib/modules:/lib/modules:ro -v $(GOPATH)/src/$(SYSIPC):/go/src/$(SYSIPC):ro $(RUNC_IMAGE) bash
 
 install:
 	install -D -m0755 $(RUNC_TARGET) $(BINDIR)/$(RUNC_TARGET)
