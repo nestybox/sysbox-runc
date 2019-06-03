@@ -1,7 +1,7 @@
 package sysvisor
 
 import (
-	"github.com/nestybox/sysvisor/sysvisor-ipc/sysvisorMgrGrpc"
+	"github.com/nestybox/sysvisor-ipc/sysvisorMgrGrpc"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
 

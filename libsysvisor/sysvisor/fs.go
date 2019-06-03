@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/nestybox/sysvisor/sysvisor-ipc/sysvisorFsGrpc"
+	"github.com/nestybox/sysvisor-ipc/sysvisorFsGrpc"
 )
 
 // FsRegInfo contains info about a container registered with sysvisor-fs
