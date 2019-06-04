@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cyphar/filepath-securejoin"
+	securejoin "github.com/cyphar/filepath-securejoin"
 	"github.com/mrunalp/fileutils"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
@@ -967,7 +967,7 @@ func needUidShiftOnBindSrc(mount *configs.Mount, config *configs.Config) (bool, 
 		return false, nil
 	}
 
-	// If the bind source has uid:gid ownership matching the container's root, shiftfs in
+	// If the bind source has uid:gid ownership matching the container's root, shiftfs is
 	// not needed
 	var hostUid, hostGid uint32
 	for _, mapping := range config.UidMappings {
@@ -1038,8 +1038,9 @@ func mountShiftfsOnRootfs(rootfs string, pipe io.ReadWriter) error {
 // shiftfs mount must be done by true root, it requests the parent runc to do the mount.
 func mountShiftfsOnBindSources(config *configs.Config, pipe io.ReadWriter) error {
 
+	mounts := []shiftMount{}
+
 	// cleanup bind sources
-	paths := []string{}
 	for _, m := range config.Mounts {
 		if m.Device == "bind" {
 
@@ -1056,33 +1057,41 @@ func mountShiftfsOnBindSources(config *configs.Config, pipe io.ReadWriter) error
 				return newSystemErrorWithCause(err, "validating bind source")
 			}
 
-			paths = append(paths, m.Source)
+			sm := shiftMount{
+				Source:   m.Source,
+				Readonly: m.Flags&unix.MS_RDONLY == unix.MS_RDONLY,
+			}
+
+			mounts = append(mounts, sm)
 		}
 	}
 
-	if len(paths) == 0 {
+	if len(mounts) == 0 {
 		return nil
 	}
 
 	// To avoid shiftfs-on-shiftfs, if we see paths such as /x/y and /x/y/z, mount
 	// shiftfs on /x/y only (i.e., the base path)
-	sort.Slice(paths, func(i, j int) bool { return !filepath.HasPrefix(paths[i], paths[j]) })
-	basePaths := []string{paths[0]}
-	for i := 1; i < len(paths); i++ {
+	sort.Slice(mounts, func(i, j int) bool {
+		return !filepath.HasPrefix(mounts[i].Source, mounts[j].Source)
+	})
+
+	baseMounts := []shiftMount{mounts[0]}
+	for i := 1; i < len(mounts); i++ {
 		found := false
-		for _, b := range basePaths {
-			if strings.Contains(paths[i], b) {
+		for _, b := range baseMounts {
+			if strings.Contains(mounts[i].Source, b.Source) {
 				found = true
 			}
 		}
 		if !found {
-			basePaths = append(basePaths, paths[i])
+			baseMounts = append(baseMounts, mounts[i])
 		}
 	}
 
 	mountInfo := &mountReqInfo{
-		Op:    shiftBind,
-		Paths: basePaths,
+		Op:      shiftBind,
+		Shiftfs: baseMounts,
 	}
 
 	err := syncParentDoMount(mountInfo, pipe)

@@ -38,13 +38,18 @@ const (
 	bind
 )
 
+type shiftMount struct {
+	Source   string
+	Readonly bool
+}
+
 type mountReqInfo struct {
-	Op     mountReqType  `json:"type"`
-	Rootfs string        `json:"rootfs"` // container's rootfs path
-	Paths  []string      `json:"paths"`  // shiftfs mount paths
-	Mount  configs.Mount `json:"mount"`  // bind mount info
-	Label  string        `json:"label"`  // bind mount label
-	Pid    int           `json:"pid"`    // container's init pid
+	Op      mountReqType  `json:"type"`
+	Rootfs  string        `json:"rootfs"`  // container's rootfs path
+	Shiftfs []shiftMount  `json:"shiftfs"` // shiftfs mount paths
+	Mount   configs.Mount `json:"mount"`   // bind mount info
+	Label   string        `json:"label"`   // bind mount label
+	Pid     int           `json:"pid"`     // container's init pid
 }
 
 func (l *linuxStandardInit) getSessionRingParams() (string, uint32, uint32) {
