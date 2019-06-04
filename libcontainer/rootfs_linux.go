@@ -21,7 +21,6 @@ import (
 	"github.com/mrunalp/fileutils"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
-	"github.com/opencontainers/runc/libcontainer/mount"
 	"github.com/opencontainers/runc/libcontainer/system"
 	"github.com/opencontainers/runc/libcontainer/utils"
 	libcontainerUtils "github.com/opencontainers/runc/libcontainer/utils"
@@ -1014,22 +1013,6 @@ func allowShiftfsBindSource(source, rootfs string) error {
 		return fmt.Errorf("bind mount with source at %v is above the container's rootfs at %v; this is not supported when using uid-shifting", source, rootfs)
 	}
 
-	// We don't support bind sources on tmpfs, due to problems with shiftfs-on-tmpfs mounts
-	// (see github issue #123). However, we make an exception for Docker /dev/shm mounts
-	// (i.e.bind mounts from a tmpfs dir in `/var/lib/docker/containers/<container-id>/mounts/shm`
-	// to the container's `/dev/shm`) as these are commonly used by Docker and are not
-	// affected by the github issue described above because the bind source directory is
-	// known to be initially empty.
-	if !strings.Contains(source, "/var/lib/docker/") {
-		if mounted, err := mount.MountedWithFs(source, "tmpfs"); mounted || err != nil {
-			if err != nil {
-				return err
-			} else {
-				return fmt.Errorf("bind mount with source at %v is on tmpfs and requires uid-shifting; however mounting shiftfs on tmpfs is not supported", source)
-			}
-		}
-	}
-
 	return nil
 }
 
@@ -1090,15 +1073,6 @@ func effectRootfsMount() error {
 // Since the shiftfs mount must be done by true root, mountShitfsOnRootfs requests the
 // parent runc to do the mount.
 func mountShiftfsOnRootfs(rootfs string, pipe io.ReadWriter) error {
-
-	if mounted, err := mount.MountedWithFs(rootfs, "tmpfs"); mounted || err != nil {
-		if err != nil {
-			return err
-		} else {
-			return fmt.Errorf("rootfs %v is on tmpfs and requires uid-shifting; however mounting shiftfs on tmpfs is not supported", rootfs)
-		}
-	}
-
 	mountInfo := &mountReqInfo{
 		Op:     shiftRootfs,
 		Rootfs: rootfs,
