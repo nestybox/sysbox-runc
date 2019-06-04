@@ -67,9 +67,6 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 		if err = revisePidFile(context); err != nil {
 			return err
 		}
-		if err = sysvisor.CheckHostConfig(context); err != nil {
-			return err
-		}
 
 		id := context.Args().First()
 		sysMgr := sysvisor.NewMgr(id, !context.GlobalBool("no-sysvisor-mgr"))
@@ -86,6 +83,11 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 		if err != nil {
 			return err
 		}
+
+		if err = sysvisor.CheckHostConfig(context, shiftUids); err != nil {
+			return err
+		}
+
 		status, err = startContainer(context, spec, CT_ACT_CREATE, nil, shiftUids, sysMgr, sysFs)
 		if err != nil {
 			return err
