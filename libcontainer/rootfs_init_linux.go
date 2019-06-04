@@ -40,19 +40,28 @@ func (l *linuxRootfsInit) Init() error {
 
 	switch l.mountInfo.Op {
 	case shiftRootfs:
-		if err := shiftfs.Mount(l.mountInfo.Rootfs, l.mountInfo.Pid); err != nil {
+		if err := shiftfs.Mount(l.mountInfo.Rootfs, l.mountInfo.Pid, true); err != nil {
 			return err
 		}
 	case shiftBind:
-		for _, path := range l.mountInfo.Paths {
-			// If the path corresponds to a regular file, mount shiftfs on the directory that
-			// contains the file. This is safe because the container does not have access to
-			// the full directory, only the bind mounted file.
-			dir, err := getDir(path)
+		for _, m := range l.mountInfo.Shiftfs {
+
+			// If the bind mount corresponds to a regular file, mount shiftfs on the
+			// directory that contains the file. This is safe because the container does not
+			// have access to the full directory, only the bind mounted file.
+			dir, err := getDir(m.Source)
 			if err != nil {
 				return newSystemErrorWithCause(err, "finding bind source dir")
 			}
-			if err := shiftfs.Mount(dir, l.mountInfo.Pid); err != nil {
+
+			// We skip the shiftfs security check for read-only mounts, because processes in
+			// the container won't be able to write to it. But if the read-only bind mount is
+			// on a regular file and we are mounting shiftfs on the directory above it, we
+			// don't skip the check because the read-only attribute applies to the file, not
+			// on the directory.
+			skipSecCheck := m.Readonly && (dir == m.Source)
+
+			if err := shiftfs.Mount(dir, l.mountInfo.Pid, !skipSecCheck); err != nil {
 				return err
 			}
 		}
