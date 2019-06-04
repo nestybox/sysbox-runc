@@ -4,6 +4,8 @@ load helpers
 
 function setup_busybox_tmpfs() {
   mkdir -p /tmp/busyboxtest/rootfs
+  mount -t tmpfs tmpfs /tmp/busyboxtest/rootfs
+
   tar --exclude './dev/*' -C /tmp/busyboxtest/rootfs -xf "$BUSYBOX_IMAGE"
 
   # sysvisor-runc: set bundle ownership to match system
@@ -14,6 +16,12 @@ function setup_busybox_tmpfs() {
 
   cd /tmp/busyboxtest
   runc_spec
+}
+
+function cleanup_busybox_tmpfs() {
+  cd
+  umount /tmp/busyboxtest/rootfs
+  rm -rf /tmp/busyboxtest/rootfs
 }
 
 function setup() {
@@ -101,9 +109,31 @@ function teardown() {
   setup_busybox_tmpfs
 
   runc run -d --console-socket $CONSOLE_SOCKET test_bind_mount
-  if [ -z "$SHIFT_UIDS" ]; then
-      [ "$status" -eq 0 ]
-  else
-    [ "$status" -eq 1 ]
-  fi
+  [ "$status" -eq 0 ]
+
+  cleanup_busybox_tmpfs
+}
+
+@test "bind mount on tmpfs" {
+  mkdir -p /tmp/busyboxtest/test-dir
+  [ "$status" -eq 0 ]
+
+  mount -t tmpfs tmpfs /tmp/busyboxtest/test-dir
+  [ "$status" -eq 0 ]
+
+  touch /tmp/busyboxtest/test-dir/test-file
+  [ "$status" -eq 0 ]
+
+  CONFIG=$(jq '.mounts |= . + [{"source": "/tmp/busyboxtest/test-dir", "destination": "/tmp/bind", "options": ["bind"]}] | .process.args = ["ls", "/tmp/bind"]' config.json)
+  echo "${CONFIG}" >config.json
+
+  runc run test_bind_mount
+  [ "$status" -eq 0 ]
+  [[ "${lines[0]}" =~ 'test-file' ]]
+
+  umount /tmp/busyboxtest/test-dir
+  [ "$status" -eq 0 ]
+
+  rmdir /tmp/busyboxtest/test-dir
+  [ "$status" -eq 0 ]
 }
