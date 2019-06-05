@@ -3,6 +3,8 @@ github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03
 github.com/checkpoint-restore/go-criu v0.0.0-20190109184317-bdb7599cd87b h1:T4nWG1TXIxeor8mAu5bFguPJgSIGhZqv/f0z55KCrJM=
 github.com/checkpoint-restore/go-criu v0.0.0-20190109184317-bdb7599cd87b/go.mod h1:TrMrLQfeENAPYPRsJuq3jsqdlRh3lvi6trTZJG8+tho=
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
+github.com/cobaugh/osrelease v0.0.0-20181218015638-a93a0a55a249 h1:R0IDH8daQ3lODvu8YtxnIqqth5qMGCJyADoUQvmLx4o=
+github.com/cobaugh/osrelease v0.0.0-20181218015638-a93a0a55a249/go.mod h1:EHKW9yNEYSBpTKzuu7Y9oOrft/UlzH57rMIB03oev6M=
 github.com/containerd/console v0.0.0-20181022165439-0650fd9eeb50 h1:WMpHmC6AxwWb9hMqhudkqG7A/p14KiMnl6d3r1iUMjU=
 github.com/containerd/console v0.0.0-20181022165439-0650fd9eeb50/go.mod h1:Tj/on1eG8kiEhd0+fhSDzsPAFESxzBBvdyEgyryXffw=
 github.com/coreos/go-systemd v0.0.0-20190321100706-95778dfbb74e h1:Wf6HqHfScWJN9/ZjdUKyjop4mf3Qdd+1TvvltAvM3m8=
@@ -32,8 +34,6 @@ github.com/mrunalp/fileutils v0.0.0-20171103030105-7d4729fb3618 h1:7InQ7/zrOh6Sl
 github.com/mrunalp/fileutils v0.0.0-20171103030105-7d4729fb3618/go.mod h1:x8F1gnqOkIEiO4rqoeEEEqQbo7HjGMTvyoq3gej4iT0=
 github.com/nestybox/sysvisor-ipc v0.0.0-20190603003818-483605a8fbcf h1:rmrhWzpTudzow6mR4SdsBBcAy7HTtdO7Kgkeac0uWgk=
 github.com/nestybox/sysvisor-ipc v0.0.0-20190603003818-483605a8fbcf/go.mod h1:4NhxDlXOsJ06cHACpwRQ8TWD2RQB/fSqZon+v+a4AOY=
-github.com/nestybox/sysvisor-runc v0.1.2 h1:14Dj2l2K/xu3dXiNNEvi1jH6y/6We7y/hUzKzMSoagk=
-github.com/nestybox/sysvisor-runc v0.1.2/go.mod h1:SQZqOUqUdM8D5whWIasTEhIZ/Woc+OhTP92wyCIyDVc=
 github.com/opencontainers/runtime-spec v0.1.2-0.20190207185410-29686dbc5559 h1:EaIFktfRhw4G3vOL8r0kTy9TM+FeFBC0k8IC0d3Hhus=
 github.com/opencontainers/runtime-spec v0.1.2-0.20190207185410-29686dbc5559/go.mod h1:jwyrGlmzljRJv/Fgzds9SsS/C5hL+LL3ko9hs6T5lQ0=
 github.com/opencontainers/selinux v1.2.2 h1:Kx9J6eDG5/24A6DtUquGSpJQ+m2MUTahn4FtGEe8bFg=

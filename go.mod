@@ -4,6 +4,7 @@ go 1.13
 
 require (
 	github.com/checkpoint-restore/go-criu v0.0.0-20190109184317-bdb7599cd87b
+	github.com/cobaugh/osrelease v0.0.0-20181218015638-a93a0a55a249
 	github.com/containerd/console v0.0.0-20181022165439-0650fd9eeb50
 	github.com/coreos/go-systemd v0.0.0-20190321100706-95778dfbb74e
 	github.com/cyphar/filepath-securejoin v0.2.2
