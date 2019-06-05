@@ -6,9 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"strconv"
-	"syscall"
+	"strings"
 
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libsysvisor/syscont"
@@ -18,29 +19,40 @@ import (
 )
 
 var specCommand = cli.Command{
-	Name:      "spec",
-	Usage:     "create a new system container specification file",
-	ArgsUsage: "<uid> <gid> <size>",
+	Name:  "spec",
+	Usage: "create a new system container specification file",
 	Description: `The spec command creates the new system container specification file
 named "` + specConfig + `" for the bundle.
 
 The spec generated is just a starter file. Editing of the spec is required to
 achieve desired results.
 
-System containers always use the Linux user namespace and thus require user and
-group id mappings.
+The "--id-map" option allows configuration of the user and group ID
+mappings used by the system container user-namespace.
 
-Arguments uid and gid indicate the host user/group IDs to which the system
-container's root user/group are mapped. Size is the number of IDs that must be
-mapped; it must be set >= ` + strconv.FormatUint(uint64(syscont.IdRangeMin), 10) + ` for compatibility
-with Linux distros that use id 65534 as "nobody".
+ID Mappings:
 
-If the "--bundle" option is present, the uid and gid parameters must match the
-user and group owners of the bundle.
+Nestybox system containers use the Linux user namespace and thus require user
+and group ID mappings. The "--id-map" option allows configuration of these
+mappings for the generated spec.
 
-When starting a container through sysvisor-runc, sysvisor-runc needs root
-privilege. If not already running as root, you can use sudo to give
-sysvisor-runc root privilege.
+If the "--id-map" option is given, the generated spec will include them and
+sysvisor-runc will honor them when creating the container. They are expected
+to match the container's root filesystem ownership. Note that the size of the
+range is required be >= ` + strconv.FormatUint(uint64(syscont.IdRangeMin), 10) + ` (for compatibility with Linux distros
+that use ID 65534 as "nobody").
+
+If the "--id-map" option is omitted, the generated spec will not include the
+user and group ID mappings. In this case sysvisor-runc will automatically
+allocate them when the container is created. The allocation is done in such as
+way as to provide each sys container an exclusive range of uid(gid)s on the
+host, as a means to improve isolation. This feature requires that the
+container's root filesystem be owned by "root:root".
+
+Root Privilege:
+
+When starting a system container, sysvisor-runc needs root privilege. If not
+already running as root, you can use sudo to give sysvisor-runc root privilege.
 
 sysvisor-runc does not currently support running without root privilege (i.e.,
 rootless).
@@ -49,19 +61,47 @@ rootless).
 		cli.StringFlag{
 			Name:  "bundle, b",
 			Value: "",
-			Usage: "path to the root of the bundle directory (i.e., rootfs)",
+			Usage: "path to the sys container's bundle directory",
+		},
+		cli.StringFlag{
+			Name:  "id-map, m",
+			Value: "",
+			Usage: `"uid gid size" ID mappings (see description above)`,
 		},
 	},
 	Action: func(context *cli.Context) error {
-
 		var uid, gid, size uint32
 
-		if err := checkArgs(context, 3, exactArgs); err != nil {
+		idMap := context.String("id-map")
+		if idMap != "" {
+			if err := parseIDMap(idMap, &uid, &gid, &size); err != nil {
+				return err
+			}
+		}
+
+		spec, err := syscont.Example()
+		if err != nil {
 			return err
 		}
 
-		if err := getArgs(context, &uid, &gid, &size); err != nil {
-			return err
+		if idMap != "" {
+			spec.Linux.UIDMappings = []specs.LinuxIDMapping{{
+				HostID:      uid,
+				ContainerID: 0,
+				Size:        size,
+			}}
+			spec.Linux.GIDMappings = []specs.LinuxIDMapping{{
+				HostID:      gid,
+				ContainerID: 0,
+				Size:        size,
+			}}
+		}
+
+		bundle := context.String("bundle")
+		if bundle != "" {
+			if err := os.Chdir(bundle); err != nil {
+				return err
+			}
 		}
 
 		checkNoFile := func(name string) error {
@@ -73,32 +113,6 @@ rootless).
 				return err
 			}
 			return nil
-		}
-
-		bundle := context.String("bundle")
-
-		if bundle != "" {
-			fi, err := os.Stat(bundle)
-			if err != nil {
-				return err
-			}
-			if bundleId := fi.Sys().(*syscall.Stat_t).Uid; uid != bundleId {
-				return fmt.Errorf("rootfs uid %d does not match uid %d passed to this command", bundleId, uid)
-			}
-			if bundleId := fi.Sys().(*syscall.Stat_t).Gid; gid != bundleId {
-				return fmt.Errorf("rootfs gid %d does not match gid %d passed to this command", bundleId, gid)
-			}
-		}
-
-		spec, err := syscont.Example(uid, gid, size, bundle)
-		if err != nil {
-			return err
-		}
-
-		if bundle != "" {
-			if err := os.Chdir(bundle); err != nil {
-				return err
-			}
 		}
 
 		if err := checkNoFile(specConfig); err != nil {
@@ -113,25 +127,31 @@ rootless).
 	},
 }
 
-// getArgs parses and returns the uid, gid, and size command line arguments
-func getArgs(context *cli.Context, uid, gid, size *uint32) error {
+// parseIDMap parses the id-map flag and returns the uid, gid, and size
+func parseIDMap(idMap string, uid, gid, size *uint32) error {
 	var num [3]uint64
 	var err error
 
-	for i := 0; i < 3; i++ {
-		str := context.Args().Get(i)
-		num[i], err = strconv.ParseUint(str, 10, 32)
+	fields := strings.Fields(idMap)
+	if len(fields) != 3 {
+		return fmt.Errorf("id-map must be of the form \"uid gid size\"; got %v", idMap)
+	}
+
+	for i, f := range fields {
+		num[i], err = strconv.ParseUint(f, 10, 32)
 		if err != nil {
 			return err
 		}
 	}
 
-	// TODO: check validity of uid, gid, and size
-	// (must be < 2^32, must be in /etc/subuid|gid and size must match)
-
 	*uid = uint32(num[0])
 	*gid = uint32(num[1])
 	*size = uint32(num[2])
+
+	if *uid > math.MaxUint32 || *gid > math.MaxUint32 || *size < syscont.IdRangeMin {
+		return fmt.Errorf("invalid id-map \"%v\": uid and gid must be <= %v, size must be >= %v",
+			idMap, math.MaxUint32, syscont.IdRangeMin)
+	}
 
 	return nil
 }

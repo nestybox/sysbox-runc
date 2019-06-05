@@ -5,12 +5,12 @@ import (
 )
 
 // Example returns an example OCI spec file for a system container
-func Example(uid, gid, idRange uint32, bundle string) (*specs.Spec, error) {
+func Example() (*specs.Spec, error) {
 
 	return &specs.Spec{
 		Version: specs.Version,
 		Root: &specs.Root{
-			Path:     "rootfs",
+			Path: "rootfs",
 		},
 		Hostname: "syscont",
 		Process: &specs.Process{
@@ -26,14 +26,14 @@ func Example(uid, gid, idRange uint32, bundle string) (*specs.Spec, error) {
 				"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
 				"TERM=xterm",
 			},
-			Cwd: "/",
+			Cwd:             "/",
 			NoNewPrivileges: true,
 			Capabilities: &specs.LinuxCapabilities{
-				Bounding: linuxCaps,
-				Permitted: linuxCaps,
+				Bounding:    linuxCaps,
+				Permitted:   linuxCaps,
 				Inheritable: linuxCaps,
-				Ambient: linuxCaps,
-				Effective: linuxCaps,
+				Ambient:     linuxCaps,
+				Effective:   linuxCaps,
 			},
 			Rlimits: []specs.POSIXRlimit{
 				{
@@ -111,16 +111,6 @@ func Example(uid, gid, idRange uint32, bundle string) (*specs.Spec, error) {
 					Type: "cgroup",
 				},
 			},
-			UIDMappings: []specs.LinuxIDMapping{{
-				HostID:      uid,
-				ContainerID: 0,
-				Size:        idRange,
-			}},
-			GIDMappings: []specs.LinuxIDMapping{{
-				HostID:      gid,
-				ContainerID: 0,
-				Size:        idRange,
-			}},
 			MaskedPaths: []string{
 				"/proc/kcore",
 				"/proc/latency_stats",
