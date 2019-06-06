@@ -29,9 +29,6 @@ function setup() {
         "period": 1000000,
         "cpus": "0"
     },
-    "blockio": {
-        "weight": 1000
-    },
     "pids": {
         "limit": 20
     }
@@ -67,7 +64,7 @@ function check_cgroup_value() {
     [ "$status" -eq 0 ]
 
     # get the cgroup paths
-    for g in MEMORY CPUSET CPU BLKIO PIDS; do
+    for g in MEMORY CPUSET CPU PIDS; do
         base_path=$(grep "cgroup"  /proc/self/mountinfo | gawk 'toupper($NF) ~ /\<'${g}'\>/ { print $5; exit }')
         eval CGROUP_${g}="${base_path}${CGROUPS_PATH}"
     done
@@ -75,13 +72,6 @@ function check_cgroup_value() {
     CGROUP_SYSTEM_MEMORY=$(grep "cgroup"  /proc/self/mountinfo | gawk 'toupper($NF) ~ /\<'MEMORY'\>/ { print $5; exit }')
 
     # check that initial values were properly set
-
-    # XXX: DEBUG
-    cat $BUSYBOX_BUNDLE/config.json
-    echo $CGROUP_BLKIO
-    cat $CGROUP_BLKIO/blkio.weight
-
-    check_cgroup_value $CGROUP_BLKIO "blkio.weight" 1000
     check_cgroup_value $CGROUP_CPU "cpu.cfs_period_us" 1000000
     check_cgroup_value $CGROUP_CPU "cpu.cfs_quota_us" 500000
     check_cgroup_value $CGROUP_CPU "cpu.shares" 100
@@ -91,11 +81,6 @@ function check_cgroup_value() {
     check_cgroup_value $CGROUP_MEMORY "memory.limit_in_bytes" 33554432
     check_cgroup_value $CGROUP_MEMORY "memory.soft_limit_in_bytes" 25165824
     check_cgroup_value $CGROUP_PIDS "pids.max" 20
-
-    # update blkio-weight
-    runc update test_update --blkio-weight 500
-    [ "$status" -eq 0 ]
-    check_cgroup_value $CGROUP_BLKIO "blkio.weight" 500
 
     # update cpu-period
     runc update test_update --cpu-period 900000
@@ -198,16 +183,12 @@ function check_cgroup_value() {
     "period": 1000000,
     "cpus": "0"
   },
-  "blockIO": {
-    "weight": 1000
-  },
   "pids": {
     "limit": 20
   }
 }
 EOF
     [ "$status" -eq 0 ]
-    check_cgroup_value $CGROUP_BLKIO "blkio.weight" 1000
     check_cgroup_value $CGROUP_CPU "cpu.cfs_period_us" 1000000
     check_cgroup_value $CGROUP_CPU "cpu.cfs_quota_us" 500000
     check_cgroup_value $CGROUP_CPU "cpu.shares" 100
@@ -219,12 +200,11 @@ EOF
     check_cgroup_value $CGROUP_PIDS "pids.max" 20
 
     # redo all the changes at once
-    runc update test_update --blkio-weight 500 \
+    runc update test_update \
         --cpu-period 900000 --cpu-quota 600000 --cpu-share 200 --memory 67108864 \
         --memory-reservation 33554432 --kernel-memory 50331648 --kernel-memory-tcp 41943040 \
         --pids-limit 10
     [ "$status" -eq 0 ]
-    check_cgroup_value $CGROUP_BLKIO "blkio.weight" 500
     check_cgroup_value $CGROUP_CPU "cpu.cfs_period_us" 900000
     check_cgroup_value $CGROUP_CPU "cpu.cfs_quota_us" 600000
     check_cgroup_value $CGROUP_CPU "cpu.shares" 200
@@ -249,9 +229,6 @@ EOF
     "period": 1000000,
     "cpus": "0"
   },
-  "blockIO": {
-    "weight": 1000
-  },
   "pids": {
     "limit": 20
   }
@@ -262,7 +239,6 @@ EOF
 
     runc update  -r $BATS_TMPDIR/runc-cgroups-integration-test.json test_update
     [ "$status" -eq 0 ]
-    check_cgroup_value $CGROUP_BLKIO "blkio.weight" 1000
     check_cgroup_value $CGROUP_CPU "cpu.cfs_period_us" 1000000
     check_cgroup_value $CGROUP_CPU "cpu.cfs_quota_us" 500000
     check_cgroup_value $CGROUP_CPU "cpu.shares" 100
