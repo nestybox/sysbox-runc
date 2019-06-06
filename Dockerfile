@@ -30,6 +30,13 @@ RUN dpkg --add-architecture armel \
     --no-install-recommends \
     && apt-get clean
 
+# Activate golang's modules functionality and install its latest (top-of-tree) binary.
+# These instructions may be eliminated upon arrival of 1.13 release (ETA: Aug-2019).
+ENV GO111MODULE=on
+RUN go get golang.org/dl/gotip \
+    && gotip download \
+    && gotip env -w GONOSUMDB=/root/nestybox/sysvisor-runc
+
 # Add a dummy user for the rootless integration tests. While runC does
 # not require an entry in /etc/passwd to operate, one of the tests uses
 # `git clone` -- and `git clone` does not allow you to clone a
@@ -61,10 +68,10 @@ ENV ROOTFS /busybox
 RUN mkdir -p ${ROOTFS}
 
 COPY script/tmpmount /
-WORKDIR /go/src/github.com/opencontainers/runc
+WORKDIR /root/nestybox/sysvisor-runc
 ENTRYPOINT ["/tmpmount"]
 
-ADD . /go/src/github.com/opencontainers/runc
+ADD . /root/nestybox/sysvisor-runc
 
 RUN . tests/integration/multi-arch.bash \
     && curl -o- -sSL `get_busybox` | tar xfJC - ${ROOTFS}

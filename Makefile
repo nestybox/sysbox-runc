@@ -15,7 +15,7 @@ BINDIR := $(PREFIX)/sbin
 GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null)
 GIT_BRANCH_CLEAN := $(shell echo $(GIT_BRANCH) | sed -e "s/[^[:alnum:]]/-/g")
 RUNC_IMAGE := runc_dev$(if $(GIT_BRANCH_CLEAN),:$(GIT_BRANCH_CLEAN))
-PROJECT := github.com/opencontainers/runc
+PROJECT := /root/nestybox/sysvisor-runc
 BUILDTAGS ?= seccomp
 COMMIT_NO := $(shell git rev-parse HEAD 2> /dev/null || true)
 COMMIT := $(if $(shell git status --porcelain --untracked-files=no),"${COMMIT_NO}-dirty","${COMMIT_NO}")
@@ -36,6 +36,12 @@ RELEASE_DIR := $(CURDIR)/release
 VERSION := ${shell cat ./VERSION}
 
 SHELL := $(shell command -v bash 2>/dev/null)
+
+RUN_TEST_CONT := docker run ${DOCKER_RUN_PROXY} -t --privileged --rm \
+		-v $(CURDIR):$(PROJECT)                         \
+		-v /lib/modules:/lib/modules:ro                 \
+		-v $(GOPATH)/pkg/mod:/go/pkg/mod                \
+		$(RUNC_IMAGE)
 
 .DEFAULT: $(RUNC_TARGET)
 
@@ -60,7 +66,7 @@ release:
 	script/release.sh -r release/$(VERSION) -v $(VERSION)
 
 dbuild: runcimage
-	docker run ${DOCKER_RUN_PROXY} --rm -v $(CURDIR):/go/src/$(PROJECT) --privileged $(RUNC_IMAGE) make clean all
+	docker run ${DOCKER_RUN_PROXY} --rm -v $(CURDIR):$(PROJECT) --privileged $(RUNC_IMAGE) make clean all
 
 lint:
 	$(GO) vet $(allpackages)
@@ -80,16 +86,16 @@ localtest:
 	make localunittest localintegration localintegration-shiftuid
 
 unittest: runcimage
-	docker run ${DOCKER_RUN_PROXY} -t --privileged --rm -v $(CURDIR):/go/src/$(PROJECT) -v /lib/modules:/lib/modules:ro -v $(GOPATH)/src/$(SYSIPC):/go/src/$(SYSIPC):ro $(RUNC_IMAGE) make localunittest TESTFLAGS=${TESTFLAGS}
+	$(RUN_TEST_CONT) make localunittest TESTFLAGS=${TESTFLAGS}
 
 localunittest: all
 	$(GO) test -timeout 3m -tags "$(BUILDTAGS)" ${TESTFLAGS} -v $(allpackages)
 
 integration: runcimage
-	docker run ${DOCKER_RUN_PROXY} -t --privileged --rm -v $(CURDIR):/go/src/$(PROJECT) -v /lib/modules:/lib/modules:ro -v $(GOPATH)/src/$(SYSIPC):/go/src/$(SYSIPC):ro $(RUNC_IMAGE) make localintegration TESTPATH=${TESTPATH}
+	$(RUN_TEST_CONT) make localintegration TESTPATH=${TESTPATH}
 
 integration-shiftuid: runcimage
-	docker run ${DOCKER_RUN_PROXY} -t --privileged --rm -v $(CURDIR):/go/src/$(PROJECT) -v /lib/modules:/lib/modules:ro -v $(GOPATH)/src/$(SYSIPC):/go/src/$(SYSIPC):ro $(RUNC_IMAGE) make localintegration-shiftuid TESTPATH=${TESTPATH}
+	$(RUN_TEST_CONT) make localintegration-shiftuid TESTPATH=${TESTPATH}
 
 localintegration: all
 	bats -t tests/integration${TESTPATH}
@@ -98,13 +104,17 @@ localintegration-shiftuid: all
 	SHIFT_UIDS=true bats -t tests/integration${TESTPATH}
 
 rootlessintegration: runcimage
-	docker run ${DOCKER_RUN_PROXY} -t --privileged --rm -v $(CURDIR):/go/src/$(PROJECT) -v /lib/modules:/lib/modules:ro -v $(GOPATH)/src/$(SYSIPC):/go/src/$(SYSIPC):ro $(RUNC_IMAGE) make localrootlessintegration
+	$(RUN_TEST_CONT) make localrootlessintegration
 
 localrootlessintegration: all
 	tests/rootless.sh
 
 shell: runcimage
-	docker run ${DOCKER_RUN_PROXY} -ti --privileged --rm -v $(CURDIR):/go/src/$(PROJECT)  -v /lib/modules:/lib/modules:ro -v $(GOPATH)/src/$(SYSIPC):/go/src/$(SYSIPC):ro $(RUNC_IMAGE) bash
+	docker run ${DOCKER_RUN_PROXY} -ti --privileged --rm    \
+		-v $(CURDIR):$(PROJECT)                         \
+		-v /lib/modules:/lib/modules:ro                 \
+		-v $(GOPATH)/pkg/mod:/go/pkg/mod                \
+		$(RUNC_IMAGE) bash
 
 install:
 	install -D -m0755 $(RUNC_TARGET) $(BINDIR)/$(RUNC_TARGET)
@@ -142,7 +152,7 @@ listpackages:
 	@echo $(allpackages)
 
 cross: runcimage
-	docker run ${DOCKER_RUN_PROXY} -e BUILDTAGS="$(BUILDTAGS)" --rm -v $(CURDIR):/go/src/$(PROJECT) $(RUNC_IMAGE) make localcross
+	docker run ${DOCKER_RUN_PROXY} -e BUILDTAGS="$(BUILDTAGS)" --rm -v $(CURDIR):$(PROJECT) $(RUNC_IMAGE) make localcross
 
 localcross:
 	CGO_ENABLED=1 GOARCH=arm GOARM=6 CC=arm-linux-gnueabi-gcc $(GO) build -buildmode=pie $(EXTRA_FLAGS) -ldflags "-X main.gitCommit=${COMMIT} -X main.version=${VERSION} $(EXTRA_LDFLAGS)" -tags "$(BUILDTAGS)" -o runc-armel .
