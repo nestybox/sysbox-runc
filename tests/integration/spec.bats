@@ -70,6 +70,9 @@ function teardown() {
 }
 
 @test "spec validator" {
+
+  skip "needs re-work due to migration to go-modules"
+
   TESTDIR=$(pwd)
   cd "$HELLO_BUNDLE"
 
@@ -91,7 +94,7 @@ function teardown() {
   GOPATH="$GOPATH" go build src/runtime-spec/schema/validate.go
   [ -e ./validate ]
 
-  runc spec "$UID_MAP" "$GID_MAP" "$ID_MAP_SIZE"
+  runc spec --id-map "$UID_MAP $GID_MAP $ID_MAP_SIZE"
   [ -e config.json ]
 
   run ./validate src/runtime-spec/schema/config-schema.json config.json

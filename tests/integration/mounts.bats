@@ -9,9 +9,16 @@ function setup_busybox_tmpfs() {
   tar --exclude './dev/*' -C /tmp/busyboxtest/rootfs -xf "$BUSYBOX_IMAGE"
 
   # sysvisor-runc: set bundle ownership to match system
-  # container's uid/gid map, except if using uid-shifting
+  # container's uid(gid) map, except if using uid-shifting
   if [ -z "$SHIFT_UIDS" ]; then
-      chown -R "$UID_MAP":"$GID_MAP" /tmp/busyboxtest
+    chown -R "$UID_MAP":"$GID_MAP" /tmp/busyboxtest
+  fi
+
+  # sysvisor-runc: restrict path to bundle when using
+  # uid-shift, as required by sysvisor-runc's shiftfs
+  # mount security check
+  if [ -n "$SHIFT_UIDS" ]; then
+    chmod 700 /tmp/busyboxtest
   fi
 
   cd /tmp/busyboxtest
@@ -21,7 +28,7 @@ function setup_busybox_tmpfs() {
 function cleanup_busybox_tmpfs() {
   cd
   umount /tmp/busyboxtest/rootfs
-  rm -rf /tmp/busyboxtest/rootfs
+  rm -rf /tmp/busyboxtest
 }
 
 function setup() {
@@ -35,15 +42,26 @@ function teardown() {
 
 @test "bind mount" {
 
-  run touch /mnt/test-file
+  mkdir -p /mnt/test-dir
   [ "$status" -eq 0 ]
 
-  CONFIG=$(jq '.mounts |= . + [{"source": "/mnt", "destination": "/tmp/bind", "options": ["bind"]}] | .process.args = ["ls", "/tmp/bind/"]' config.json)
+  # need this to pass sysvisor-runc's shiftfs mount security check
+  if [ -n "$SHIFT_UIDS" ]; then
+    chmod 700 /mnt/test-dir
+  fi
+
+  run touch /mnt/test-dir/test-file
+  [ "$status" -eq 0 ]
+
+  CONFIG=$(jq '.mounts |= . + [{"source": "/mnt/test-dir", "destination": "/mnt/test-dir", "options": ["bind"]}] | .process.args = ["ls", "/mnt/test-dir/"]' config.json)
   echo "${CONFIG}" >config.json
 
   runc run test_bind_mount
   [ "$status" -eq 0 ]
   [[ "${lines[0]}" =~ 'test-file' ]]
+
+  rm -rf /mnt/test-dir
+  [ "$status" -eq 0 ]
 }
 
 @test "bind mount above rootfs" {
@@ -111,12 +129,20 @@ function teardown() {
   runc run -d --console-socket $CONSOLE_SOCKET test_bind_mount
   [ "$status" -eq 0 ]
 
+  runc kill test_bind_mount
+  [ "$status" -eq 0 ]
+
   cleanup_busybox_tmpfs
 }
 
 @test "bind mount on tmpfs" {
   mkdir -p /tmp/busyboxtest/test-dir
   [ "$status" -eq 0 ]
+
+  # need this to pass sysvisor-runc's shiftfs mount security check
+  if [ -n "$SHIFT_UIDS" ]; then
+    chmod 700 /tmp/busyboxtest
+  fi
 
   mount -t tmpfs tmpfs /tmp/busyboxtest/test-dir
   [ "$status" -eq 0 ]
@@ -134,6 +160,6 @@ function teardown() {
   umount /tmp/busyboxtest/test-dir
   [ "$status" -eq 0 ]
 
-  rmdir /tmp/busyboxtest/test-dir
+  rm -rf /tmp/busyboxtest
   [ "$status" -eq 0 ]
 }
