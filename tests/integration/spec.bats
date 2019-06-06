@@ -5,9 +5,9 @@ load helpers
 function setup() {
 	setup_hello
 
-        # sysbox-runc: bundle must have same uid/gid as that passed to
-        # "runc spec" (see runc_spec())
-        chown -R "$UID_MAP":"$GID_MAP" "$HELLO_BUNDLE"
+   # sysbox-runc: bundle must have same uid/gid as that passed to
+   # "runc spec" (see runc_spec())
+   chown -R "$UID_MAP":"$GID_MAP" "$HELLO_BUNDLE"
 }
 
 function teardown() {
@@ -25,6 +25,7 @@ function teardown() {
 }
 
 @test "spec validator" {
+
 	requires rootless_no_features
 
 	SPEC_VERSION=$(awk '$1 == "github.com/opencontainers/runtime-spec" {print $2}' "$BATS_TEST_DIRNAME"/../../go.mod)
@@ -37,30 +38,30 @@ function teardown() {
 	SCHEMA='runtime-spec/schema/config-schema.json'
 	[ -e "$SCHEMA" ]
 
-        runc spec "$UID_MAP" "$GID_MAP" "$ID_MAP_SIZE"
-        [ -e config.json ]
+   runc spec "$UID_MAP" "$GID_MAP" "$ID_MAP_SIZE"
+   [ -e config.json ]
 
-        go get github.com/xeipuuv/gojsonschema
-        go build runtime-spec/schema/validate.go
+   go get github.com/xeipuuv/gojsonschema
+   go build runtime-spec/schema/validate.go
 
 	./validate "$SCHEMA" config.json
 }
 
 @test "spec process validator" {
-  skip "not written yet"
-  # verify process uid=gid=0
+	skip "not written yet"
+	# verify process uid=gid=0
 }
 
 @test "spec read-only path filtering" {
-  skip "not written yet"
-  # configure sys cont spec with read-only paths on files handled by sysbox-fs
-  # launch the sys container
-  # verify that read-only paths in config are ignored
+	skip "not written yet"
+	# configure sys cont spec with read-only paths on files handled by sysbox-fs
+	# launch the sys container
+	# verify that read-only paths in config are ignored
 }
 
 @test "spec masked path filtering" {
-  skip "not written yet"
-  # configure sys cont spec with masked paths on files handled by sysbox-fs
-  # launch the sys container
-  # verify that masked paths in config are ignored
+	skip "not written yet"
+	# configure sys cont spec with masked paths on files handled by sysbox-fs
+	# launch the sys container
+	# verify that masked paths in config are ignored
 }

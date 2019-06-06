@@ -9,9 +9,16 @@ function setup_busybox_tmpfs() {
 	tar --exclude './dev/*' -C /tmp/busyboxtest/rootfs -xf "$BUSYBOX_IMAGE"
 
 	# sysbox-runc: set bundle ownership to match system
-	# container's uid/gid map, except if using uid-shifting
+	# container's uid(gid) map, except if using uid-shifting
 	if [ -z "$SHIFT_UIDS" ]; then
-      chown -R "$UID_MAP":"$GID_MAP" /tmp/busyboxtest
+		chown -R "$UID_MAP":"$GID_MAP" /tmp/busyboxtest
+	fi
+
+	# sysbox-runc: restrict path to bundle when using
+	# uid-shift, as required by sysbox-runc's shiftfs
+	# mount security check
+	if [ -n "$SHIFT_UIDS" ]; then
+		chmod 700 /tmp/busyboxtest
 	fi
 
 	cd /tmp/busyboxtest
@@ -21,7 +28,7 @@ function setup_busybox_tmpfs() {
 function cleanup_busybox_tmpfs() {
 	cd
 	umount /tmp/busyboxtest/rootfs
-	rm -rf /tmp/busyboxtest/rootfs
+	rm -rf /tmp/busyboxtest
 }
 
 function setup() {
@@ -36,15 +43,22 @@ function teardown() {
 
 @test "runc run [bind mount]" {
 
-	run touch /mnt/test-file
-	[ "$status" -eq 0 ]
+	mkdir -p /mnt/test-dir
 
-	update_config ' .mounts += [{"source": "/mnt", "destination": "/tmp/bind", "options": ["bind"]}]
-			| .process.args |= ["ls", "/tmp/bind/"]'
+	# need this to pass sysbox-runc's shiftfs mount security check
+	if [ -n "$SHIFT_UIDS" ]; then
+		chmod 700 /mnt/test-dir
+	fi
+
+	touch /mnt/test-dir/test-file
+
+	update_config ' .mounts |= . + [{"source": "/mnt/test-dir", "destination": "/mnt/test-dir", "options": ["bind"]}] | .process.args = ["ls", "/mnt/test-dir/"]'
 
 	runc run test_bind_mount
 	[ "$status" -eq 0 ]
-   [[ "${lines[0]}" =~ 'test-file' ]]
+	[[ "${lines[0]}" =~ 'test-file' ]]
+
+	rm -rf /mnt/test-dir
 }
 
 @test "runc run [ro tmpfs mount]" {
@@ -118,11 +132,20 @@ function teardown() {
 	runc run -d --console-socket $CONSOLE_SOCKET test_bind_mount
 	[ "$status" -eq 0 ]
 
+	runc kill test_bind_mount
+	[ "$status" -eq 0 ]
+
 	cleanup_busybox_tmpfs
 }
 
 @test "runc run [bind mount on tmpfs]" {
 	mkdir -p /tmp/busyboxtest/test-dir
+
+	# need this to pass sysbox-runc's shiftfs mount security check
+	if [ -n "$SHIFT_UIDS" ]; then
+		chmod 700 /tmp/busyboxtest
+	fi
+
 	mount -t tmpfs tmpfs /tmp/busyboxtest/test-dir
 	touch /tmp/busyboxtest/test-dir/test-file
 
@@ -135,6 +158,5 @@ function teardown() {
 	umount /tmp/busyboxtest/test-dir
 	[ "$status" -eq 0 ]
 
-	rmdir /tmp/busyboxtest/test-dir
-	[ "$status" -eq 0 ]
+	rm -rf /tmp/busyboxtest
 }
