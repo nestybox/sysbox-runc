@@ -115,20 +115,6 @@ func main() {
 			Value: root,
 			Usage: "root directory for storage of container state (this should be located in tmpfs)",
 		},
-		cli.StringFlag{
-			Name:  "criu",
-			Value: "criu",
-			Usage: "path to the criu binary used for checkpoint and restore",
-		},
-		cli.BoolFlag{
-			Name:  "systemd-cgroup",
-			Usage: "enable systemd cgroup support, expects cgroupsPath to be of form \"slice:prefix:name\" for e.g. \"system.slice:sysbox-runc:434234\"",
-		},
-		cli.StringFlag{
-			Name:  "rootless",
-			Value: "auto",
-			Usage: "ignore cgroup permission errors ('true', 'false', or 'auto')",
-		},
 		cli.BoolFlag{
 			Name:  "no-sysbox-fs",
 			Usage: "do not interact with sysbox-fs; meant for testing and debugging.",
@@ -143,7 +129,6 @@ func main() {
 		},
 	}
 	app.Commands = []cli.Command{
-		checkpointCommand,
 		createCommand,
 		deleteCommand,
 		eventsCommand,
@@ -153,7 +138,6 @@ func main() {
 		listCommand,
 		pauseCommand,
 		psCommand,
-		restoreCommand,
 		resumeCommand,
 		runCommand,
 		specCommand,
