@@ -15,9 +15,11 @@ load helpers
 }
 
 @test "runc command -h" {
-	runc checkpoint -h
-	[ "$status" -eq 0 ]
-	[[ ${lines[1]} =~ runc\ checkpoint+ ]]
+
+	# sysbox-runc does not yet support checkpoint/restore
+	# runc checkpoint -h
+	# [ "$status" -eq 0 ]
+	# [[ ${lines[1]} =~ runc\ checkpoint+ ]]
 
 	runc delete -h
 	[ "$status" -eq 0 ]
@@ -49,9 +51,10 @@ load helpers
 	[ "$status" -eq 0 ]
 	[[ ${lines[1]} =~ runc\ pause+ ]]
 
-	runc restore -h
-	[ "$status" -eq 0 ]
-	[[ ${lines[1]} =~ runc\ restore+ ]]
+	# # sysbox-runc does not yet support checkpoint/restore
+	# runc restore -h
+	# [ "$status" -eq 0 ]
+	# [[ ${lines[1]} =~ runc\ restore+ ]]
 
 	runc resume -h
 	[ "$status" -eq 0 ]
