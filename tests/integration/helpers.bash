@@ -40,7 +40,7 @@ CONSOLE_SOCKET="$WORK_DIR/console.sock"
 
 # runc command
 RUNC="${INTEGRATION_ROOT}/../../sysvisor-runc"
-FLAGS="--no-sysvisor-mgr --no-sysvisor-fs --no-kernel-check"
+RUNC_FLAGS="--no-sysvisor-mgr --no-sysvisor-fs --no-kernel-check"
 
 # Cgroup paths
 CGROUP_MEMORY_BASE_PATH=$(grep "cgroup" /proc/self/mountinfo | gawk 'toupper($NF) ~ /\<MEMORY\>/ { print $5; exit }')
@@ -55,7 +55,7 @@ RT_PERIOD="${CGROUP_CPU_BASE_PATH}/cpu.rt_period_us"
 # Check if we're in rootless mode.
 ROOTLESS=$(id -u)
 
-# sysvisor-runc
+# sys container uid(gid) mapping
 UID_MAP=100000
 GID_MAP=100000
 ID_MAP_SIZE=65536
@@ -72,7 +72,7 @@ function runc() {
 
 # Raw wrapper for runc.
 function __runc() {
-	$RUNC ${FLAGS} ${RUNC_FLAGS} --log /proc/self/fd/2 --root "$ROOT" "$@"
+	$RUNC ${RUNC_FLAGS} --log /proc/self/fd/2 --root "$ROOT" "$@"
 }
 
 # Wrapper for runc spec, which takes only one argument (the bundle path).
@@ -90,7 +90,7 @@ function runc_spec() {
 		args+=("--bundle" "$bundle")
 	fi
 
-        # sysvisor-runc: sys container spec requires id mappings
+        # sysvisor-runc: sys container spec takes id mappings
         $RUNC spec "${args[@]}" --id-map "$UID_MAP $GID_MAP $ID_MAP_SIZE"
 
 	# Always add additional mappings if we have idmaps.
