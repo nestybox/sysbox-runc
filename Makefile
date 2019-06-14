@@ -1,7 +1,7 @@
 .PHONY: all shell dbuild man release \
 	    localtest localunittest localintegration \
 	    test unittest integration \
-	    cross localcross
+	    cross localcross recvtty
 
 # Let's make use of go's top-of-tree binary till 1.13 comes out.
 GO := gotip
@@ -45,10 +45,10 @@ RUN_TEST_CONT := docker run ${DOCKER_RUN_PROXY} -t --privileged --rm \
 
 .DEFAULT: $(RUNC_TARGET)
 
-$(RUNC_TARGET): $(SOURCES) $(SYSMGR_GRPC_SRC) $(SYSFS_GRPC_SRC) recvtty
+$(RUNC_TARGET): $(SOURCES) $(SYSMGR_GRPC_SRC) $(SYSFS_GRPC_SRC) contrib/cmd/recvtty/recvtty
 	$(GO) build -buildmode=pie $(EXTRA_FLAGS) -ldflags "-X main.gitCommit=${COMMIT} -X main.version=${VERSION} $(EXTRA_LDFLAGS)" -tags "$(BUILDTAGS)" -o $(RUNC_TARGET) .
 
-$(RUNC_DEBUG_TARGET): $(SOURCES) $(SYSMGR_GRPC_SRC) $(SYSFS_GRPC_SRC) recvtty
+$(RUNC_DEBUG_TARGET): $(SOURCES) $(SYSMGR_GRPC_SRC) $(SYSFS_GRPC_SRC) contrib/cmd/recvtty/recvtty
 	$(GO) build -buildmode=pie $(EXTRA_FLAGS) -ldflags "-X main.gitCommit=${COMMIT} -X main.version=${VERSION} $(EXTRA_LDFLAGS)" -tags "$(BUILDTAGS)" -gcflags="all=-N -l" -o $(RUNC_TARGET) .
 
 all: $(RUNC_TARGET) recvtty
