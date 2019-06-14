@@ -15,7 +15,8 @@ BINDIR := $(PREFIX)/sbin
 GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null)
 GIT_BRANCH_CLEAN := $(shell echo $(GIT_BRANCH) | sed -e "s/[^[:alnum:]]/-/g")
 RUNC_IMAGE := runc_dev$(if $(GIT_BRANCH_CLEAN),:$(GIT_BRANCH_CLEAN))
-PROJECT := /root/nestybox/sysvisor-runc
+NBOX := /root/nestybox
+RUNC := $(NBOX)/sysvisor-runc
 BUILDTAGS ?= seccomp
 COMMIT_NO := $(shell git rev-parse HEAD 2> /dev/null || true)
 COMMIT := $(if $(shell git status --porcelain --untracked-files=no),"${COMMIT_NO}-dirty","${COMMIT_NO}")
@@ -38,9 +39,10 @@ VERSION := ${shell cat ./VERSION}
 SHELL := $(shell command -v bash 2>/dev/null)
 
 RUN_TEST_CONT := docker run ${DOCKER_RUN_PROXY} -t --privileged --rm \
-		-v $(CURDIR):$(PROJECT)                         \
-		-v /lib/modules:/lib/modules:ro                 \
-		-v $(GOPATH)/pkg/mod:/go/pkg/mod                \
+		-v $(CURDIR):$(RUNC)                                 \
+		-v $(CURDIR)/../sysvisor-ipc:$(NBOX)/sysvisor-ipc    \
+		-v /lib/modules:/lib/modules:ro                      \
+		-v $(GOPATH)/pkg/mod:/go/pkg/mod                     \
 		$(RUNC_IMAGE)
 
 .DEFAULT: $(RUNC_TARGET)
@@ -66,7 +68,7 @@ release:
 	script/release.sh -r release/$(VERSION) -v $(VERSION)
 
 dbuild: runcimage
-	docker run ${DOCKER_RUN_PROXY} --rm -v $(CURDIR):$(PROJECT) --privileged $(RUNC_IMAGE) make clean all
+	docker run ${DOCKER_RUN_PROXY} --rm -v $(CURDIR):$(RUNC) --privileged $(RUNC_IMAGE) make clean all
 
 lint:
 	$(GO) vet $(allpackages)
@@ -110,11 +112,12 @@ localrootlessintegration: all
 	tests/rootless.sh
 
 shell: runcimage
-	docker run ${DOCKER_RUN_PROXY} -ti --privileged --rm    \
-		-v $(CURDIR):$(PROJECT)                         \
-		-v /lib/modules:/lib/modules:ro                 \
-		-v $(GOPATH)/pkg/mod:/go/pkg/mod                \
-		$(RUNC_IMAGE) bash
+	docker run ${DOCKER_RUN_PROXY} -ti --privileged --rm \
+	   -v $(CURDIR):$(RUNC)                              \
+	   -v $(CURDIR)/../sysvisor-ipc:$(NBOX)/sysvisor-ipc \
+	   -v /lib/modules:/lib/modules:ro                   \
+	   -v $(GOPATH)/pkg/mod:/go/pkg/mod                  \
+	   $(RUNC_IMAGE) bash
 
 install:
 	install -D -m0755 $(RUNC_TARGET) $(BINDIR)/$(RUNC_TARGET)
@@ -152,7 +155,7 @@ listpackages:
 	@echo $(allpackages)
 
 cross: runcimage
-	docker run ${DOCKER_RUN_PROXY} -e BUILDTAGS="$(BUILDTAGS)" --rm -v $(CURDIR):$(PROJECT) $(RUNC_IMAGE) make localcross
+	docker run ${DOCKER_RUN_PROXY} -e BUILDTAGS="$(BUILDTAGS)" --rm -v $(CURDIR):$(RUNC) $(RUNC_IMAGE) make localcross
 
 localcross:
 	CGO_ENABLED=1 GOARCH=arm GOARM=6 CC=arm-linux-gnueabi-gcc $(GO) build -buildmode=pie $(EXTRA_FLAGS) -ldflags "-X main.gitCommit=${COMMIT} -X main.version=${VERSION} $(EXTRA_LDFLAGS)" -tags "$(BUILDTAGS)" -o runc-armel .
