@@ -1,4 +1,5 @@
-FROM golang:1.10-stretch
+# Note: the golang version should match that used by the sysvisor test container Dockerfile.
+FROM golang:1.12-stretch
 
 RUN dpkg --add-architecture armel \
     && dpkg --add-architecture armhf \
