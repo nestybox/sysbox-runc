@@ -59,18 +59,16 @@ func destroy(c *linuxContainer) error {
 	}
 	c.state = &stoppedState{c: c}
 
-	// Unregister with sysvisor-fs; we do this after the post-stop hooks are executed
-	// so that sysvisor-fs is present when the the hooks run.
+	// Unregister with sysvisor-fs and sysvisor-mgr
 	if c.sysFs.Enabled() {
 		if err := c.sysFs.Unregister(); err != nil {
 			return newSystemErrorWithCause(err, "unregistering with sysvisor-fs")
 		}
 	}
 
-	// release resources obtained from sysvisor-mgr
 	if c.sysMgr.Enabled() {
-		if err := c.sysMgr.RelResources(); err != nil {
-			return newSystemErrorWithCause(err, "releasing resources obtained from sysvisor-mgr")
+		if err := c.sysMgr.Unregister(); err != nil {
+			return newSystemErrorWithCause(err, "unregistering with sysvisor-mgr")
 		}
 	}
 

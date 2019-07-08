@@ -41,7 +41,7 @@ func (l *linuxRootfsInit) Init() error {
 	switch l.mountInfo.Op {
 	case shiftRootfs:
 		if err := shiftfs.Mount(l.mountInfo.Rootfs, l.mountInfo.Pid, true); err != nil {
-			return err
+			return newSystemErrorWithCause(err, "mounting shiftfs on rootfs")
 		}
 	case shiftBind:
 		for _, m := range l.mountInfo.Shiftfs {
@@ -62,7 +62,7 @@ func (l *linuxRootfsInit) Init() error {
 			skipSecCheck := m.Readonly && (dir == m.Source)
 
 			if err := shiftfs.Mount(dir, l.mountInfo.Pid, !skipSecCheck); err != nil {
-				return err
+				return newSystemErrorWithCause(err, "mounting shiftfs on bind source")
 			}
 		}
 	case bind:
