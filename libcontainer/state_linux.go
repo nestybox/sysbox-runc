@@ -61,18 +61,16 @@ func destroy(c *linuxContainer) error {
 	}
 	c.state = &stoppedState{c: c}
 
-	// Unregister with sysbox-fs; we do this after the post-stop hooks are executed
-	// so that sysbox-fs is present when the the hooks run.
+	// Unregister with sysbox-fs and sysbox-mgr
 	if c.sysFs.Enabled() {
 		if err := c.sysFs.Unregister(); err != nil {
 			return newSystemErrorWithCause(err, "unregistering with sysbox-fs")
 		}
 	}
 
-	// release resources obtained from sysbox-mgr
 	if c.sysMgr.Enabled() {
-		if err := c.sysMgr.RelResources(); err != nil {
-			return newSystemErrorWithCause(err, "releasing resources obtained from sysbox-mgr")
+		if err := c.sysMgr.Unregister(); err != nil {
+			return newSystemErrorWithCause(err, "unregistering with sysbox-mgr")
 		}
 	}
 

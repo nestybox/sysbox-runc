@@ -72,12 +72,17 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 		sysMgr := sysbox.NewMgr(id, !context.GlobalBool("no-sysbox-mgr"))
 		sysFs := sysbox.NewFs(id, !context.GlobalBool("no-sysbox-fs"))
 
-		defer func() {
-			if err != nil {
-				sysFs.Unregister()
-				sysMgr.RelResources()
+		// register with sysMgr (registration with sysFs occurs later (within libcontainer))
+		if sysMgr.Enabled() {
+			if err = sysMgr.Register(); err != nil {
+				return err
 			}
-		}()
+			defer func() {
+				if err != nil {
+					sysMgr.Unregister()
+				}
+			}()
+		}
 
 		spec, shiftUids, err = setupSpec(context, sysMgr, sysFs)
 		if err != nil {
@@ -90,6 +95,7 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 
 		status, err = startContainer(context, spec, CT_ACT_CREATE, nil, shiftUids, sysMgr, sysFs)
 		if err != nil {
+			sysFs.Unregister()
 			return err
 		}
 		// exit with the container's exit status so any external supervisor is

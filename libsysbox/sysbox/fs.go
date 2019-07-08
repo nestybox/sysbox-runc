@@ -1,3 +1,5 @@
+// Exposes functions for sysbox-runc to interact with sysbox-fs
+
 package sysbox
 
 import (
@@ -16,8 +18,6 @@ type FsRegInfo struct {
 	IdSize   int
 }
 
-// Fs is an object that encapsulates interactions with the sysbox-fs when creating or
-// destroying a container
 type Fs struct {
 	Active bool
 	Id     string // container-id
@@ -50,7 +50,7 @@ func (fs *Fs) Register(info *FsRegInfo) error {
 		GidSize:  int32(info.IdSize),
 	}
 	if err := sysboxFsGrpc.SendContainerRegistration(data); err != nil {
-		return err
+		return fmt.Errorf("failed to register with sysbox-fs: %v", err)
 	}
 	fs.Reg = true
 	return nil
@@ -66,7 +66,7 @@ func (fs *Fs) SendCreationTime(t time.Time) error {
 		Ctime: t,
 	}
 	if err := sysboxFsGrpc.SendContainerUpdate(data); err != nil {
-		return err
+		return fmt.Errorf("failed to send creation time to sysbox-fs: %v", err)
 	}
 	return nil
 }
@@ -78,7 +78,7 @@ func (fs *Fs) Unregister() error {
 			Id: fs.Id,
 		}
 		if err := sysboxFsGrpc.SendContainerUnregistration(data); err != nil {
-			return err
+			return fmt.Errorf("failed to unregister with sysbox-fs: %v", err)
 		}
 		fs.Reg = false
 	}

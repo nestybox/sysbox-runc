@@ -80,15 +80,21 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 		}
 
 		id := context.Args().First()
+
 		sysMgr := sysbox.NewMgr(id, !context.GlobalBool("no-sysbox-mgr"))
 		sysFs := sysbox.NewFs(id, !context.GlobalBool("no-sysbox-fs"))
 
-		defer func() {
-			if err != nil {
-				sysFs.Unregister()
-				sysMgr.RelResources()
+		// register with sysMgr (registration with sysFs occurs later (within libcontainer))
+		if sysMgr.Enabled() {
+			if err = sysMgr.Register(); err != nil {
+				return err
 			}
-		}()
+			defer func() {
+				if err != nil {
+					sysMgr.Unregister()
+				}
+			}()
+		}
 
 		spec, shiftUids, err = setupSpec(context, sysMgr, sysFs)
 		if err != nil {
@@ -105,6 +111,8 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 			// notified of the exit with the correct exit status.
 			os.Exit(status)
 		}
+
+		sysFs.Unregister()
 		return err
 	},
 }
