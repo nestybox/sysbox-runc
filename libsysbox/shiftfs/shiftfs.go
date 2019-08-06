@@ -38,7 +38,7 @@ func securityCheck(path string) error {
 // The path must be a directory. Param 'secCheck' indicates if a security check should be performed.
 func Mount(path string, pid int, secCheck bool) error {
 
-	if mounted, err := mount.MountedWithFs(path, "shiftfs"); mounted || err != nil {
+	if mounted, err := mount.MountedWithFs(path, "nbox_shiftfs"); mounted || err != nil {
 		return err
 	}
 
@@ -49,7 +49,7 @@ func Mount(path string, pid int, secCheck bool) error {
 	}
 
 	opt := fmt.Sprintf("userns=/proc/%d/ns/user", pid)
-	if err := unix.Mount(path, path, "shiftfs", 0, opt); err != nil {
+	if err := unix.Mount(path, path, "nbox_shiftfs", 0, opt); err != nil {
 		return fmt.Errorf("failed to mount shiftfs for pid %d on %s: %v", pid, path, err)
 	}
 
@@ -60,7 +60,7 @@ func Mount(path string, pid int, secCheck bool) error {
 // The path must be a directory.
 func Unmount(path string) error {
 
-	if mounted, err := mount.MountedWithFs(path, "shiftfs"); !mounted || err != nil {
+	if mounted, err := mount.MountedWithFs(path, "nbox_shiftfs"); !mounted || err != nil {
 		return err
 	}
 
