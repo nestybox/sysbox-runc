@@ -196,6 +196,22 @@ func setupIO(process *libcontainer.Process, rootuid, rootgid int, createTTY, det
 	// when runc will detach the caller provides the stdio to runc via runc's 0,1,2
 	// and the container's process inherits runc's stdio.
 	if detach {
+
+		// sysvisor-runc: ensure the ownership of stdio matches the container init process uid(gid).
+		// This is necessary because sysvisor-runc allocates the container's uid(gid) when using
+		// uid-shifting. The higher layer (e.g., containerd-shim) does not know about this and
+		// therefore will not set the correct permissions on stdio.
+
+		if err := unix.Fchown(int(os.Stdin.Fd()), rootuid, rootgid); err != nil {
+			return &tty{}, fmt.Errorf("failed to chown stdout")
+		}
+		if err := unix.Fchown(int(os.Stdout.Fd()), rootuid, rootgid); err != nil {
+			return &tty{}, fmt.Errorf("failed to chown stdout")
+		}
+		if err := unix.Fchown(int(os.Stderr.Fd()), rootuid, rootgid); err != nil {
+			return &tty{}, fmt.Errorf("failed to chown stdout")
+		}
+
 		if err := inheritStdio(process); err != nil {
 			return nil, err
 		}
