@@ -14,20 +14,24 @@ RUNC_IMAGE := runc_dev$(if $(GIT_BRANCH_CLEAN),:$(GIT_BRANCH_CLEAN))
 PROJECT := nestybox/sysbox-runc
 BUILDTAGS ?= seccomp selinux apparmor
 COMMIT_NO := $(shell git rev-parse HEAD 2> /dev/null || true)
+
 COMMIT ?= $(if $(shell git status --porcelain --untracked-files=no),"$(COMMIT_NO)-dirty","$(COMMIT_NO)")
 VERSION := $(shell cat ./VERSION)
+
+LDFLAGS := '-X main.version=${VERSION} -X main.commitId=${COMMIT_ID} \
+		-X "main.builtAt=${BUILD_AT}" -X main.builtBy=${BUILD_BY}'
 
 ifeq ($(shell $(GO) env GOOS),linux)
 	ifeq (,$(filter $(shell $(GO) env GOARCH),mips mipsle mips64 mips64le ppc64))
 		GO_BUILDMODE := "-buildmode=pie"
 	endif
 endif
-GO_BUILD := $(GO) build $(MOD_VENDOR) $(GO_BUILDMODE) $(EXTRA_FLAGS) -tags "$(BUILDTAGS)" \
-	-ldflags "-X main.gitCommit=$(COMMIT) -X main.version=$(VERSION) $(EXTRA_LDFLAGS)"
-GO_BUILD_STATIC := CGO_ENABLED=1 $(GO) build $(MOD_VENDOR) $(EXTRA_FLAGS) -tags "$(BUILDTAGS) netgo osusergo" \
-	-ldflags "-w -extldflags -static -X main.gitCommit=$(COMMIT) -X main.version=$(VERSION) $(EXTRA_LDFLAGS)"
-GO_BUILD_DEBUG := $(GO) build $(MOD_VENDOR) --buildmode=exe $(EXTRA_FLAGS) -tags "$(BUILDTAGS)" \
-	-ldflags "-X main.gitCommit=$(COMMIT) -X main.version=$(VERSION) $(EXTRA_LDFLAGS)" -gcflags="all=-N -l"
+GO_BUILD := $(GO) build $(GO_BUILDMODE) $(EXTRA_FLAGS) -tags "$(BUILDTAGS)" \
+	-ldflags "$(LDFLAGS) $(EXTRA_LDFLAGS)"
+GO_BUILD_STATIC := CGO_ENABLED=1 $(GO) build $(EXTRA_FLAGS) -tags "$(BUILDTAGS) netgo osusergo" \
+	-ldflags "-w -extldflags -static $(LDFLAGS) $(EXTRA_LDFLAGS)"
+GO_BUILD_DEBUG := $(GO) build --buildmode=exe $(EXTRA_FLAGS) -tags "$(BUILDTAGS)" \
+	-ldflags "$(LDFLAGS) $(EXTRA_LDFLAGS)" -gcflags="all=-N -l"
 
 .DEFAULT: $(RUNC_TARGET)
 
