@@ -34,9 +34,10 @@ MAN_INSTALL_PATH := ${PREFIX}/share/man/man8/
 
 RELEASE_DIR := $(CURDIR)/release
 
-VERSION := ${shell cat ./VERSION}
-
 SHELL := $(shell command -v bash 2>/dev/null)
+
+LDFLAGS := '-X main.version=${VERSION} -X main.commitId=${COMMIT_ID} \
+			-X "main.builtAt=${BUILD_AT}" -X main.builtBy=${BUILD_BY}'
 
 RUN_TEST_CONT := docker run ${DOCKER_RUN_PROXY} -t --privileged --rm \
 		-v $(CURDIR):$(RUNC)                                 \
@@ -48,7 +49,8 @@ RUN_TEST_CONT := docker run ${DOCKER_RUN_PROXY} -t --privileged --rm \
 .DEFAULT: $(RUNC_TARGET)
 
 $(RUNC_TARGET): $(SOURCES) $(SYSMGR_GRPC_SRC) $(SYSFS_GRPC_SRC) contrib/cmd/recvtty/recvtty
-	$(GO) build -buildmode=pie $(EXTRA_FLAGS) -ldflags "-X main.gitCommit=${COMMIT} -X main.version=${VERSION} $(EXTRA_LDFLAGS)" -tags "$(BUILDTAGS)" -o $(RUNC_TARGET) .
+	$(GO) build -buildmode=pie $(EXTRA_FLAGS) -ldflags ${LDFLAGS} -tags "$(BUILDTAGS)" \
+		-o $(RUNC_TARGET) .
 
 $(RUNC_DEBUG_TARGET): $(SOURCES) $(SYSMGR_GRPC_SRC) $(SYSFS_GRPC_SRC) contrib/cmd/recvtty/recvtty
 	$(GO) build -buildmode=pie $(EXTRA_FLAGS) -ldflags "-X main.gitCommit=${COMMIT} -X main.version=${VERSION} $(EXTRA_LDFLAGS)" -tags "$(BUILDTAGS)" -gcflags="all=-N -l" -o $(RUNC_TARGET) .

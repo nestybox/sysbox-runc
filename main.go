@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
 
@@ -22,13 +21,13 @@ import (
 	"github.com/urfave/cli"
 )
 
-// version will be populated by the Makefile, read from
-// VERSION file of the source code.
-var version = ""
-
-// gitCommit will be the hash that the binary was built from
-// and will be populated by the Makefile
-var gitCommit = ""
+// Globals to be populated at build time during Makefile processing.
+var (
+	version   string // extracted from VERSION file
+	commitId  string // latest git commit-id of sysvisor superproject
+	builtAt   string // build time
+	builtBy   string // build owner
+)
 
 const (
 	specConfig = "config.json"
@@ -73,16 +72,18 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "sysvisor-runc"
 	app.Usage = usage
+	app.Version = version
 
-	var v []string
-	if version != "" {
-		v = append(v, version)
+	// show-version specialization.
+	cli.VersionPrinter = func(c *cli.Context) {
+		fmt.Printf("sysvisor-runc\n" +
+			"\tversion: \t%s\n" +
+			"\tcommit: \t%s\n" +
+			"\tbuilt at: \t%s\n" +
+			"\tbuilt by: \t%s\n" +
+			"\toci-specs: \t%s\n",
+			c.App.Version, commitId, builtAt, builtBy, specs.Version)
 	}
-	if gitCommit != "" {
-		v = append(v, fmt.Sprintf("   commit: %s", gitCommit))
-	}
-	v = append(v, fmt.Sprintf("   spec: %s", specs.Version))
-	app.Version = strings.Join(v, "\n")
 
 	root := "/run/sysvisor-runc"
 	if shouldHonorXDGRuntimeDir() {
