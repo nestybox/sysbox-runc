@@ -29,67 +29,7 @@ const (
 var SysvisorFsDir = "/var/lib/sysvisorfs"
 
 var sysvisorFsMounts = []specs.Mount{
-	specs.Mount{
-		Destination: "/proc/cpuinfo",
-		Source:      filepath.Join(SysvisorFsDir, "proc/cpuinfo"),
-		Type:        "bind",
-		Options:     []string{"rbind", "rprivate"},
-	},
 
-	specs.Mount{
-		Destination: "/proc/cgroups",
-		Source:      filepath.Join(SysvisorFsDir, "proc/cgroups"),
-		Type:        "bind",
-		Options:     []string{"rbind", "rprivate"},
-	},
-	specs.Mount{
-		Destination: "/proc/devices",
-		Source:      filepath.Join(SysvisorFsDir, "proc/devices"),
-		Type:        "bind",
-		Options:     []string{"rbind", "rprivate"},
-	},
-	specs.Mount{
-		Destination: "/proc/diskstats",
-		Source:      filepath.Join(SysvisorFsDir, "proc/diskstats"),
-		Type:        "bind",
-		Options:     []string{"rbind", "rprivate"},
-	},
-	specs.Mount{
-		Destination: "/proc/loadavg",
-		Source:      filepath.Join(SysvisorFsDir, "proc/loadavg"),
-		Type:        "bind",
-		Options:     []string{"rbind", "rprivate"},
-	},
-	specs.Mount{
-		Destination: "/proc/meminfo",
-		Source:      filepath.Join(SysvisorFsDir, "proc/meminfo"),
-		Type:        "bind",
-		Options:     []string{"rbind", "rprivate"},
-	},
-	specs.Mount{
-		Destination: "/proc/pagetypeinfo",
-		Source:      filepath.Join(SysvisorFsDir, "proc/pagetypeinfo"),
-		Type:        "bind",
-		Options:     []string{"rbind", "rprivate"},
-	},
-	specs.Mount{
-		Destination: "/proc/partitions",
-		Source:      filepath.Join(SysvisorFsDir, "proc/partitions"),
-		Type:        "bind",
-		Options:     []string{"rbind", "rprivate"},
-	},
-	specs.Mount{
-		Destination: "/proc/stat",
-		Source:      filepath.Join(SysvisorFsDir, "proc/stat"),
-		Type:        "bind",
-		Options:     []string{"rbind", "rprivate"},
-	},
-	specs.Mount{
-		Destination: "/proc/swaps",
-		Source:      filepath.Join(SysvisorFsDir, "proc/swaps"),
-		Type:        "bind",
-		Options:     []string{"rbind", "rprivate"},
-	},
 	specs.Mount{
 		Destination: "/proc/sys",
 		Source:      filepath.Join(SysvisorFsDir, "proc/sys"),
@@ -102,6 +42,70 @@ var sysvisorFsMounts = []specs.Mount{
 		Type:        "bind",
 		Options:     []string{"rbind", "rprivate"},
 	},
+
+	// XXX: In the future sysvisor-fs will also handle the following
+
+	// specs.Mount{
+	// 	Destination: "/proc/cpuinfo",
+	// 	Source:      filepath.Join(SysvisorFsDir, "proc/cpuinfo"),
+	// 	Type:        "bind",
+	// 	Options:     []string{"rbind", "rprivate"},
+	// },
+
+	// specs.Mount{
+	// 	Destination: "/proc/cgroups",
+	// 	Source:      filepath.Join(SysvisorFsDir, "proc/cgroups"),
+	// 	Type:        "bind",
+	// 	Options:     []string{"rbind", "rprivate"},
+	// },
+	// specs.Mount{
+	// 	Destination: "/proc/devices",
+	// 	Source:      filepath.Join(SysvisorFsDir, "proc/devices"),
+	// 	Type:        "bind",
+	// 	Options:     []string{"rbind", "rprivate"},
+	// },
+	// specs.Mount{
+	// 	Destination: "/proc/diskstats",
+	// 	Source:      filepath.Join(SysvisorFsDir, "proc/diskstats"),
+	// 	Type:        "bind",
+	// 	Options:     []string{"rbind", "rprivate"},
+	// },
+	// specs.Mount{
+	// 	Destination: "/proc/loadavg",
+	// 	Source:      filepath.Join(SysvisorFsDir, "proc/loadavg"),
+	// 	Type:        "bind",
+	// 	Options:     []string{"rbind", "rprivate"},
+	// },
+	// specs.Mount{
+	// 	Destination: "/proc/meminfo",
+	// 	Source:      filepath.Join(SysvisorFsDir, "proc/meminfo"),
+	// 	Type:        "bind",
+	// 	Options:     []string{"rbind", "rprivate"},
+	// },
+	// specs.Mount{
+	// 	Destination: "/proc/pagetypeinfo",
+	// 	Source:      filepath.Join(SysvisorFsDir, "proc/pagetypeinfo"),
+	// 	Type:        "bind",
+	// 	Options:     []string{"rbind", "rprivate"},
+	// },
+	// specs.Mount{
+	// 	Destination: "/proc/partitions",
+	// 	Source:      filepath.Join(SysvisorFsDir, "proc/partitions"),
+	// 	Type:        "bind",
+	// 	Options:     []string{"rbind", "rprivate"},
+	// },
+	// specs.Mount{
+	// 	Destination: "/proc/stat",
+	// 	Source:      filepath.Join(SysvisorFsDir, "proc/stat"),
+	// 	Type:        "bind",
+	// 	Options:     []string{"rbind", "rprivate"},
+	// },
+	// specs.Mount{
+	// 	Destination: "/proc/swaps",
+	// 	Source:      filepath.Join(SysvisorFsDir, "proc/swaps"),
+	// 	Type:        "bind",
+	// 	Options:     []string{"rbind", "rprivate"},
+	// },
 }
 
 // sysvisorRwPaths list the paths within the sys container's rootfs
