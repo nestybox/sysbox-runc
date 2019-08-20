@@ -1,7 +1,3 @@
-//
-// (c) 2019 Nestybox. All Rights Reserved.
-//
-
 package main
 
 import (
@@ -26,40 +22,10 @@ var (
 
 const (
 	specConfig = "config.json"
-	usage      = `sysbox container runtime runc
+	usage      = `Nestybox sysbox-runc
 
-sysbox-runc is a command line client for running system containers.
-
-A system container is a container whose main purpose is to package and
-deploy a full operating system environment (e.g., init process, system
-daemons, libraries, utilities, etc.)
-
-A system container provides enviroment inside of which application
-containers can be deployed (e.g., by running Docker and Kubernetes
-inside the system container).
-
-sysbox-runc is a fork of the Open Container Initiative (OCI) runc
-that has been customized for system containers.
-
-sysbox-runc is configured using OCI bundles (i.e., a directory that
-includes a specification file named "` + specConfig + `" and a root
-filesystem containing the contents of the system container).
-
-System containers must be isolated from the host and from each other.
-sysbox-runc achieves this by using several Linux isolation
-technologies (e.g., all Linux namespaces, cgroups, seccomp, etc.) as
-well as by restricting the set of configurations for a system
-container (i.e., the system container OCI bundle must meet certain
-requirements). sysbox-runc will check that the config meets these
-requirements when creating a system container; the "sysbox-runc spec"
-command can be used to generate a baseline system container configuration.
-
-To start a new instance of a system container:
-
-    # sysbox-runc run [ -b bundle ] <container-id>
-
-Where "<container-id>" is your name for the instance of the system
-container that you are starting (which must be unique on the host).
+sysbox-runc container runtime
+info: https://github.com/nestybox/sysbox-external
 `
 )
 

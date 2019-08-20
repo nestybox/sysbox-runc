@@ -3,15 +3,15 @@
 load helpers
 
 @test "runc -h" {
-	runc -h
-	[ "$status" -eq 0 ]
-	[[ ${lines[0]} =~ NAME:+ ]]
-        [[ ${lines[1]} =~ sysbox-runc\ '-'\ sysbox\ container\ runtime\ runc+ ]]
+  runc -h
+  [ "$status" -eq 0 ]
+  [[ ${lines[0]} =~ NAME:+ ]]
+  [[ ${lines[1]} =~ sysbox-runc\ '-'\ Nestybox\ sysbox-runc+ ]]
 
-	runc --help
-	[ "$status" -eq 0 ]
-	[[ ${lines[0]} =~ NAME:+ ]]
-        [[ ${lines[1]} =~ sysbox-runc\ '-'\ sysbox\ container\ runtime\ runc+ ]]
+  runc --help
+  [ "$status" -eq 0 ]
+  [[ ${lines[0]} =~ NAME:+ ]]
+  [[ ${lines[1]} =~ sysbox-runc\ '-'\ Nestybox\ sysbox-runc+ ]]
 }
 
 @test "runc command -h" {

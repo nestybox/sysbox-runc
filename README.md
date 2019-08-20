@@ -2,7 +2,19 @@
 
 ## Introduction
 
-`sysbox-runc` is a fork of the OCI runc, modified for spawning and running system containers.
+`sysbox-runc` is a fork of the OCI runc, modified for running containers that
+enhance regular Docker containers in two ways:
+
+* It expands the types of programs that can run within the container.
+
+* It hardens the isolation of the container from the rest of the
+  system.
+
+Refer to the [Sysbox repo](https://github.com/nestybox/sysbox) for
+more detailed info on Sysbox.
+
+
+## Dependencies
 
 `sysbox-runc` tracks the OCI [runc](https://github.com/opencontainers/runc) repository
 as well as the OCI [runtime-spec](https://github.com/opencontainers/runtime-spec)
@@ -12,7 +24,8 @@ repository.
 ## Integration with other Sysbox components
 
 sysbox-runc is tightly integrated with sysbox-fs and sysbox-mgr via
-gRPC. Refer to the sysbox documentation for details.
+gRPC. Refer to the [Sysbox design doc](https://github.com/nestybox/sysbox/blob/master/docs/design.md) for
+further info.
 
 ## Building
 
@@ -135,7 +148,7 @@ make verify-dependencies
 
 ### Creating an OCI Bundle
 
-In order to use sysbox-runc you must have your system container in the format of an OCI bundle.
+In order to use sysbox-runc you must have your container in the format of an OCI bundle.
 If you have Docker installed you can use its `export` method to acquire a root filesystem from an existing Docker container.
 
 ```bash
@@ -150,19 +163,19 @@ mkdir rootfs
 docker export $(docker create busybox) | tar -C rootfs -xvf -
 ```
 
-After a root filesystem is populated you just generate a system container spec in the
-format of a `config.json` file inside your bundle.  `sysbox-runc` provides a `spec`
-command to generate a base template spec that you are then able to edit.  To find features
-and documentation for fields in the spec please refer to the
+After a root filesystem is populated you just generate a container spec in the
+format of a `config.json` file inside your bundle. `sysbox-runc` provides a
+`spec` command to generate a base template spec that you are then able to edit.
+To find features and documentation for fields in the spec please refer to the
 [specs](https://github.com/opencontainers/runtime-spec) repository.
 
 ```bash
 sysbox-runc spec
 ```
 
-### Running System Containers
+### Running Containers
 
-Assuming you have an OCI bundle from the previous step you can execute the system container in two different ways.
+Assuming you have an OCI bundle from the previous step you can execute the container in two different ways.
 
 The first way is to use the convenience command `run` that will handle creating, starting, and deleting the container after it exits.
 
@@ -172,11 +185,11 @@ cd /mycontainer
 sysbox-runc run mycontainerid
 ```
 
-If you used the unmodified `sysbox-runc spec` template this should give you a `sh` session inside the system container.
+If you used the unmodified `sysbox-runc spec` template this should give you a `sh` session inside the container.
 
 The second way to start a container is using the specs lifecycle operations.
 This gives you more power over how the container is created and managed while it is running.
-This will also launch the system container in the background so you will have to edit the `config.json` to remove the `terminal` setting for the simple examples here.
+This will also launch the container in the background so you will have to edit the `config.json` to remove the `terminal` setting for the simple examples here.
 Your process field in the `config.json` should have `"terminal": false` and `"args": ["sleep", "5"]`.
 
 These are the lifecycle operations in your shell.

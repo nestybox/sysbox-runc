@@ -20,27 +20,21 @@ import (
 
 var specCommand = cli.Command{
 	Name:  "spec",
-	Usage: "create a new system container specification file",
-	Description: `The spec command creates the new system container specification file
+	Usage: "create a new container specification file",
+	Description: `The spec command creates the new container specification file
 named "` + specConfig + `" for the bundle.
 
 The spec generated is just a starter file. Editing of the spec is required to
 achieve desired results.
 
-The "--id-map" option allows configuration of the user and group ID
-mappings used by the system container user-namespace.
+ID mapping configuration:
 
-ID Mappings:
+Nestybox Sysbox containers use the Linux user namespace and thus require user
+and group ID mappings.
 
-Nestybox system containers use the Linux user namespace and thus require user
-and group ID mappings. The "--id-map" option allows configuration of these
-mappings for the generated spec.
-
-If the "--id-map" option is given, the generated spec will include them and
-sysbox-runc will honor them when creating the container. They are expected
-to match the container's root filesystem ownership. Note that the size of the
-range is required be >= ` + strconv.FormatUint(uint64(syscont.IdRangeMin), 10) + ` (for compatibility with Linux distros
-that use ID 65534 as "nobody").
+The "--id-map" option allows configuration of these mappings for the generated spec.
+It's normally not required, unless the user wants to control the user and group IDs
+mappings of the container.
 
 If the "--id-map" option is omitted, the generated spec will not include the
 user and group ID mappings. In this case sysbox-runc will automatically
@@ -49,13 +43,11 @@ way as to provide each sys container an exclusive range of uid(gid)s on the
 host, as a means to improve isolation. This feature requires that the
 container's root filesystem be owned by "root:root".
 
-Root Privilege:
-
-When starting a system container, sysbox-runc needs root privilege. If not
-already running as root, you can use sudo to give sysbox-runc root privilege.
-
-sysbox-runc does not currently support running without root privilege (i.e.,
-rootless).
+If the "--id-map" option is given, the generated spec will include them and
+sysbox-runc will honor them when creating the container. They are expected
+to match the container's root filesystem ownership. Note that the size of the
+range is required be >= ` + strconv.FormatUint(uint64(syscont.IdRangeMin), 10) + ` (for compatibility with Linux distros
+that use ID 65534 as "nobody").
 `,
 	Flags: []cli.Flag{
 		cli.StringFlag{
