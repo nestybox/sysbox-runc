@@ -30,66 +30,6 @@ var SysboxFsDir = "/var/lib/sysboxfs"
 // (please keep in alphabetical order)
 var sysboxFsMounts = []specs.Mount{
 	specs.Mount{
-		Destination: "/proc/cpuinfo",
-		Source:      filepath.Join(SysboxFsDir, "proc/cpuinfo"),
-		Type:        "bind",
-		Options:     []string{"rbind", "rprivate"},
-	},
-	specs.Mount{
-		Destination: "/proc/cgroups",
-		Source:      filepath.Join(SysboxFsDir, "proc/cgroups"),
-		Type:        "bind",
-		Options:     []string{"rbind", "rprivate"},
-	},
-	specs.Mount{
-		Destination: "/proc/devices",
-		Source:      filepath.Join(SysboxFsDir, "proc/devices"),
-		Type:        "bind",
-		Options:     []string{"rbind", "rprivate"},
-	},
-	specs.Mount{
-		Destination: "/proc/diskstats",
-		Source:      filepath.Join(SysboxFsDir, "proc/diskstats"),
-		Type:        "bind",
-		Options:     []string{"rbind", "rprivate"},
-	},
-	specs.Mount{
-		Destination: "/proc/loadavg",
-		Source:      filepath.Join(SysboxFsDir, "proc/loadavg"),
-		Type:        "bind",
-		Options:     []string{"rbind", "rprivate"},
-	},
-	specs.Mount{
-		Destination: "/proc/meminfo",
-		Source:      filepath.Join(SysboxFsDir, "proc/meminfo"),
-		Type:        "bind",
-		Options:     []string{"rbind", "rprivate"},
-	},
-	specs.Mount{
-		Destination: "/proc/pagetypeinfo",
-		Source:      filepath.Join(SysboxFsDir, "proc/pagetypeinfo"),
-		Type:        "bind",
-		Options:     []string{"rbind", "rprivate"},
-	},
-	specs.Mount{
-		Destination: "/proc/partitions",
-		Source:      filepath.Join(SysboxFsDir, "proc/partitions"),
-		Type:        "bind",
-		Options:     []string{"rbind", "rprivate"},
-	},
-	specs.Mount{
-		Destination: "/proc/stat",
-		Source:      filepath.Join(SysboxFsDir, "proc/stat"),
-		Type:        "bind",
-		Options:     []string{"rbind", "rprivate"},
-	},
-	specs.Mount{
-		Destination: "/proc/swaps",
-		Source:      filepath.Join(SysboxFsDir, "proc/swaps"),
-		Type:        "bind",
-		Options:     []string{"rbind", "rprivate"},
-	},
-	specs.Mount{
 		Destination: "/proc/sys",
 		Source:      filepath.Join(SysboxFsDir, "proc/sys"),
 		Type:        "bind",
@@ -101,6 +41,70 @@ var sysboxFsMounts = []specs.Mount{
 		Type:        "bind",
 		Options:     []string{"rbind", "rprivate"},
 	},
+
+	// XXX: In the future sysbox-fs will also handle the following
+
+	// specs.Mount{
+	// 	Destination: "/proc/cpuinfo",
+	// 	Source:      filepath.Join(SysboxFsDir, "proc/cpuinfo"),
+	// 	Type:        "bind",
+	// 	Options:     []string{"rbind", "rprivate"},
+	// },
+
+	// specs.Mount{
+	// 	Destination: "/proc/cgroups",
+	// 	Source:      filepath.Join(SysboxFsDir, "proc/cgroups"),
+	// 	Type:        "bind",
+	// 	Options:     []string{"rbind", "rprivate"},
+	// },
+	// specs.Mount{
+	// 	Destination: "/proc/devices",
+	// 	Source:      filepath.Join(SysboxFsDir, "proc/devices"),
+	// 	Type:        "bind",
+	// 	Options:     []string{"rbind", "rprivate"},
+	// },
+	// specs.Mount{
+	// 	Destination: "/proc/diskstats",
+	// 	Source:      filepath.Join(SysboxFsDir, "proc/diskstats"),
+	// 	Type:        "bind",
+	// 	Options:     []string{"rbind", "rprivate"},
+	// },
+	// specs.Mount{
+	// 	Destination: "/proc/loadavg",
+	// 	Source:      filepath.Join(SysboxFsDir, "proc/loadavg"),
+	// 	Type:        "bind",
+	// 	Options:     []string{"rbind", "rprivate"},
+	// },
+	// specs.Mount{
+	// 	Destination: "/proc/meminfo",
+	// 	Source:      filepath.Join(SysboxFsDir, "proc/meminfo"),
+	// 	Type:        "bind",
+	// 	Options:     []string{"rbind", "rprivate"},
+	// },
+	// specs.Mount{
+	// 	Destination: "/proc/pagetypeinfo",
+	// 	Source:      filepath.Join(SysboxFsDir, "proc/pagetypeinfo"),
+	// 	Type:        "bind",
+	// 	Options:     []string{"rbind", "rprivate"},
+	// },
+	// specs.Mount{
+	// 	Destination: "/proc/partitions",
+	// 	Source:      filepath.Join(SysboxFsDir, "proc/partitions"),
+	// 	Type:        "bind",
+	// 	Options:     []string{"rbind", "rprivate"},
+	// },
+	// specs.Mount{
+	// 	Destination: "/proc/stat",
+	// 	Source:      filepath.Join(SysboxFsDir, "proc/stat"),
+	// 	Type:        "bind",
+	// 	Options:     []string{"rbind", "rprivate"},
+	// },
+	// specs.Mount{
+	// 	Destination: "/proc/swaps",
+	// 	Source:      filepath.Join(SysboxFsDir, "proc/swaps"),
+	// 	Type:        "bind",
+	// 	Options:     []string{"rbind", "rprivate"},
+	// },
 }
 
 // sysboxRwPaths list the paths within the sys container's rootfs
