@@ -37,7 +37,7 @@ RELEASE_DIR := $(CURDIR)/release
 SHELL := $(shell command -v bash 2>/dev/null)
 
 LDFLAGS := '-X main.version=${VERSION} -X main.commitId=${COMMIT_ID} \
-			-X "main.builtAt=${BUILD_AT}" -X main.builtBy=${BUILD_BY}'
+			-X "main.builtAt=${BUILT_AT}" -X main.builtBy=${BUILT_BY}'
 
 RUN_TEST_CONT := docker run ${DOCKER_RUN_PROXY} -t --privileged --rm \
 		-v $(CURDIR):$(RUNC)                                 \
