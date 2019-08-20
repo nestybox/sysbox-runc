@@ -19,7 +19,7 @@ COMMIT ?= $(if $(shell git status --porcelain --untracked-files=no),"$(COMMIT_NO
 VERSION := $(shell cat ./VERSION)
 
 LDFLAGS := '-X main.version=${VERSION} -X main.commitId=${COMMIT_ID} \
-		-X "main.builtAt=${BUILD_AT}" -X main.builtBy=${BUILD_BY}'
+		-X "main.builtAt=${BUILT_AT}" -X main.builtBy=${BUILT_BY}'
 
 ifeq ($(shell $(GO) env GOOS),linux)
 	ifeq (,$(filter $(shell $(GO) env GOARCH),mips mipsle mips64 mips64le ppc64))
