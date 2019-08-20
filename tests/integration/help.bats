@@ -6,12 +6,12 @@ load helpers
   runc -h
   [ "$status" -eq 0 ]
   [[ ${lines[0]} =~ NAME:+ ]]
-  [[ ${lines[1]} =~ sysvisor-runc\ '-'\ system\ container\ runc+ ]]
+  [[ ${lines[1]} =~ sysvisor-runc\ '-'\ Nestybox\ sysvisor-runc+ ]]
 
   runc --help
   [ "$status" -eq 0 ]
   [[ ${lines[0]} =~ NAME:+ ]]
-  [[ ${lines[1]} =~ sysvisor-runc\ '-'\ system\ container\ runc+ ]]
+  [[ ${lines[1]} =~ sysvisor-runc\ '-'\ Nestybox\ sysvisor-runc+ ]]
 }
 
 @test "runc command -h" {

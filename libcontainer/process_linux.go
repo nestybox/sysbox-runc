@@ -287,7 +287,7 @@ func (p *initProcess) start() error {
 	// sysvisor-runc: create a child cgroup that will serve as the system container's
 	// cgroup root.
 	if err := p.manager.CreateChildCgroup(p.config.Config); err != nil {
-		return newSystemErrorWithCause(err, "creating system container child cgroup")
+		return newSystemErrorWithCause(err, "creating container child cgroup")
 	}
 
 	if p.intelRdtManager != nil {

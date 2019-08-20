@@ -71,7 +71,7 @@ func setupSpec(context *cli.Context, sysMgr *sysvisor.Mgr, sysFs *sysvisor.Fs) (
 
 	shiftUids, err := syscont.ConvertSpec(context, sysMgr, sysFs, spec)
 	if err != nil {
-		return nil, false, fmt.Errorf("error in system container spec: %v", err)
+		return nil, false, fmt.Errorf("error in the container spec: %v", err)
 	}
 
 	return spec, shiftUids, nil

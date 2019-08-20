@@ -411,7 +411,7 @@ func cfgSeccomp(seccomp *specs.LinuxSeccomp) error {
 		syscontAllowSet.Add(sc)
 	}
 
-	// seccomp syscall lsit may be a whitelist or blacklist
+	// seccomp syscall list may be a whitelist or blacklist
 	whitelist := (seccomp.DefaultAction == specs.ActErrno ||
 		seccomp.DefaultAction == specs.ActKill)
 
@@ -619,7 +619,7 @@ func ConvertProcessSpec(p *specs.Process) error {
 func ConvertSpec(context *cli.Context, sysMgr *sysvisor.Mgr, sysFs *sysvisor.Fs, spec *specs.Spec) (bool, error) {
 
 	if err := checkSpec(spec); err != nil {
-		return false, fmt.Errorf("invalid or unsupported system container spec: %v", err)
+		return false, fmt.Errorf("invalid or unsupported container spec: %v", err)
 	}
 
 	if err := ConvertProcessSpec(spec.Process); err != nil {

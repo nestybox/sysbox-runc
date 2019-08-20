@@ -1,13 +1,3 @@
-//
-// (c) 2019 Nestybox. All Rights Reserved.
-//
-
-//
-// Change Log:
-//
-// * Modified usage message for sysvisor-runc.
-//
-
 package main
 
 import (
@@ -23,48 +13,19 @@ import (
 
 // Globals to be populated at build time during Makefile processing.
 var (
-	version   string // extracted from VERSION file
-	commitId  string // latest git commit-id of sysvisor superproject
-	builtAt   string // build time
-	builtBy   string // build owner
+	version  string // extracted from VERSION file
+	commitId string // latest git commit-id of sysvisor superproject
+	builtAt  string // build time
+	builtBy  string // build owner
 )
 
 const (
 	specConfig = "config.json"
-	usage      = `system container runc
+	usage      = `Nestybox sysvisor-runc
 
-sysvisor-runc is a command line client for running system containers.
+sysvisor-runc container runtime
 
-A system container is a container whose main purpose is to package and
-deploy a full operating system environment (e.g., init process, system
-daemons, libraries, utilities, etc.)
-
-A system container provides enviroment inside of which application
-containers can be deployed (e.g., by running Docker and Kubernetes
-inside the system container).
-
-sysvisor-runc is a fork of the Open Container Initiative (OCI) runc
-that has been customized for system containers.
-
-sysvisor-runc is configured using OCI bundles (i.e., a directory that
-includes a specification file named "` + specConfig + `" and a root
-filesystem containing the contents of the system container).
-
-System containers must be isolated from the host and from each other.
-sysvisor-runc achieves this by using several Linux isolation
-technologies (e.g., all Linux namespaces, cgroups, seccomp, etc.) as
-well as by restricting the set of configurations for a system
-container (i.e., the system container OCI bundle must meet certain
-requirements). sysvisor-runc will check that the config meets these
-requirements when creating a system container; the "sysvisor-runc spec"
-command can be used to generate a baseline system container configuration.
-
-To start a new instance of a system container:
-
-    # sysvisor-runc run [ -b bundle ] <container-id>
-
-Where "<container-id>" is your name for the instance of the system
-container that you are starting (which must be unique on the host).
+info: https://github.com/nestybox/sysvisor-external
 `
 )
 
@@ -76,11 +37,11 @@ func main() {
 
 	// show-version specialization.
 	cli.VersionPrinter = func(c *cli.Context) {
-		fmt.Printf("sysvisor-runc\n" +
-			"\tversion: \t%s\n" +
-			"\tcommit: \t%s\n" +
-			"\tbuilt at: \t%s\n" +
-			"\tbuilt by: \t%s\n" +
+		fmt.Printf("sysvisor-runc\n"+
+			"\tversion: \t%s\n"+
+			"\tcommit: \t%s\n"+
+			"\tbuilt at: \t%s\n"+
+			"\tbuilt by: \t%s\n"+
 			"\toci-specs: \t%s\n",
 			c.App.Version, commitId, builtAt, builtBy, specs.Version)
 	}
