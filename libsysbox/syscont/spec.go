@@ -10,7 +10,7 @@ import (
 	"syscall"
 
 	mapset "github.com/deckarep/golang-set"
-	"github.com/opencontainers/runc/libsysvisor/sysvisor"
+	"github.com/opencontainers/runc/libsysbox/sysbox"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
@@ -23,101 +23,101 @@ const (
 	defaultGid uint32 = 231072
 )
 
-// sysvisorFsMounts is a list of system container mounts backed by sysvisor-fs
+// sysboxFsMounts is a list of system container mounts backed by sysbox-fs
 // (please keep in alphabetical order)
 
-var SysvisorFsDir = "/var/lib/sysvisorfs"
+var SysboxFsDir = "/var/lib/sysboxfs"
 
-var sysvisorFsMounts = []specs.Mount{
+var sysboxFsMounts = []specs.Mount{
 
 	specs.Mount{
 		Destination: "/proc/sys",
-		Source:      filepath.Join(SysvisorFsDir, "proc/sys"),
+		Source:      filepath.Join(SysboxFsDir, "proc/sys"),
 		Type:        "bind",
 		Options:     []string{"rbind", "rprivate"},
 	},
 	specs.Mount{
 		Destination: "/proc/uptime",
-		Source:      filepath.Join(SysvisorFsDir, "proc/uptime"),
+		Source:      filepath.Join(SysboxFsDir, "proc/uptime"),
 		Type:        "bind",
 		Options:     []string{"rbind", "rprivate"},
 	},
 
-	// XXX: In the future sysvisor-fs will also handle the following
+	// XXX: In the future sysbox-fs will also handle the following
 
 	// specs.Mount{
 	// 	Destination: "/proc/cpuinfo",
-	// 	Source:      filepath.Join(SysvisorFsDir, "proc/cpuinfo"),
+	// 	Source:      filepath.Join(SysboxFsDir, "proc/cpuinfo"),
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 
 	// specs.Mount{
 	// 	Destination: "/proc/cgroups",
-	// 	Source:      filepath.Join(SysvisorFsDir, "proc/cgroups"),
+	// 	Source:      filepath.Join(SysboxFsDir, "proc/cgroups"),
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/devices",
-	// 	Source:      filepath.Join(SysvisorFsDir, "proc/devices"),
+	// 	Source:      filepath.Join(SysboxFsDir, "proc/devices"),
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/diskstats",
-	// 	Source:      filepath.Join(SysvisorFsDir, "proc/diskstats"),
+	// 	Source:      filepath.Join(SysboxFsDir, "proc/diskstats"),
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/loadavg",
-	// 	Source:      filepath.Join(SysvisorFsDir, "proc/loadavg"),
+	// 	Source:      filepath.Join(SysboxFsDir, "proc/loadavg"),
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/meminfo",
-	// 	Source:      filepath.Join(SysvisorFsDir, "proc/meminfo"),
+	// 	Source:      filepath.Join(SysboxFsDir, "proc/meminfo"),
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/pagetypeinfo",
-	// 	Source:      filepath.Join(SysvisorFsDir, "proc/pagetypeinfo"),
+	// 	Source:      filepath.Join(SysboxFsDir, "proc/pagetypeinfo"),
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/partitions",
-	// 	Source:      filepath.Join(SysvisorFsDir, "proc/partitions"),
+	// 	Source:      filepath.Join(SysboxFsDir, "proc/partitions"),
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/stat",
-	// 	Source:      filepath.Join(SysvisorFsDir, "proc/stat"),
+	// 	Source:      filepath.Join(SysboxFsDir, "proc/stat"),
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 	// specs.Mount{
 	// 	Destination: "/proc/swaps",
-	// 	Source:      filepath.Join(SysvisorFsDir, "proc/swaps"),
+	// 	Source:      filepath.Join(SysboxFsDir, "proc/swaps"),
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
 }
 
-// sysvisorRwPaths list the paths within the sys container's rootfs
+// sysboxRwPaths list the paths within the sys container's rootfs
 // that must have read-write permission
-var sysvisorRwPaths = []string{
+var sysboxRwPaths = []string{
 	"/proc",
 	"/proc/sys",
 }
 
-// sysvisorExposedPaths list the paths within the sys container's rootfs
+// sysboxExposedPaths list the paths within the sys container's rootfs
 // that must not be masked
-var sysvisorExposedPaths = []string{
+var sysboxExposedPaths = []string{
 	"/proc",
 	"/proc/sys",
 }
@@ -206,7 +206,7 @@ func cfgNamespaces(spec *specs.Spec) error {
 }
 
 // allocIDMappings performs uid and gid allocation for the system container
-func allocIDMappings(sysMgr *sysvisor.Mgr, spec *specs.Spec) error {
+func allocIDMappings(sysMgr *sysbox.Mgr, spec *specs.Spec) error {
 	var uid, gid uint32
 	var err error
 
@@ -238,25 +238,25 @@ func allocIDMappings(sysMgr *sysvisor.Mgr, spec *specs.Spec) error {
 	return nil
 }
 
-// validateIDMappings checks if the spec's user namespace uid and gid mappings meet sysvisor-runc requirements
+// validateIDMappings checks if the spec's user namespace uid and gid mappings meet sysbox-runc requirements
 func validateIDMappings(spec *specs.Spec) error {
 
 	if len(spec.Linux.UIDMappings) != 1 {
-		return fmt.Errorf("sysvisor-runc requires user namespace uid mapping array have one element; found %v", spec.Linux.UIDMappings)
+		return fmt.Errorf("sysbox-runc requires user namespace uid mapping array have one element; found %v", spec.Linux.UIDMappings)
 	}
 
 	if len(spec.Linux.GIDMappings) != 1 {
-		return fmt.Errorf("sysvisor-runc requires user namespace gid mapping array have one element; found %v", spec.Linux.GIDMappings)
+		return fmt.Errorf("sysbox-runc requires user namespace gid mapping array have one element; found %v", spec.Linux.GIDMappings)
 	}
 
 	uidMap := spec.Linux.UIDMappings[0]
 	if uidMap.ContainerID != 0 || uidMap.Size < IdRangeMin {
-		return fmt.Errorf("sysvisor-runc requires uid mapping specify a container with at least %d uids starting at uid 0; found %v", IdRangeMin, uidMap)
+		return fmt.Errorf("sysbox-runc requires uid mapping specify a container with at least %d uids starting at uid 0; found %v", IdRangeMin, uidMap)
 	}
 
 	gidMap := spec.Linux.GIDMappings[0]
 	if gidMap.ContainerID != 0 || gidMap.Size < IdRangeMin {
-		return fmt.Errorf("sysvisor-runc requires gid mapping specify a container with at least %d gids starting at gid 0; found %v", IdRangeMin, gidMap)
+		return fmt.Errorf("sysbox-runc requires gid mapping specify a container with at least %d gids starting at gid 0; found %v", IdRangeMin, gidMap)
 	}
 
 	return nil
@@ -265,7 +265,7 @@ func validateIDMappings(spec *specs.Spec) error {
 // cfgIDMappings checks if the uid/gid mappings are present and valid; if they are not
 // present, it allocates them. Note that we don't disallow mappings that map to the host
 // root UID (i.e., we always honor the ID config); some runc tests use such mappings.
-func cfgIDMappings(sysMgr *sysvisor.Mgr, spec *specs.Spec) error {
+func cfgIDMappings(sysMgr *sysbox.Mgr, spec *specs.Spec) error {
 	if len(spec.Linux.UIDMappings) == 0 && len(spec.Linux.GIDMappings) == 0 {
 		return allocIDMappings(sysMgr, spec)
 	}
@@ -289,11 +289,11 @@ func cfgCapabilities(p *specs.Process) {
 }
 
 // cfgMaskedPaths removes from the container's config any masked paths for which
-// sysvisor-fs will handle accesses.
+// sysbox-fs will handle accesses.
 func cfgMaskedPaths(spec *specs.Spec) {
 	specPaths := spec.Linux.MaskedPaths
 	for i := 0; i < len(specPaths); i++ {
-		for _, path := range sysvisorExposedPaths {
+		for _, path := range sysboxExposedPaths {
 			if specPaths[i] == path {
 				specPaths = append(specPaths[:i], specPaths[i+1:]...)
 				i--
@@ -310,7 +310,7 @@ func cfgMaskedPaths(spec *specs.Spec) {
 func cfgReadonlyPaths(spec *specs.Spec) {
 	specPaths := spec.Linux.ReadonlyPaths
 	for i := 0; i < len(specPaths); i++ {
-		for _, path := range sysvisorRwPaths {
+		for _, path := range sysboxRwPaths {
 			if specPaths[i] == path {
 				specPaths = append(specPaths[:i], specPaths[i+1:]...)
 				i--
@@ -322,25 +322,25 @@ func cfgReadonlyPaths(spec *specs.Spec) {
 	spec.Linux.ReadonlyPaths = specPaths
 }
 
-// cfgSysvisorFsMounts adds the sysvisor-fs mounts to the containers config.
-func cfgSysvisorFsMounts(spec *specs.Spec) {
+// cfgSysboxFsMounts adds the sysbox-fs mounts to the containers config.
+func cfgSysboxFsMounts(spec *specs.Spec) {
 
 	// disallow all mounts over /proc/* or /sys/* (except for /sys/fs/cgroup);
-	// only sysvisor-fs mounts are allowed there.
+	// only sysbox-fs mounts are allowed there.
 	for i := 0; i < len(spec.Mounts); i++ {
 		m := spec.Mounts[i]
 		if strings.HasPrefix(m.Destination, "/proc/") ||
 			(strings.HasPrefix(m.Destination, "/sys/") && (m.Destination != "/sys/fs/cgroup")) {
 			spec.Mounts = append(spec.Mounts[:i], spec.Mounts[i+1:]...)
 			i--
-			logrus.Debugf("removed mount %s from spec (not compatible with sysvisor-runc)", m.Destination)
+			logrus.Debugf("removed mount %s from spec (not compatible with sysbox-runc)", m.Destination)
 		}
 	}
 
-	// add sysvisor-fs mounts to the config
-	for _, mount := range sysvisorFsMounts {
+	// add sysbox-fs mounts to the config
+	for _, mount := range sysboxFsMounts {
 		spec.Mounts = append(spec.Mounts, mount)
-		logrus.Debugf("added sysvisor-fs mount %s to spec", mount.Destination)
+		logrus.Debugf("added sysbox-fs mount %s to spec", mount.Destination)
 	}
 }
 
@@ -471,7 +471,7 @@ func cfgAppArmor(p *specs.Process) error {
 	// profile in the container's config.
 	//
 	// TODO: In the near future, we should develop an apparmor profile for sys-containers,
-	// and have sysvisor-mgr load it to the kernel (if apparmor is enabled on the system)
+	// and have sysbox-mgr load it to the kernel (if apparmor is enabled on the system)
 	// and then configure the container to use that profile here.
 
 	p.ApparmorProfile = ""
@@ -493,7 +493,7 @@ func cfgLibModMount(spec *specs.Spec, doFhsCheck bool) error {
 		}
 	}
 
-	kernelRel, err := sysvisor.GetKernelRelease()
+	kernelRel, err := sysbox.GetKernelRelease()
 	if err != nil {
 		return err
 	}
@@ -595,14 +595,14 @@ func needUidShiftOnRootfs(spec *specs.Spec) (bool, error) {
 	return false, nil
 }
 
-// getSupConfig obtains supplementary config from the sysvisor-mgr for the container with the given id
-func getSupConfig(mgr *sysvisor.Mgr, spec *specs.Spec, shiftUids bool) error {
+// getSupConfig obtains supplementary config from the sysbox-mgr for the container with the given id
+func getSupConfig(mgr *sysbox.Mgr, spec *specs.Spec, shiftUids bool) error {
 	uid := spec.Linux.UIDMappings[0].HostID
 	gid := spec.Linux.GIDMappings[0].HostID
 
 	mounts, err := mgr.ReqSupMounts(spec.Root.Path, uid, gid, shiftUids)
 	if err != nil {
-		return fmt.Errorf("failed to request supplementary mounts from sysvisor-mgr: %v", err)
+		return fmt.Errorf("failed to request supplementary mounts from sysbox-mgr: %v", err)
 	}
 	spec.Mounts = append(spec.Mounts, mounts...)
 	return nil
@@ -620,7 +620,7 @@ func ConvertProcessSpec(p *specs.Process) error {
 }
 
 // ConvertSpec converts the given container spec to a system container spec.
-func ConvertSpec(context *cli.Context, sysMgr *sysvisor.Mgr, sysFs *sysvisor.Fs, spec *specs.Spec) (bool, error) {
+func ConvertSpec(context *cli.Context, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs, spec *specs.Spec) (bool, error) {
 
 	if err := checkSpec(spec); err != nil {
 		return false, fmt.Errorf("invalid or unsupported container spec: %v", err)
@@ -649,7 +649,7 @@ func ConvertSpec(context *cli.Context, sysMgr *sysvisor.Mgr, sysFs *sysvisor.Fs,
 	if sysFs.Enabled() {
 		cfgMaskedPaths(spec)
 		cfgReadonlyPaths(spec)
-		cfgSysvisorFsMounts(spec)
+		cfgSysboxFsMounts(spec)
 	}
 
 	if err := cfgSeccomp(spec.Linux.Seccomp); err != nil {

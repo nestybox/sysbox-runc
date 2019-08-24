@@ -1,11 +1,11 @@
-// Exposes functions for sysvisor-runc to interact with sysvisor-mgr
+// Exposes functions for sysbox-runc to interact with sysbox-mgr
 
-package sysvisor
+package sysbox
 
 import (
 	"fmt"
 
-	"github.com/nestybox/sysvisor-ipc/sysvisorMgrGrpc"
+	"github.com/nestybox/sysbox-ipc/sysboxMgrGrpc"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
 
@@ -26,31 +26,31 @@ func (mgr *Mgr) Enabled() bool {
 }
 
 func (mgr *Mgr) Register() error {
-	if err := sysvisorMgrGrpc.Register(mgr.Id); err != nil {
-		return fmt.Errorf("failed to register with sysvisor-mgr: %v", err)
+	if err := sysboxMgrGrpc.Register(mgr.Id); err != nil {
+		return fmt.Errorf("failed to register with sysbox-mgr: %v", err)
 	}
 	return nil
 }
 
 func (mgr *Mgr) Unregister() error {
-	if err := sysvisorMgrGrpc.Unregister(mgr.Id); err != nil {
-		return fmt.Errorf("failed to unregister with sysvisor-mgr: %v", err)
+	if err := sysboxMgrGrpc.Unregister(mgr.Id); err != nil {
+		return fmt.Errorf("failed to unregister with sysbox-mgr: %v", err)
 	}
 	return nil
 }
 
 func (mgr *Mgr) ReqSubid(size uint32) (uint32, uint32, error) {
-	uid, gid, err := sysvisorMgrGrpc.SubidAlloc(mgr.Id, uint64(size))
+	uid, gid, err := sysboxMgrGrpc.SubidAlloc(mgr.Id, uint64(size))
 	if err != nil {
-		return 0, 0, fmt.Errorf("failed to req subid from sysvisor-mgr: %v", err)
+		return 0, 0, fmt.Errorf("failed to req subid from sysbox-mgr: %v", err)
 	}
 	return uid, gid, nil
 }
 
 func (mgr *Mgr) ReqSupMounts(rootfs string, uid, gid uint32, shiftUids bool) ([]specs.Mount, error) {
-	mounts, err := sysvisorMgrGrpc.ReqSupMounts(mgr.Id, rootfs, uid, gid, shiftUids)
+	mounts, err := sysboxMgrGrpc.ReqSupMounts(mgr.Id, rootfs, uid, gid, shiftUids)
 	if err != nil {
-		return []specs.Mount{}, fmt.Errorf("failed to req supplementary mounts from sysvisor-mgr: %v", err)
+		return []specs.Mount{}, fmt.Errorf("failed to req supplementary mounts from sysbox-mgr: %v", err)
 	}
 
 	// convert mounts to []spec.Mount

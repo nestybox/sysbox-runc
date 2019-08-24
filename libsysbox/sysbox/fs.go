@@ -1,15 +1,15 @@
-// Exposes functions for sysvisor-runc to interact with sysvisor-fs
+// Exposes functions for sysbox-runc to interact with sysbox-fs
 
-package sysvisor
+package sysbox
 
 import (
 	"fmt"
 	"time"
 
-	"github.com/nestybox/sysvisor-ipc/sysvisorFsGrpc"
+	"github.com/nestybox/sysbox-ipc/sysboxFsGrpc"
 )
 
-// FsRegInfo contains info about a container registered with sysvisor-fs
+// FsRegInfo contains info about a container registered with sysbox-fs
 type FsRegInfo struct {
 	Hostname string
 	Pid      int
@@ -21,7 +21,7 @@ type FsRegInfo struct {
 type Fs struct {
 	Active bool
 	Id     string // container-id
-	Reg    bool   // indicates if container was registered with sysvisor-mgr
+	Reg    bool   // indicates if container was registered with sysbox-mgr
 }
 
 func NewFs(id string, enable bool) *Fs {
@@ -35,12 +35,12 @@ func (fs *Fs) Enabled() bool {
 	return fs.Active
 }
 
-// Registers container info with with sysvisor-fs
+// Registers container info with with sysbox-fs
 func (fs *Fs) Register(info *FsRegInfo) error {
 	if fs.Reg {
 		return fmt.Errorf("container %v already registered", fs.Id)
 	}
-	data := &sysvisorFsGrpc.ContainerData{
+	data := &sysboxFsGrpc.ContainerData{
 		Id:       fs.Id,
 		InitPid:  int32(info.Pid),
 		Hostname: info.Hostname,
@@ -49,36 +49,36 @@ func (fs *Fs) Register(info *FsRegInfo) error {
 		GidFirst: int32(info.Gid),
 		GidSize:  int32(info.IdSize),
 	}
-	if err := sysvisorFsGrpc.SendContainerRegistration(data); err != nil {
-		return fmt.Errorf("failed to register with sysvisor-fs: %v", err)
+	if err := sysboxFsGrpc.SendContainerRegistration(data); err != nil {
+		return fmt.Errorf("failed to register with sysbox-fs: %v", err)
 	}
 	fs.Reg = true
 	return nil
 }
 
-// Sends container creation time to sysvisor-fs
+// Sends container creation time to sysbox-fs
 func (fs *Fs) SendCreationTime(t time.Time) error {
 	if !fs.Reg {
 		return fmt.Errorf("must register container %v before", fs.Id)
 	}
-	data := &sysvisorFsGrpc.ContainerData{
+	data := &sysboxFsGrpc.ContainerData{
 		Id:    fs.Id,
 		Ctime: t,
 	}
-	if err := sysvisorFsGrpc.SendContainerUpdate(data); err != nil {
-		return fmt.Errorf("failed to send creation time to sysvisor-fs: %v", err)
+	if err := sysboxFsGrpc.SendContainerUpdate(data); err != nil {
+		return fmt.Errorf("failed to send creation time to sysbox-fs: %v", err)
 	}
 	return nil
 }
 
-// Unregisters the container with with sysvisor-fs
+// Unregisters the container with with sysbox-fs
 func (fs *Fs) Unregister() error {
 	if fs.Reg {
-		data := &sysvisorFsGrpc.ContainerData{
+		data := &sysboxFsGrpc.ContainerData{
 			Id: fs.Id,
 		}
-		if err := sysvisorFsGrpc.SendContainerUnregistration(data); err != nil {
-			return fmt.Errorf("failed to unregister with sysvisor-fs: %v", err)
+		if err := sysboxFsGrpc.SendContainerUnregistration(data); err != nil {
+			return fmt.Errorf("failed to unregister with sysbox-fs: %v", err)
 		}
 		fs.Reg = false
 	}

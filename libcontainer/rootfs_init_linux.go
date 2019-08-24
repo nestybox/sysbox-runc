@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/opencontainers/runc/libsysvisor/shiftfs"
+	"github.com/opencontainers/runc/libsysbox/shiftfs"
 	"github.com/opencontainers/selinux/go-selinux/label"
 	"golang.org/x/sys/unix"
 )
@@ -29,7 +29,7 @@ func getDir(file string) (string, error) {
 	}
 }
 
-// sysvisor-runc:
+// sysbox-runc:
 // Init performs container rootfs initialization actions from within the container's mount
 // namespace only. By virtue of only entering the mount namespace, Init has true
 // root-level access to the host and thus can perform operations that the container's init

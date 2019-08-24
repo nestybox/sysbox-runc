@@ -1,36 +1,29 @@
-# sysvisor-runc
+# sysbox-runc
 
 ## Introduction
 
-`sysvisor-runc` is a fork of the OCI runc, modified for running containers that
-enhance regular Docker containers in two ways:
+`sysbox-runc` is a fork of the OCI runc, modified for running system
+containers.
 
-* It expands the types of programs that can run within the container.
-
-* It hardens the isolation of the container from the rest of the
-  system.
-
-Refer to the [Sysvisor repo](https://github.com/nestybox/sysvisor) for
-more detailed info on Sysvisor.
-
+Refer to the [Sysboxd repo](../README.md) for more detailed info on
+Sysboxd.
 
 ## Dependencies
 
-`sysvisor-runc` tracks the OCI [runc](https://github.com/opencontainers/runc) repository
+`sysbox-runc` tracks the OCI [runc](https://github.com/opencontainers/runc) repository
 as well as the OCI [runtime-spec](https://github.com/opencontainers/runtime-spec)
 repository.
 
 
-## Integration with other Sysvisor components
+## Integration with other Sysboxd components
 
-sysvisor-runc is tightly integrated with sysvisor-fs and sysvisor-mgr via
-gRPC. Refer to the [Sysvisor design doc](https://github.com/nestybox/sysvisor/blob/master/docs/design.md) for
+sysbox-runc is tightly integrated with sysbox-fs and sysbox-mgr via
+gRPC. Refer to the [Sysboxd design doc](../docs/design.md) for
 further info.
-
 
 ## Building
 
-`sysvisor-runc` currently supports the Linux platform with various architecture support.
+`sysbox-runc` currently supports the Linux platform with various architecture support.
 It must be built with Go version 1.6 or higher in order for some features to function properly.
 
 In order to enable seccomp support you will need to install `libseccomp` on your platform.
@@ -43,12 +36,12 @@ make
 sudo make install
 ```
 
-`sysvisor-runc` will be installed to `/usr/local/sbin/sysvisor-runc` on your system.
+`sysbox-runc` will be installed to `/usr/local/sbin/sysbox-runc` on your system.
 
 
 #### Build Tags
 
-`sysvisor-runc` supports optional build tags for compiling support of various features.
+`sysbox-runc` supports optional build tags for compiling support of various features.
 To add build tags to the make option the `BUILDTAGS` variable must be set.
 
 ```bash
@@ -66,7 +59,7 @@ make BUILDTAGS='seccomp apparmor'
 
 ### Running the test suite
 
-`sysvisor-runc` currently supports running its test suite via Docker.
+`sysbox-runc` currently supports running its test suite via Docker.
 To run the suite just type `make test`.
 
 ```bash
@@ -97,15 +90,15 @@ You can run a test in your proxy environment by setting `DOCKER_BUILD_PROXY` and
 
 ### Dependencies Management
 
-`sysvisor-runc` uses [vndr](https://github.com/LK4D4/vndr) for dependencies management.
+`sysbox-runc` uses [vndr](https://github.com/LK4D4/vndr) for dependencies management.
 Please refer to [vndr](https://github.com/LK4D4/vndr) for how to add or update
 new dependencies.
 
-## Using sysvisor-runc
+## Using sysbox-runc
 
 ### Creating an OCI Bundle
 
-In order to use sysvisor-runc you must have your container in the format of an OCI bundle.
+In order to use sysbox-runc you must have your container in the format of an OCI bundle.
 If you have Docker installed you can use its `export` method to acquire a root filesystem from an existing Docker container.
 
 ```bash
@@ -121,13 +114,13 @@ docker export $(docker create busybox) | tar -C rootfs -xvf -
 ```
 
 After a root filesystem is populated you just generate a container spec in the
-format of a `config.json` file inside your bundle.  `sysvisor-runc` provides a `spec`
+format of a `config.json` file inside your bundle.  `sysbox-runc` provides a `spec`
 command to generate a base template spec that you are then able to edit.  To find features
 and documentation for fields in the spec please refer to the
 [specs](https://github.com/opencontainers/runtime-spec) repository.
 
 ```bash
-sysvisor-runc spec
+sysbox-runc spec
 ```
 
 ### Running Containers
@@ -139,10 +132,10 @@ The first way is to use the convenience command `run` that will handle creating,
 ```bash
 # run as root
 cd /mycontainer
-sysvisor-runc run mycontainerid
+sysbox-runc run mycontainerid
 ```
 
-If you used the unmodified `sysvisor-runc spec` template this should give you a `sh` session inside the container.
+If you used the unmodified `sysbox-runc spec` template this should give you a `sh` session inside the container.
 
 The second way to start a container is using the specs lifecycle operations.
 This gives you more power over how the container is created and managed while it is running.
@@ -155,26 +148,26 @@ These are the lifecycle operations in your shell.
 ```bash
 # run as root
 cd /mycontainer
-sysvisor-runc create mycontainerid
+sysbox-runc create mycontainerid
 
 # view the container is created and in the "created" state
-sysvisor-runc list
+sysbox-runc list
 
 # start the process inside the container
-sysvisor-runc start mycontainerid
+sysbox-runc start mycontainerid
 
 # after 5 seconds view that the container has exited and is now in the stopped state
-sysvisor-runc list
+sysbox-runc list
 
 # now delete the container
-sysvisor-runc delete mycontainerid
+sysbox-runc delete mycontainerid
 ```
 
 This allows higher level systems to augment the containers creation logic with setup of various settings after the container is created and/or before it is deleted. For example, the container's network stack is commonly set up after `create` but before `start`.
 
 #### Supervisors
 
-`sysvisor-runc` can be used with process supervisors and init systems to ensure that containers are restarted when they exit.
+`sysbox-runc` can be used with process supervisors and init systems to ensure that containers are restarted when they exit.
 An example systemd unit file looks something like this.
 
 ```systemd
@@ -183,8 +176,8 @@ Description=Start My Container
 
 [Service]
 Type=forking
-ExecStart=/usr/local/sbin/sysvisor-runc run -d --pid-file /run/mycontainerid.pid mycontainerid
-ExecStopPost=/usr/local/sbin/sysvisor-runc delete mycontainerid
+ExecStart=/usr/local/sbin/sysbox-runc run -d --pid-file /run/mycontainerid.pid mycontainerid
+ExecStopPost=/usr/local/sbin/sysbox-runc delete mycontainerid
 WorkingDirectory=/mycontainer
 PIDFile=/run/mycontainerid.pid
 

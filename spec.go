@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/opencontainers/runc/libcontainer/configs"
-	"github.com/opencontainers/runc/libsysvisor/syscont"
+	"github.com/opencontainers/runc/libsysbox/syscont"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"
@@ -20,8 +20,8 @@ import (
 
 var specCommand = cli.Command{
 	Name:  "spec",
-	Usage: "create a new container specification file",
-	Description: `The spec command creates the new container specification file
+	Usage: "create a new system container specification file",
+	Description: `The spec command creates the new system container specification file
 named "` + specConfig + `" for the bundle.
 
 The spec generated is just a starter file. Editing of the spec is required to
@@ -29,7 +29,7 @@ achieve desired results.
 
 ID mapping configuration:
 
-Nestybox Sysvisor containers use the Linux user namespace and thus require user
+Nestybox system containers use the Linux user namespace and thus require user
 and group ID mappings.
 
 The "--id-map" option allows configuration of these mappings for the generated spec.
@@ -37,14 +37,14 @@ It's normally not required, unless the user wants to control the user and group 
 mappings of the container.
 
 If the "--id-map" option is omitted, the generated spec will not include the
-user and group ID mappings. In this case sysvisor-runc will automatically
+user and group ID mappings. In this case sysbox-runc will automatically
 allocate them when the container is created. The allocation is done in such as
 way as to provide each sys container an exclusive range of uid(gid)s on the
 host, as a means to improve isolation. This feature requires that the
 container's root filesystem be owned by "root:root".
 
 If the "--id-map" option is given, the generated spec will include them and
-sysvisor-runc will honor them when creating the container. They are expected
+sysbox-runc will honor them when creating the container. They are expected
 to match the container's root filesystem ownership. Note that the size of the
 range is required be >= ` + strconv.FormatUint(uint64(syscont.IdRangeMin), 10) + ` (for compatibility with Linux distros
 that use ID 65534 as "nobody").

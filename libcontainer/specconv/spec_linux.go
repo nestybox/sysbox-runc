@@ -295,7 +295,7 @@ func createLibcontainerMount(cwd string, m specs.Mount) (*configs.Mount, error) 
 		}
 	}
 
-	// sysvisor-runc: for bind mounts, collect some info on the mount source. We do this
+	// sysbox-runc: for bind mounts, collect some info on the mount source. We do this
 	// here so that we don't have to do this from within the container's init process (as
 	// the latter may not have search permission into the bind source).
 	var bindSrcInfo configs.BindSrcInfo

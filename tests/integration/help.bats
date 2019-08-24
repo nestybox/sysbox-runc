@@ -6,17 +6,17 @@ load helpers
   runc -h
   [ "$status" -eq 0 ]
   [[ ${lines[0]} =~ NAME:+ ]]
-  [[ ${lines[1]} =~ sysvisor-runc\ '-'\ Nestybox\ sysvisor-runc+ ]]
+  [[ ${lines[1]} =~ sysbox-runc\ '-'\ sysbox-runc+ ]]
 
   runc --help
   [ "$status" -eq 0 ]
   [[ ${lines[0]} =~ NAME:+ ]]
-  [[ ${lines[1]} =~ sysvisor-runc\ '-'\ Nestybox\ sysvisor-runc+ ]]
+  [[ ${lines[1]} =~ sysbox-runc\ '-'\ sysbox-runc+ ]]
 }
 
 @test "runc command -h" {
 
-  # sysvisor-runc does not yet support checkpoint/restore
+  # sysbox-runc does not yet support checkpoint/restore
   # runc checkpoint -h
   # [ "$status" -eq 0 ]
   # [[ ${lines[1]} =~ runc\ checkpoint+ ]]
@@ -51,7 +51,7 @@ load helpers
   [ "$status" -eq 0 ]
   [[ ${lines[1]} =~ runc\ pause+ ]]
 
-  # sysvisor-runc does not yet support checkpoint/restore
+  # sysbox-runc does not yet support checkpoint/restore
   # runc restore -h
   # [ "$status" -eq 0 ]
   # [[ ${lines[1]} =~ runc\ restore+ ]]

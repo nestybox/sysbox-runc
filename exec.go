@@ -11,7 +11,7 @@ import (
 
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/utils"
-	"github.com/opencontainers/runc/libsysvisor/syscont"
+	"github.com/opencontainers/runc/libsysbox/syscont"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"
@@ -19,7 +19,7 @@ import (
 
 var execCommand = cli.Command{
 	Name:  "exec",
-	Usage: "execute new process inside the container",
+	Usage: "execute new process inside the system container",
 	ArgsUsage: `<container-id> <command> [command options]  || -p process.json <container-id>
 
 Where "<container-id>" is the name for the instance of the container and
@@ -30,7 +30,7 @@ EXAMPLE:
 For example, if the container is configured to run the linux ps command the
 following will output a list of processes running in the container:
 
-       # sysvisor-runc exec <container-id> ps`,
+       # sysbox-runc exec <container-id> ps`,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:  "console-socket",
@@ -166,7 +166,7 @@ func getProcess(context *cli.Context, bundle string) (*specs.Process, error) {
 		if err := validateProcessSpec(&p); err != nil {
 			return nil, err
 		}
-		// sysvisor-runc: convert the process spec for system containers
+		// sysbox-runc: convert the process spec for system containers
 		return &p, syscont.ConvertProcessSpec(&p)
 	}
 	// process via cli flags
@@ -231,7 +231,7 @@ func getProcess(context *cli.Context, bundle string) (*specs.Process, error) {
 		}
 		p.User.AdditionalGids = append(p.User.AdditionalGids, uint32(gid))
 	}
-	// sysvisor-runc: convert the process spec for system containers
+	// sysbox-runc: convert the process spec for system containers
 	if err := syscont.ConvertProcessSpec(p); err != nil {
 		return nil, err
 	}

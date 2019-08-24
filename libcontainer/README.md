@@ -1,6 +1,6 @@
-# sysvisor-runc libcontainer
+# sysbox-runc libcontainer
 
-The sysvisor-runc libcontainer is a fork of the OCI runc libcontainer
+The sysbox-runc libcontainer is a fork of the OCI runc libcontainer
 library. It has been modified (minimally and only when absolutely
 required) to support creation and management of system containers.
 

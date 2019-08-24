@@ -39,8 +39,8 @@ ROOT=$(mktemp -d "$WORK_DIR/runc.XXXXXX")
 CONSOLE_SOCKET="$WORK_DIR/console.sock"
 
 # runc command
-RUNC="${INTEGRATION_ROOT}/../../sysvisor-runc"
-RUNC_FLAGS="--no-sysvisor-mgr --no-sysvisor-fs --no-kernel-check"
+RUNC="${INTEGRATION_ROOT}/../../sysbox-runc"
+RUNC_FLAGS="--no-sysbox-mgr --no-sysbox-fs --no-kernel-check"
 
 # Cgroup paths
 CGROUP_MEMORY_BASE_PATH=$(grep "cgroup" /proc/self/mountinfo | gawk 'toupper($NF) ~ /\<MEMORY\>/ { print $5; exit }')
@@ -90,7 +90,7 @@ function runc_spec() {
 		args+=("--bundle" "$bundle")
 	fi
 
-        # sysvisor-runc: sys container spec takes id mappings
+        # sysbox-runc: sys container spec takes id mappings
         $RUNC spec "${args[@]}" --id-map "$UID_MAP $GID_MAP $ID_MAP_SIZE"
 
 	# Always add additional mappings if we have idmaps.
@@ -290,14 +290,14 @@ function setup_busybox() {
 	fi
 	tar --exclude './dev/*' -C "$BUSYBOX_BUNDLE"/rootfs -xf "$BUSYBOX_IMAGE"
 
-        # sysvisor-runc: set bundle ownership to match system
+        # sysbox-runc: set bundle ownership to match system
         # container's uid/gid map, except if using uid-shifting
         if [ -z "$SHIFT_UIDS" ]; then
             chown -R "$UID_MAP":"$GID_MAP" "$BUSYBOX_BUNDLE"
         fi
 
-        # sysvisor-runc: restrict path to bundle when using
-        # uid-shift, as required by sysvisor-runc's shiftfs
+        # sysbox-runc: restrict path to bundle when using
+        # uid-shift, as required by sysbox-runc's shiftfs
         # mount security check
         if [ -n "$SHIFT_UIDS" ]; then
           chmod 700 "$BUSYBOX_BUNDLE"
@@ -314,7 +314,7 @@ function setup_hello() {
 	run mkdir "$HELLO_BUNDLE"/rootfs
 	tar --exclude './dev/*' -C "$HELLO_BUNDLE"/rootfs -xf "$HELLO_IMAGE"
 
-        # sysvisor-runc: set bundle ownership to match system
+        # sysbox-runc: set bundle ownership to match system
         # container's uid/gid map, except if using uid-shifting
         if [ -z "$SHIFT_UIDS" ]; then
             chown -R "$UID_MAP":"$GID_MAP" "$HELLO_BUNDLE"

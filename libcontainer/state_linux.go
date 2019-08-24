@@ -59,16 +59,16 @@ func destroy(c *linuxContainer) error {
 	}
 	c.state = &stoppedState{c: c}
 
-	// Unregister with sysvisor-fs and sysvisor-mgr
+	// Unregister with sysbox-fs and sysbox-mgr
 	if c.sysFs.Enabled() {
 		if err := c.sysFs.Unregister(); err != nil {
-			return newSystemErrorWithCause(err, "unregistering with sysvisor-fs")
+			return newSystemErrorWithCause(err, "unregistering with sysbox-fs")
 		}
 	}
 
 	if c.sysMgr.Enabled() {
 		if err := c.sysMgr.Unregister(); err != nil {
-			return newSystemErrorWithCause(err, "unregistering with sysvisor-mgr")
+			return newSystemErrorWithCause(err, "unregistering with sysbox-mgr")
 		}
 	}
 

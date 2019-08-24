@@ -7,7 +7,7 @@ import (
 
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/system"
-	"github.com/opencontainers/runc/libsysvisor/sysvisor"
+	"github.com/opencontainers/runc/libsysbox/sysbox"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
@@ -15,13 +15,13 @@ import (
 
 var restoreCommand = cli.Command{
 	Name:  "restore",
-	Usage: "restore a container from a previous checkpoint",
+	Usage: "restore a system container from a previous checkpoint",
 	ArgsUsage: `<container-id>
 
 Where "<container-id>" is the name for the instance of the container to be
 restored.`,
 	Description: `Restores the saved state of the container instance that was previously saved
-using the sysvisor-runc checkpoint command.`,
+using the sysbox-runc checkpoint command.`,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:  "console-socket",
@@ -79,7 +79,7 @@ using the sysvisor-runc checkpoint command.`,
 		},
 		cli.BoolFlag{
 			Name:  "no-pivot",
-			Usage: "do not use pivot root to jail process inside rootfs.  This should be used whenever the rootfs is on top of a ramdisk",
+			Usage: "do not use pivot root to jail process inside rootfs. This should be used whenever the rootfs is on top of a ramdisk",
 		},
 		cli.StringSliceFlag{
 			Name:  "empty-ns",
@@ -111,8 +111,8 @@ using the sysvisor-runc checkpoint command.`,
 		}
 
 		id := context.Args().First()
-		sysMgr := sysvisor.NewMgr(id, !context.GlobalBool("no-sysvisor-mgr"))
-		sysFs := sysvisor.NewFs(id, !context.GlobalBool("no-sysvisor-fs"))
+		sysMgr := sysbox.NewMgr(id, !context.GlobalBool("no-sysbox-mgr"))
+		sysFs := sysbox.NewFs(id, !context.GlobalBool("no-sysbox-fs"))
 
 		// register with sysMgr (registration with sysFs occurs later (within libcontainer))
 		if sysMgr.Enabled() {

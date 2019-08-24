@@ -27,8 +27,7 @@ function teardown() {
 
   # TODO: improve test by checking that the mount source and destination
   # is "/root/test/"; currently only the destination is; the source
-  # is incorrectly showing a full host path. See sysvisor issue #39
-  # (https://github.com/nestybox/sysvisor/issues/39).
+  # is incorrectly showing a full host path. See sysboxd issue #39.
 
   runc exec test_busybox sh -c "umount /root/test"
   [ "$status" -eq 0 ]

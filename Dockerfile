@@ -1,4 +1,4 @@
-# Note: the golang version should match that used by the sysvisor test container Dockerfile.
+# Note: the golang version should match that used by the sysboxd test container Dockerfile.
 FROM golang:1.12-stretch
 
 RUN dpkg --add-architecture armel \
@@ -36,7 +36,7 @@ RUN dpkg --add-architecture armel \
 ENV GO111MODULE=on
 RUN go get golang.org/dl/gotip \
     && gotip download \
-    && gotip env -w GONOSUMDB=/root/nestybox/sysvisor-runc
+    && gotip env -w GONOSUMDB=/root/nestybox/sysbox-runc
 
 # Add a dummy user for the rootless integration tests. While runC does
 # not require an entry in /etc/passwd to operate, one of the tests uses
@@ -69,10 +69,10 @@ ENV ROOTFS /busybox
 RUN mkdir -p ${ROOTFS}
 
 COPY script/tmpmount /
-WORKDIR /root/nestybox/sysvisor-runc
+WORKDIR /root/nestybox/sysbox-runc
 ENTRYPOINT ["/tmpmount"]
 
-ADD . /root/nestybox/sysvisor-runc
+ADD . /root/nestybox/sysbox-runc
 
 RUN . tests/integration/multi-arch.bash \
     && curl -o- -sSL `get_busybox` | tar xfJC - ${ROOTFS}

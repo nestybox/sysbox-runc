@@ -10,7 +10,7 @@ function setup() {
 	mkdir rootfs/testdir
 	echo "Forbidden information!" > rootfs/testfile
 
-        # sysvisor-runc
+        # sysbox-runc
         chown "$UID_MAP":"$GID_MAP" rootfs/testdir
         chown "$UID_MAP":"$GID_MAP" rootfs/testfile
 
@@ -54,7 +54,7 @@ function teardown() {
 	[[ "${output}" == *"Device or resource busy"* ]]
 }
 
-# sysvisor-runc: this test is expected to fail until sysvisor can intercept
+# sysbox-runc: this test is expected to fail until sysboxd can intercept
 # the mount syscall to prevent umounting of mounts for masked paths
 # @test "mask path umounting" {
 # 	run busybox detached

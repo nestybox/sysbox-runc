@@ -5,7 +5,7 @@ package main
 import (
 	"os"
 
-	"github.com/opencontainers/runc/libsysvisor/sysvisor"
+	"github.com/opencontainers/runc/libsysbox/sysbox"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"
 )
@@ -13,7 +13,7 @@ import (
 // default action is to start a container
 var runCommand = cli.Command{
 	Name:  "run",
-	Usage: "create and run a container",
+	Usage: "create and run a system container",
 	ArgsUsage: `<container-id>
 
 Where "<container-id>" is your name for the instance of the container that you
@@ -81,8 +81,8 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 
 		id := context.Args().First()
 
-		sysMgr := sysvisor.NewMgr(id, !context.GlobalBool("no-sysvisor-mgr"))
-		sysFs := sysvisor.NewFs(id, !context.GlobalBool("no-sysvisor-fs"))
+		sysMgr := sysbox.NewMgr(id, !context.GlobalBool("no-sysbox-mgr"))
+		sysFs := sysbox.NewFs(id, !context.GlobalBool("no-sysbox-fs"))
 
 		// register with sysMgr (registration with sysFs occurs later (within libcontainer))
 		if sysMgr.Enabled() {
@@ -101,7 +101,7 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 			return err
 		}
 
-		if err = sysvisor.CheckHostConfig(context, shiftUids); err != nil {
+		if err = sysbox.CheckHostConfig(context, shiftUids); err != nil {
 			return err
 		}
 

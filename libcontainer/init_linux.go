@@ -249,7 +249,7 @@ func syncParentHooks(pipe io.ReadWriter) error {
 	return readSync(pipe, procResume)
 }
 
-// sysvisor-runc:
+// sysbox-runc:
 // syncParentDoMount signals the parent runc to perform a mount on behalf of the
 // container's init process; this is useful in cases where the container's init process
 // can't do the mount because it may not have search permissions to the bind mount

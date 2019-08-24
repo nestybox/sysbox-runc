@@ -55,7 +55,7 @@ function teardown() {
   # check state
   testcontainer test_busybox running
 
-  # sysvisor-runc: -e -x yields 0 processes because sys container uid
+  # sysbox-runc: -e -x yields 0 processes because sys container uid
   # is not the same as the uid of the process executing ps.
   runc ps test_busybox -e
   [ "$status" -eq 0 ]

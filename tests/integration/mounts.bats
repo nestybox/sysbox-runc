@@ -8,14 +8,14 @@ function setup_busybox_tmpfs() {
 
   tar --exclude './dev/*' -C /tmp/busyboxtest/rootfs -xf "$BUSYBOX_IMAGE"
 
-  # sysvisor-runc: set bundle ownership to match system
+  # sysbox-runc: set bundle ownership to match system
   # container's uid(gid) map, except if using uid-shifting
   if [ -z "$SHIFT_UIDS" ]; then
     chown -R "$UID_MAP":"$GID_MAP" /tmp/busyboxtest
   fi
 
-  # sysvisor-runc: restrict path to bundle when using
-  # uid-shift, as required by sysvisor-runc's shiftfs
+  # sysbox-runc: restrict path to bundle when using
+  # uid-shift, as required by sysbox-runc's shiftfs
   # mount security check
   if [ -n "$SHIFT_UIDS" ]; then
     chmod 700 /tmp/busyboxtest
@@ -45,7 +45,7 @@ function teardown() {
   mkdir -p /mnt/test-dir
   [ "$status" -eq 0 ]
 
-  # need this to pass sysvisor-runc's shiftfs mount security check
+  # need this to pass sysbox-runc's shiftfs mount security check
   if [ -n "$SHIFT_UIDS" ]; then
     chmod 700 /mnt/test-dir
   fi
@@ -139,7 +139,7 @@ function teardown() {
   mkdir -p /tmp/busyboxtest/test-dir
   [ "$status" -eq 0 ]
 
-  # need this to pass sysvisor-runc's shiftfs mount security check
+  # need this to pass sysbox-runc's shiftfs mount security check
   if [ -n "$SHIFT_UIDS" ]; then
     chmod 700 /tmp/busyboxtest
   fi

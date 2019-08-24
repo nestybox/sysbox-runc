@@ -21,7 +21,7 @@ func TestCaptureTestFunc(t *testing.T) {
 	if expected := "captureFunc"; frame.Function != expected {
 		t.Fatalf("expected function %q but received %q", expected, frame.Function)
 	}
-	expected := "github.com/nestybox/sysvisor-runc/libcontainer/stacktrace"
+	expected := "github.com/nestybox/sysbox-runc/libcontainer/stacktrace"
 	if !strings.HasSuffix(frame.Package, expected) {
 		t.Fatalf("expected package %q but received %q", expected, frame.Package)
 	}

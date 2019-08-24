@@ -12,7 +12,7 @@ function setup() {
   run mkdir "$HELLO_BUNDLE"/rootfs
   run tar -C "$HELLO_BUNDLE"/rootfs -xf "$HELLO_IMAGE"
 
-  # sysvisor-runc: bundle must have same uid/gid as that passed to
+  # sysbox-runc: bundle must have same uid/gid as that passed to
   # "runc spec" (see runc_spec())
   chown -R "$UID_MAP":"$GID_MAP" "$HELLO_BUNDLE"
 }
@@ -109,14 +109,14 @@ function teardown() {
 
 @test "spec read-only path filtering" {
   skip "not written yet"
-  # configure sys cont spec with read-only paths on files handled by sysvisor-fs
+  # configure sys cont spec with read-only paths on files handled by sysbox-fs
   # launch the sys container
   # verify that read-only paths in config are ignored
 }
 
 @test "spec masked path filtering" {
   skip "not written yet"
-  # configure sys cont spec with masked paths on files handled by sysvisor-fs
+  # configure sys cont spec with masked paths on files handled by sysbox-fs
   # launch the sys container
   # verify that masked paths in config are ignored
 }

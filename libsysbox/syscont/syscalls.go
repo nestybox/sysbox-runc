@@ -320,7 +320,7 @@ var syscontSyscallWhitelist = []string{
 	"clone",
 	"chroot",
 
-	// docker blocks these by default; sysvisor allows them
+	// docker blocks these by default; sysbox-runc allows them
 	"mount",
 	"umount",
 	"umount2",

@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/opencontainers/runc/libsysvisor/syscont"
-	"github.com/opencontainers/runc/libsysvisor/sysvisor"
+	"github.com/opencontainers/runc/libsysbox/sysbox"
+	"github.com/opencontainers/runc/libsysbox/syscont"
 	"github.com/opencontainers/runtime-spec/specs-go"
 
 	"github.com/sirupsen/logrus"
@@ -57,7 +57,7 @@ func fatal(err error) {
 }
 
 // setupSpec performs initial setup based on the cli.Context for the container
-func setupSpec(context *cli.Context, sysMgr *sysvisor.Mgr, sysFs *sysvisor.Fs) (*specs.Spec, bool, error) {
+func setupSpec(context *cli.Context, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs) (*specs.Spec, bool, error) {
 	bundle := context.String("bundle")
 	if bundle != "" {
 		if err := os.Chdir(bundle); err != nil {

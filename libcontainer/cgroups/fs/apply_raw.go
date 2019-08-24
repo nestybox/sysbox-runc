@@ -132,7 +132,7 @@ func isIgnorableError(rootless bool, err error) bool {
 	return errno == unix.EROFS || errno == unix.EPERM || errno == unix.EACCES
 }
 
-// sysvisor-runc:
+// sysbox-runc:
 //
 // CreateChildCgroup creates a sub directory under the cgroup directory for the system
 // container; this child cgroup will serve as the system container's cgroup root. The
@@ -306,7 +306,7 @@ func (m *Manager) GetPaths() map[string]string {
 	return paths
 }
 
-// sysvisor-runc
+// sysbox-runc
 func (m *Manager) GetChildCgroupPaths() map[string]string {
 	m.mu.Lock()
 	childCgroupPaths := make(map[string]string)
@@ -387,14 +387,14 @@ func (m *Manager) Freeze(state configs.FreezerState) error {
 }
 
 func (m *Manager) GetPids() ([]int, error) {
-	// sysvisor-runc: return the pids starting from the system container root
+	// sysbox-runc: return the pids starting from the system container root
    // (all sys container pids start at this level)
 	paths := m.GetChildCgroupPaths()
 	return cgroups.GetPids(paths["devices"])
 }
 
 func (m *Manager) GetAllPids() ([]int, error) {
-	// sysvisor-runc: return the pids starting from the system container root
+	// sysbox-runc: return the pids starting from the system container root
    // (all sys container pids start at this level)
 	paths := m.GetChildCgroupPaths()
 	return cgroups.GetAllPids(paths["devices"])

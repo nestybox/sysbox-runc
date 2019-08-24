@@ -10,16 +10,15 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/coreos/go-systemd/activation"
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/cgroups/systemd"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/intelrdt"
 	"github.com/opencontainers/runc/libcontainer/specconv"
 	"github.com/opencontainers/runc/libcontainer/utils"
-	"github.com/opencontainers/runc/libsysvisor/sysvisor"
+	"github.com/opencontainers/runc/libsysbox/sysbox"
 	"github.com/opencontainers/runtime-spec/specs-go"
-
-	"github.com/coreos/go-systemd/activation"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
@@ -29,7 +28,7 @@ import (
 var errEmptyID = errors.New("container id cannot be empty")
 
 // loadFactory returns the configured factory instance for execing containers.
-func loadFactory(context *cli.Context, sysMgr *sysvisor.Mgr, sysFs *sysvisor.Fs) (libcontainer.Factory, error) {
+func loadFactory(context *cli.Context, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs) (libcontainer.Factory, error) {
 	root := context.GlobalString("root")
 	abs, err := filepath.Abs(root)
 	if err != nil {
@@ -197,8 +196,8 @@ func setupIO(process *libcontainer.Process, rootuid, rootgid int, createTTY, det
 	// and the container's process inherits runc's stdio.
 	if detach {
 
-		// sysvisor-runc: ensure the ownership of stdio matches the container init process uid(gid).
-		// This is necessary because sysvisor-runc allocates the container's uid(gid) when using
+		// sysbox-runc: ensure the ownership of stdio matches the container init process uid(gid).
+		// This is necessary because sysbox-runc allocates the container's uid(gid) when using
 		// uid-shifting. The higher layer (e.g., containerd-shim) does not know about this and
 		// therefore will not set the correct permissions on stdio.
 
@@ -244,7 +243,7 @@ func createPidFile(path string, process *libcontainer.Process) error {
 	return os.Rename(tmpName, path)
 }
 
-func createContainer(context *cli.Context, id string, spec *specs.Spec, shiftUids bool, sysMgr *sysvisor.Mgr, sysFs *sysvisor.Fs) (libcontainer.Container, error) {
+func createContainer(context *cli.Context, id string, spec *specs.Spec, shiftUids bool, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs) (libcontainer.Container, error) {
 	rootlessCg, err := shouldUseRootlessCgroupManager(context)
 	if err != nil {
 		return nil, err
@@ -425,10 +424,10 @@ const (
 	CT_ACT_RESTORE
 )
 
-func startContainer(context *cli.Context, spec *specs.Spec, action CtAct, criuOpts *libcontainer.CriuOpts, shiftUids bool, sysMgr *sysvisor.Mgr, sysFs *sysvisor.Fs) (int, error) {
+func startContainer(context *cli.Context, spec *specs.Spec, action CtAct, criuOpts *libcontainer.CriuOpts, shiftUids bool, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs) (int, error) {
 
 	if shiftUids {
-		if err := sysvisor.KernelModSupported("nbox_shiftfs"); err != nil {
+		if err := sysbox.KernelModSupported("nbox_shiftfs"); err != nil {
 			return -1, fmt.Errorf("container requires uid shifting but error was found: %v", err)
 		}
 	}

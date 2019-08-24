@@ -28,7 +28,7 @@ type linuxStandardInit struct {
 	config        *initConfig
 }
 
-// sysvisor-runc: info passed when container init process requests its parent runc to perform
+// sysbox-runc: info passed when container init process requests its parent runc to perform
 // a mount operation on its behalf.
 type mountReqType int
 

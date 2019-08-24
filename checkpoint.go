@@ -19,7 +19,7 @@ import (
 
 var checkpointCommand = cli.Command{
 	Name:  "checkpoint",
-	Usage: "checkpoint a running container",
+	Usage: "checkpoint a running system container",
 	ArgsUsage: `<container-id>
 
 Where "<container-id>" is the name for the instance of the container to be
@@ -121,7 +121,7 @@ var namespaceMapping = map[specs.LinuxNamespaceType]int{
 }
 
 func setEmptyNsMask(context *cli.Context, options *libcontainer.CriuOpts) error {
-	/* sysvisor-runc doesn't manage network devices and their configuration */
+	/* sysbox-runc doesn't manage network devices and their configuration */
 	nsmask := unix.CLONE_NEWNET
 
 	for _, ns := range context.StringSlice("empty-ns") {

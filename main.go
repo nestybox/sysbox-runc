@@ -14,30 +14,30 @@ import (
 // Globals to be populated at build time during Makefile processing.
 var (
 	version  string // extracted from VERSION file
-	commitId string // latest git commit-id of sysvisor superproject
+	commitId string // latest git commit-id of sysboxd superproject
 	builtAt  string // build time
 	builtBy  string // build owner
 )
 
 const (
 	specConfig = "config.json"
-	usage      = `Nestybox sysvisor-runc
+	usage      = `sysbox-runc
 
-sysvisor-runc container runtime
+Nestybox's system container runtime.
 
-info: https://github.com/nestybox/sysvisor-external
+Info: https://github.com/nestybox/sysbox-external
 `
 )
 
 func main() {
 	app := cli.NewApp()
-	app.Name = "sysvisor-runc"
+	app.Name = "sysbox-runc"
 	app.Usage = usage
 	app.Version = version
 
 	// show-version specialization.
 	cli.VersionPrinter = func(c *cli.Context) {
-		fmt.Printf("sysvisor-runc\n"+
+		fmt.Printf("sysbox-runc\n"+
 			"\tversion: \t%s\n"+
 			"\tcommit: \t%s\n"+
 			"\tbuilt at: \t%s\n"+
@@ -46,10 +46,10 @@ func main() {
 			c.App.Version, commitId, builtAt, builtBy, specs.Version)
 	}
 
-	root := "/run/sysvisor-runc"
+	root := "/run/sysbox-runc"
 	if shouldHonorXDGRuntimeDir() {
 		if runtimeDir := os.Getenv("XDG_RUNTIME_DIR"); runtimeDir != "" {
-			root = runtimeDir + "/sysvisor-runc"
+			root = runtimeDir + "/sysbox-runc"
 			// According to the XDG specification, we need to set anything in
 			// XDG_RUNTIME_DIR to have a sticky bit if we don't want it to get
 			// auto-pruned.
@@ -83,12 +83,12 @@ func main() {
 			Usage: "root directory for storage of container state (this should be located in tmpfs)",
 		},
 		cli.BoolFlag{
-			Name:  "no-sysvisor-fs",
-			Usage: "do not interact with sysvisor-fs; meant for testing and debugging.",
+			Name:  "no-sysbox-fs",
+			Usage: "do not interact with sysbox-fs; meant for testing and debugging.",
 		},
 		cli.BoolFlag{
-			Name:  "no-sysvisor-mgr",
-			Usage: "do not interact with sysvisor-mgr; meant for testing and debugging.",
+			Name:  "no-sysbox-mgr",
+			Usage: "do not interact with sysbox-mgr; meant for testing and debugging.",
 		},
 		cli.BoolFlag{
 			Name:  "no-kernel-check",

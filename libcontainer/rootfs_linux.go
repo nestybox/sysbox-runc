@@ -21,7 +21,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/mount"
 	"github.com/opencontainers/runc/libcontainer/system"
 	libcontainerUtils "github.com/opencontainers/runc/libcontainer/utils"
-	"github.com/opencontainers/runc/libsysvisor/syscont"
+	"github.com/opencontainers/runc/libsysbox/syscont"
 	"github.com/opencontainers/selinux/go-selinux/label"
 
 	"golang.org/x/sys/unix"
@@ -282,7 +282,7 @@ func mountToRootfs(m *configs.Mount, rootfs, mountLabel string, enableCgroupns, 
 		}
 		return nil
 	case "bind":
-		// sysvisor-runc: in order to support uid shifting on bind mounts, we handle bind
+		// sysbox-runc: in order to support uid shifting on bind mounts, we handle bind
 		// mounts differently than the OCI runc; in particular, we perform the bind mount by
 		// asking the parent runc to spawn a helper child process which enters the
 		// container's mount namespace only and performs the mount. The helper process is
@@ -887,7 +887,7 @@ func mountNewCgroup(m *configs.Mount) error {
 	return nil
 }
 
-// sysvisor-runc: doMounts sets up all of the container's mounts as specified in the given config.
+// sysbox-runc: doMounts sets up all of the container's mounts as specified in the given config.
 func doMounts(config *configs.Config, pipe io.ReadWriter) error {
 	for _, m := range config.Mounts {
 		for _, precmd := range m.PremountCmds {
@@ -907,7 +907,7 @@ func doMounts(config *configs.Config, pipe io.ReadWriter) error {
 	return nil
 }
 
-// sysvisor-runc: validateCwd verifies that the current working directory is the container's
+// sysbox-runc: validateCwd verifies that the current working directory is the container's
 // rootfs
 func validateCwd(rootfs string) error {
 	cwd, err := os.Getwd()
@@ -920,7 +920,7 @@ func validateCwd(rootfs string) error {
 	return nil
 }
 
-// sysvisor-runc: allowShiftfsBindSource checks if the source dir of a bind mount is allowed
+// sysbox-runc: allowShiftfsBindSource checks if the source dir of a bind mount is allowed
 // when using shiftfs.
 func allowShiftfsBindSource(source, rootfs string) error {
 
@@ -941,8 +941,8 @@ func allowShiftfsBindSource(source, rootfs string) error {
 // required to run the system container.
 func needUidShiftOnBindSrc(mount *configs.Mount, config *configs.Config) (bool, error) {
 
-	// sysvisor-fs handles uid(gid) shifting itself, so no need for mounting shiftfs on top
-	if filepath.HasPrefix(mount.Source, syscont.SysvisorFsDir) {
+	// sysbox-fs handles uid(gid) shifting itself, so no need for mounting shiftfs on top
+	if filepath.HasPrefix(mount.Source, syscont.SysboxFsDir) {
 		return false, nil
 	}
 
@@ -971,7 +971,7 @@ func needUidShiftOnBindSrc(mount *configs.Mount, config *configs.Config) (bool, 
 	return true, nil
 }
 
-// sysvisor-runc: effectRootfsMount ensure the calling process sees the effects of a previous rootfs
+// sysbox-runc: effectRootfsMount ensure the calling process sees the effects of a previous rootfs
 // mount. It does this by reopening the rootfs directory.
 func effectRootfsMount() error {
 
@@ -988,7 +988,7 @@ func effectRootfsMount() error {
 	return nil
 }
 
-// sysvisor-runc: mountShiftfsOnRootfs mounts shiftfs over the container's rootfs.
+// sysbox-runc: mountShiftfsOnRootfs mounts shiftfs over the container's rootfs.
 // Since the shiftfs mount must be done by true root, mountShitfsOnRootfs requests the
 // parent runc to do the mount.
 func mountShiftfsOnRootfs(rootfs string, pipe io.ReadWriter) error {
@@ -1009,7 +1009,7 @@ func mountShiftfsOnRootfs(rootfs string, pipe io.ReadWriter) error {
 	return nil
 }
 
-// sysvisor-runc: mountShiftfs mounts shiftfs over the source of bind mounts. Since the
+// sysbox-runc: mountShiftfs mounts shiftfs over the source of bind mounts. Since the
 // shiftfs mount must be done by true root, it requests the parent runc to do the mount.
 func mountShiftfsOnBindSources(config *configs.Config, pipe io.ReadWriter) error {
 

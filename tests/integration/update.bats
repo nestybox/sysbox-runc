@@ -97,9 +97,9 @@ function check_cgroup_value() {
     [ "$status" -eq 0 ]
     check_cgroup_value $CGROUP_CPU "cpu.shares" 200
 
-    # sysvisor-runc: it's not possible to update the cpuset while a system container
+    # sysbox-runc: it's not possible to update the cpuset while a system container
     # is running, because Linux will not allow a cpuset of a cgroup to be
-    # set when that cgroup has child cgroups; recall that sysvisor-runc sets up a
+    # set when that cgroup has child cgroups; recall that sysbox-runc sets up a
     # child cgroup for the system containers cgroup root.
     #
     # update cpuset if supported (i.e. we're running on a multicore cpu)

@@ -6,8 +6,8 @@
 # Let's make use of go's top-of-tree binary till 1.13 comes out.
 GO := gotip
 
-RUNC_TARGET := sysvisor-runc
-RUNC_DEBUG_TARGET := sysvisor-runc-debug
+RUNC_TARGET := sysbox-runc
+RUNC_DEBUG_TARGET := sysbox-runc-debug
 
 SOURCES := $(shell find . 2>&1 | grep -E '.*\.(c|h|go)$$')
 PREFIX := $(DESTDIR)/usr/local
@@ -16,15 +16,15 @@ GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null)
 GIT_BRANCH_CLEAN := $(shell echo $(GIT_BRANCH) | sed -e "s/[^[:alnum:]]/-/g")
 RUNC_IMAGE := runc_dev$(if $(GIT_BRANCH_CLEAN),:$(GIT_BRANCH_CLEAN))
 NBOX := /root/nestybox
-RUNC := $(NBOX)/sysvisor-runc
+RUNC := $(NBOX)/sysbox-runc
 BUILDTAGS ?= seccomp
 COMMIT_NO := $(shell git rev-parse HEAD 2> /dev/null || true)
 COMMIT := $(if $(shell git status --porcelain --untracked-files=no),"${COMMIT_NO}-dirty","${COMMIT_NO}")
 
-SYSIPC := github.com/nestybox/sysvisor/sysvisor-ipc
-SYSMGR_GRPC_DIR := ../sysvisor-ipc/sysvisorMgrGrpc
+SYSIPC := github.com/nestybox/sysboxd/sysbox-ipc
+SYSMGR_GRPC_DIR := ../sysbox-ipc/sysboxMgrGrpc
 SYSMGR_GRPC_SRC := $(shell find $(SYSMGR_GRPC_DIR) 2>&1 | grep -E '.*\.(c|h|go|proto)$$')
-SYSFS_GRPC_DIR := ../sysvisor-ipc/sysvisorFsGrpc
+SYSFS_GRPC_DIR := ../sysbox-ipc/sysboxFsGrpc
 SYSFS_GRPC_SRC := $(shell find $(SYSFS_GRPC_DIR) 2>&1 | grep -E '.*\.(c|h|go|proto)$$')
 
 MAN_DIR := $(CURDIR)/man/man8
@@ -41,7 +41,7 @@ LDFLAGS := '-X main.version=${VERSION} -X main.commitId=${COMMIT_ID} \
 
 RUN_TEST_CONT := docker run ${DOCKER_RUN_PROXY} -t --privileged --rm \
 		-v $(CURDIR):$(RUNC)                                 \
-		-v $(CURDIR)/../sysvisor-ipc:$(NBOX)/sysvisor-ipc    \
+		-v $(CURDIR)/../sysbox-ipc:$(NBOX)/sysbox-ipc    \
 		-v /lib/modules:/lib/modules:ro                      \
 		-v $(GOPATH)/pkg/mod:/go/pkg/mod                     \
 		$(RUNC_IMAGE)
@@ -82,7 +82,7 @@ man:
 runcimage:
 	docker build ${DOCKER_BUILD_PROXY} -t $(RUNC_IMAGE) .
 
-# Note: sysvisor-runc does not support rootless mode, so rootless integration tests are not invoked as part of test or localtest
+# Note: sysbox-runc does not support rootless mode, so rootless integration tests are not invoked as part of test or localtest
 test:
 	make unittest integration integration-shiftuid
 
@@ -116,7 +116,7 @@ localrootlessintegration: all
 shell: runcimage
 	docker run ${DOCKER_RUN_PROXY} -ti --privileged --rm \
 	   -v $(CURDIR):$(RUNC)                              \
-	   -v $(CURDIR)/../sysvisor-ipc:$(NBOX)/sysvisor-ipc \
+	   -v $(CURDIR)/../sysbox-ipc:$(NBOX)/sysbox-ipc \
 	   -v /lib/modules:/lib/modules:ro                   \
 	   -v $(GOPATH)/pkg/mod:/go/pkg/mod                  \
 	   $(RUNC_IMAGE) bash

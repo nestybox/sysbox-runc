@@ -40,19 +40,19 @@ type Manager interface {
 	// Sets the cgroup as configured.
 	Set(container *configs.Config) error
 
-	// sysvisor-runc: creates a child cgroup for the system container's cgroup root;
+	// sysbox-runc: creates a child cgroup for the system container's cgroup root;
 	// we don't need a corresponding destroy method because the existing Destroy()
 	// method will destroy the child cgroup.
 	CreateChildCgroup(container *configs.Config) error
 
-	// sysvisor-runc: applies child cgroup configuration to the process with the specified
+	// sysbox-runc: applies child cgroup configuration to the process with the specified
 	// pid. Must be called after Apply() has been called because Apply() configures
 	// internal state in the cgroup manager that ApplyChildCgroup() does not. This
 	// awkwardness could be avoided if this interface had a separate Create() method as
 	// currently Apply() serves as both create and apply.
 	ApplyChildCgroup(pid int) error
 
-	// sysvisor-runc: same as GetPaths(), but returns child cgroup paths
+	// sysbox-runc: same as GetPaths(), but returns child cgroup paths
 	GetChildCgroupPaths() map[string]string
 }
 

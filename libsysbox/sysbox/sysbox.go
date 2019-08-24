@@ -1,4 +1,4 @@
-package sysvisor
+package sysbox
 
 import (
 	"bufio"
@@ -15,14 +15,14 @@ import (
 )
 
 // The min supported kernel release is chosen based on whether it contains all kernel
-// fixes required to run sysvisor. Refer to the sysvisor github issues and search for
+// fixes required to run sysboxd. Refer to the sysboxd github issues and search for
 // "kernel".
 type kernelRelease struct{ major, minor int }
 
 var minKernel = kernelRelease{4, 10}        // 4.10
-var minKernelUidShift = kernelRelease{5, 0} // 5.0 (see sysvisor issues #160 and #180)
+var minKernelUidShift = kernelRelease{5, 0} // 5.0 (see issues #160 and #180)
 
-// See sysvisor issues #160 and #180
+// See issues #160 and #180
 var uidShiftDistros = []string{"Ubuntu"}
 
 // checkUnprivilegedUserns checks if the kernel is configured to allow
@@ -144,7 +144,7 @@ func checkKernel(uidShift bool) error {
 	return nil
 }
 
-// CheckHostConfig checks if the host is configured appropriately to run sysvisor-runc
+// CheckHostConfig checks if the host is configured appropriately to run sysbox-runc
 func CheckHostConfig(context *cli.Context, shiftUids bool) error {
 
 	if !context.GlobalBool("no-kernel-check") {
@@ -160,7 +160,7 @@ func CheckHostConfig(context *cli.Context, shiftUids bool) error {
 		return fmt.Errorf("host is not configured properly: %v", err)
 	}
 
-	// TODO: check for fuse module presence (needed by sysvisor-fs)
+	// TODO: check for fuse module presence (needed by sysbox-fs)
 
 	return nil
 }

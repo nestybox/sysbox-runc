@@ -20,7 +20,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/intelrdt"
 	"github.com/opencontainers/runc/libcontainer/mount"
 	"github.com/opencontainers/runc/libcontainer/utils"
-	"github.com/opencontainers/runc/libsysvisor/sysvisor"
+	"github.com/opencontainers/runc/libsysbox/sysbox"
 
 	"golang.org/x/sys/unix"
 )
@@ -129,8 +129,8 @@ func CriuPath(criupath string) func(*LinuxFactory) error {
 }
 
 // SysFs returns an option func that configures a LinuxFactory to return containers that
-// use the given sysvisor-fs for emulating parts of the container's rootfs.
-func SysFs(sysFs *sysvisor.Fs) func(*LinuxFactory) error {
+// use the given sysbox-fs for emulating parts of the container's rootfs.
+func SysFs(sysFs *sysbox.Fs) func(*LinuxFactory) error {
 	return func(l *LinuxFactory) error {
 		l.SysFs = sysFs
 		return nil
@@ -138,8 +138,8 @@ func SysFs(sysFs *sysvisor.Fs) func(*LinuxFactory) error {
 }
 
 // SysMgr returns an option func that configures a LinuxFactory to return containers that
-// use the given sysvisor-mgr services.
-func SysMgr(sysMgr *sysvisor.Mgr) func(*LinuxFactory) error {
+// use the given sysbox-mgr services.
+func SysMgr(sysMgr *sysbox.Mgr) func(*LinuxFactory) error {
 	return func(l *LinuxFactory) error {
 		l.SysMgr = sysMgr
 		return nil
@@ -172,11 +172,11 @@ func New(root string, options ...func(*LinuxFactory) error) (Factory, error) {
 	}
 
 	if l.SysMgr == nil {
-		l.SysMgr = sysvisor.NewMgr("", false)
+		l.SysMgr = sysbox.NewMgr("", false)
 	}
 
 	if l.SysFs == nil {
-		l.SysFs = sysvisor.NewFs("", false)
+		l.SysFs = sysbox.NewFs("", false)
 	}
 
 	return l, nil
@@ -213,11 +213,11 @@ type LinuxFactory struct {
 	// NewIntelRdtManager returns an initialized Intel RDT manager for a single container.
 	NewIntelRdtManager func(config *configs.Config, id string, path string) intelrdt.Manager
 
-	// SysFs is the object representing the sysvisor-fs
-	SysFs *sysvisor.Fs
+	// SysFs is the object representing the sysbox-fs
+	SysFs *sysbox.Fs
 
-	// SysMgr is the object representing the sysvisor-mgr
-	SysMgr *sysvisor.Mgr
+	// SysMgr is the object representing the sysbox-mgr
+	SysMgr *sysbox.Mgr
 }
 
 func (l *LinuxFactory) Create(id string, config *configs.Config) (Container, error) {

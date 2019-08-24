@@ -29,17 +29,17 @@ func killContainer(container libcontainer.Container) error {
 
 var deleteCommand = cli.Command{
 	Name:  "delete",
-	Usage: "delete any resources held by the container; often used with detached container",
+	Usage: "delete any resources held by the system container; often used with detached container",
 	ArgsUsage: `<container-id>
 
 Where "<container-id>" is the name for the instance of the container.
 
 EXAMPLE:
-For example, if the container id is "ubuntu01" and sysvisor-runc list currently shows the
+For example, if the container id is "ubuntu01" and sysbox-runc list currently shows the
 status of "ubuntu01" as "stopped" the following will delete resources held for
-"ubuntu01" removing "ubuntu01" from the sysvisor-runc list of containers:
+"ubuntu01" removing "ubuntu01" from the sysbox-runc list of containers:
 
-       # sysvisor-runc delete ubuntu01`,
+       # sysbox-runc delete ubuntu01`,
 	Flags: []cli.Flag{
 		cli.BoolFlag{
 			Name:  "force, f",

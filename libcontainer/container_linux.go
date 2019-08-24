@@ -20,14 +20,15 @@ import (
 	"time"
 
 	criurpc "github.com/checkpoint-restore/go-criu/rpc"
-	"github.com/cyphar/filepath-securejoin"
+	//"github.com/cyphar/filepath-securejoin"
+	securejoin "github.com/cyphar/filepath-securejoin"
 	"github.com/golang/protobuf/proto"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/intelrdt"
 	"github.com/opencontainers/runc/libcontainer/system"
 	"github.com/opencontainers/runc/libcontainer/utils"
-	"github.com/opencontainers/runc/libsysvisor/sysvisor"
+	"github.com/opencontainers/runc/libsysbox/sysbox"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink/nl"
@@ -53,8 +54,8 @@ type linuxContainer struct {
 	criuVersion          int
 	state                containerState
 	created              time.Time
-	sysFs                *sysvisor.Fs
-	sysMgr               *sysvisor.Mgr
+	sysFs                *sysbox.Fs
+	sysMgr               *sysbox.Mgr
 }
 
 // State represents a running container's state
@@ -81,11 +82,11 @@ type State struct {
 	// Intel RDT "resource control" filesystem path
 	IntelRdtPath string `json:"intel_rdt_path"`
 
-	// SysFs contains info about resources obtained from sysvisor-fs
-	SysFs sysvisor.Fs `json:"sys_fs,omitempty"`
+	// SysFs contains info about resources obtained from sysbox-fs
+	SysFs sysbox.Fs `json:"sys_fs,omitempty"`
 
-	// SysMgr contains info about resources obtained from sysvisor-mgr
-	SysMgr sysvisor.Mgr `json:"sys_mgr,omitempty"`
+	// SysMgr contains info about resources obtained from sysbox-mgr
+	SysMgr sysbox.Mgr `json:"sys_mgr,omitempty"`
 }
 
 // Container is a libcontainer container object.
@@ -355,10 +356,10 @@ func (c *linuxContainer) start(process *Process) error {
 	// generate a timestamp indicating when the container was started
 	c.created = time.Now().UTC()
 
-	// sysvisor-runc: send the creation-timestamp to sysvisor-fs.
+	// sysbox-runc: send the creation-timestamp to sysbox-fs.
 	if process.Init && c.sysFs.Enabled() {
 		if err := c.sysFs.SendCreationTime(c.created); err != nil {
-			return newSystemErrorWithCause(err, "sending creation timestamp to sysvisor-fs")
+			return newSystemErrorWithCause(err, "sending creation timestamp to sysbox-fs")
 		}
 	}
 
@@ -549,7 +550,7 @@ func (c *linuxContainer) newSetnsProcess(p *Process, cmd *exec.Cmd, parentPipe, 
 	if err != nil {
 		return nil, err
 	}
-	// sysvisor-runc: setns processes enter the child cgroup (i.e., the system container's
+	// sysbox-runc: setns processes enter the child cgroup (i.e., the system container's
 	// cgroup root)
 	return &setnsProcess{
 		cmd:             cmd,
@@ -564,7 +565,7 @@ func (c *linuxContainer) newSetnsProcess(p *Process, cmd *exec.Cmd, parentPipe, 
 	}, nil
 }
 
-// sysvisor-runc: create a new helper process command to perform rootfs mount initialization
+// sysbox-runc: create a new helper process command to perform rootfs mount initialization
 func (c *linuxContainer) initMountCmdTemplate(childPipe *os.File) *exec.Cmd {
 	cmd := exec.Command(c.initPath, c.initArgs[1:]...)
 	cmd.Args[0] = c.initArgs[0]
@@ -1186,7 +1187,7 @@ func (c *linuxContainer) makeCriuRestoreMountpoints(m *configs.Mount) error {
 		// The prepareBindDest() function checks if source
 		// exists. So it cannot be used for other filesystem types.
 		//
-		// sysvisor-runc: this is no longer the case; prepareBindDest() only checks the
+		// sysbox-runc: this is no longer the case; prepareBindDest() only checks the
 		// mount destination; if we need to check the mount source we need to create a
 		// function that explicitly does this.
 		if err := prepareBindDest(m, c.config.Rootfs, true); err != nil {
@@ -2070,7 +2071,7 @@ func requiresRootOrMappingTool(c *configs.Config) bool {
 	return !reflect.DeepEqual(c.GidMappings, gidMap)
 }
 
-// sysvisor-runc: initMount creates a child helper process that assists the container's
+// sysbox-runc: initMount creates a child helper process that assists the container's
 // init process with rootfs mount initializations. This helper process enters the
 // container's mount namespace (only) and performs the requested mount action. By virtue
 // of only entering the mount namespace, the helper process has true root-level access to

@@ -18,7 +18,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/intelrdt"
 	"github.com/opencontainers/runc/libcontainer/system"
 	"github.com/opencontainers/runc/libcontainer/utils"
-	"github.com/opencontainers/runc/libsysvisor/sysvisor"
+	"github.com/opencontainers/runc/libsysbox/sysbox"
 
 	"golang.org/x/sys/unix"
 )
@@ -276,7 +276,7 @@ func (p *initProcess) start() error {
 		return newSystemErrorWithCause(err, "applying cgroup configuration for process")
 	}
 
-	// sysvisor-runc: set the cgroup resources before creating a child cgroup for
+	// sysbox-runc: set the cgroup resources before creating a child cgroup for
 	// the system container's cgroup root. This way the child cgroup will inherit
 	// the cgroup resources. Also, do this before the prestart hook so that the
 	// prestart hook may apply cgroup permissions.
@@ -284,7 +284,7 @@ func (p *initProcess) start() error {
 		return newSystemErrorWithCause(err, "setting cgroup config for ready process")
 	}
 
-	// sysvisor-runc: create a child cgroup that will serve as the system container's
+	// sysbox-runc: create a child cgroup that will serve as the system container's
 	// cgroup root.
 	if err := p.manager.CreateChildCgroup(p.config.Config); err != nil {
 		return newSystemErrorWithCause(err, "creating container child cgroup")
@@ -322,7 +322,7 @@ func (p *initProcess) start() error {
 	}
 	p.setExternalDescriptors(fds)
 
-	// sysvisor-runc: place the system container's init process in the child cgroup. Do
+	// sysbox-runc: place the system container's init process in the child cgroup. Do
 	// this before syncing with child so that no children can escape the cgroup
 	if err := p.manager.ApplyChildCgroup(childPid); err != nil {
 		return newSystemErrorWithCause(err, "applying cgroup configuration for process")
@@ -341,12 +341,12 @@ func (p *initProcess) start() error {
 		}
 	}
 
-	// sysvisor-runc: register the container with sysvisor-fs (must be done before
-	// prestart hooks so that sysvisor-fs is ready to respond by the time the hooks run).
+	// sysbox-runc: register the container with sysbox-fs (must be done before
+	// prestart hooks so that sysbox-fs is ready to respond by the time the hooks run).
 	sysFs := p.container.sysFs
 	if sysFs.Enabled() {
 		c := p.container
-		info := &sysvisor.FsRegInfo{
+		info := &sysbox.FsRegInfo{
 			Hostname: c.config.Hostname,
 			Pid:      childPid,
 			Uid:      c.config.UidMappings[0].HostID,
@@ -354,7 +354,7 @@ func (p *initProcess) start() error {
 			IdSize:   c.config.UidMappings[0].Size,
 		}
 		if err := sysFs.Register(info); err != nil {
-			return newSystemErrorWithCause(err, "registering with sysvisor-fs")
+			return newSystemErrorWithCause(err, "registering with sysbox-fs")
 		}
 	}
 

@@ -39,7 +39,7 @@ func showFile(t *testing.T, fname string) error {
 	return nil
 }
 
-// sysvisor-fs: disable checkpoint/restore tests until behavior and requirements are
+// sysbox-fs: disable checkpoint/restore tests until behavior and requirements are
 // understood; this test fails if enabled (during the restore operation, the test
 // tries to write to the container's device cgroup (devices.deny file) but fails
 // because this operation is not permitted due to the presence of the child cgroup).
