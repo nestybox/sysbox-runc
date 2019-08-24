@@ -22,10 +22,11 @@ var (
 
 const (
 	specConfig = "config.json"
-	usage      = `Nestybox sysbox-runc
+	usage      = `sysbox-runc
 
-sysbox-runc container runtime
-info: https://github.com/nestybox/sysbox-external
+Nestybox's system container runtime.
+
+Info: https://github.com/nestybox/sysbox-external
 `
 )
 

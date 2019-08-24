@@ -13,7 +13,7 @@ import (
 // default action is to start a container
 var runCommand = cli.Command{
 	Name:  "run",
-	Usage: "create and run a container",
+	Usage: "create and run a system container",
 	ArgsUsage: `<container-id>
 
 Where "<container-id>" is your name for the instance of the container that you

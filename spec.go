@@ -20,8 +20,8 @@ import (
 
 var specCommand = cli.Command{
 	Name:  "spec",
-	Usage: "create a new container specification file",
-	Description: `The spec command creates the new container specification file
+	Usage: "create a new system container specification file",
+	Description: `The spec command creates the new system container specification file
 named "` + specConfig + `" for the bundle.
 
 The spec generated is just a starter file. Editing of the spec is required to
@@ -29,7 +29,7 @@ achieve desired results.
 
 ID mapping configuration:
 
-Nestybox Sysbox containers use the Linux user namespace and thus require user
+Nestybox system containers use the Linux user namespace and thus require user
 and group ID mappings.
 
 The "--id-map" option allows configuration of these mappings for the generated spec.

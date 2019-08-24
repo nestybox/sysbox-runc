@@ -42,7 +42,6 @@ function teardown() {
 }
 
 @test "runc run [bind mount]" {
-
 	mkdir -p /mnt/test-dir
 
 	# need this to pass sysbox-runc's shiftfs mount security check

@@ -11,10 +11,10 @@ import (
 
 var startCommand = cli.Command{
 	Name:  "start",
-	Usage: "executes the user defined process in a created container",
+	Usage: "executes the user defined process in a created system container",
 	ArgsUsage: `<container-id>
 
-Where "<container-id>" is your name for the instance of the container that you
+Where "<container-id>" is your name for the instance of the system container that you
 are starting. The name you provide for the container instance must be unique on
 your host.`,
 	Description: `The start command executes the user defined process in a created container.`,

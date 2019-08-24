@@ -10,7 +10,6 @@ import (
 	"syscall"
 
 	mapset "github.com/deckarep/golang-set"
-
 	"github.com/opencontainers/runc/libsysbox/sysbox"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"

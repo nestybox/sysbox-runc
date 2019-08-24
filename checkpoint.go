@@ -20,7 +20,7 @@ import (
 
 var checkpointCommand = cli.Command{
 	Name:  "checkpoint",
-	Usage: "checkpoint a running container",
+	Usage: "checkpoint a running system container",
 	ArgsUsage: `<container-id>
 
 Where "<container-id>" is the name for the instance of the container to be

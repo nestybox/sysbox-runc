@@ -21,6 +21,7 @@ function setup() {
 			| .linux.resources.pids |= {"limit": 20}' "${BUSYBOX_BUNDLE}"
 }
 
+
 # Tests whatever limits are (more or less) common between cgroup
 # v1 and v2: memory/swap, pids, and cpuset.
 @test "update cgroup v1/v2 common limits" {
@@ -42,29 +43,29 @@ function setup() {
 
 	# Set a few variables to make the code below work for both v1 and v2
 	case $CGROUP_UNIFIED in
-	no)
-		MEM_LIMIT="memory.limit_in_bytes"
-		SD_MEM_LIMIT="MemoryLimit"
-		MEM_RESERVE="memory.soft_limit_in_bytes"
-		SD_MEM_RESERVE="unsupported"
-		MEM_SWAP="memory.memsw.limit_in_bytes"
-		SD_MEM_SWAP="unsupported"
-		SYSTEM_MEM=$(cat "${CGROUP_MEMORY_BASE_PATH}/${MEM_LIMIT}")
-		HAVE_SWAP="no"
-		if [ -f "${CGROUP_MEMORY_BASE_PATH}/${MEM_SWAP}" ]; then
+		no)
+			MEM_LIMIT="memory.limit_in_bytes"
+			SD_MEM_LIMIT="MemoryLimit"
+			MEM_RESERVE="memory.soft_limit_in_bytes"
+			SD_MEM_RESERVE="unsupported"
+			MEM_SWAP="memory.memsw.limit_in_bytes"
+			SD_MEM_SWAP="unsupported"
+			SYSTEM_MEM=$(cat "${CGROUP_MEMORY_BASE_PATH}/${MEM_LIMIT}")
+			HAVE_SWAP="no"
+			if [ -f "${CGROUP_MEMORY_BASE_PATH}/${MEM_SWAP}" ]; then
+				HAVE_SWAP="yes"
+			fi
+			;;
+		yes)
+			MEM_LIMIT="memory.max"
+			SD_MEM_LIMIT="MemoryMax"
+			Mem_RESERVE="memory.low"
+			SD_MEM_RESERVE="MemoryLow"
+			MEM_SWAP="memory.swap.max"
+			SD_MEM_SWAP="MemorySwapMax"
+			SYSTEM_MEM="max"
 			HAVE_SWAP="yes"
-		fi
-		;;
-	yes)
-		MEM_LIMIT="memory.max"
-		SD_MEM_LIMIT="MemoryMax"
-		Mem_RESERVE="memory.low"
-		SD_MEM_RESERVE="MemoryLow"
-		MEM_SWAP="memory.swap.max"
-		SD_MEM_SWAP="MemorySwapMax"
-		SYSTEM_MEM="max"
-		HAVE_SWAP="yes"
-		;;
+			;;
 	esac
 	SD_UNLIMITED="infinity"
 	SD_VERSION=$(systemctl --version | awk '{print $2; exit}')
@@ -88,12 +89,12 @@ function setup() {
 	check_systemd_value "TasksMax" 20
 
 	# update cpuset if supported (i.e. we're running on a multicore cpu)
-        #
-        # NOTE: with sysbox, we always create a parent and a child cgroup; the
-        # first is owned by the host, the later is delegated to the sys
-        # container. Because of this, cpuset updates on the parent fail with
-        # "Devicer or resource busy" because they can only be done when there are
-        # no child cgroups. Thus, we check for failure here.
+   #
+   # NOTE: with sysbox, we always create a parent and a child cgroup; the
+   # first is owned by the host, the later is delegated to the sys
+   # container. Because of this, cpuset updates on the parent fail with
+   # "Devicer or resource busy" because they can only be done when there are
+   # no child cgroups. Thus, we check for failure here.
 
 	cpu_count=$(grep -c '^processor' /proc/cpuinfo)
 	if [ "$cpu_count" -gt 1 ]; then
@@ -200,9 +201,9 @@ EOF
 
 	# redo all the changes at once
 	runc update test_update \
-		--cpu-period 900000 --cpu-quota 600000 --cpu-share 200 \
-		--memory 67108864 --memory-reservation 33554432 \
-		--pids-limit 10
+		  --cpu-period 900000 --cpu-quota 600000 --cpu-share 200 \
+		  --memory 67108864 --memory-reservation 33554432 \
+		  --pids-limit 10
 	[ "$status" -eq 0 ]
 	check_cgroup_value $MEM_LIMIT 67108864
 	check_systemd_value $SD_MEM_LIMIT 67108864
@@ -292,7 +293,7 @@ EOF
 
 	# redo all the changes at once
 	runc update test_update \
-		--cpu-period 900000 --cpu-quota 600000 --cpu-share 200
+		  --cpu-period 900000 --cpu-quota 600000 --cpu-share 200
 	[ "$status" -eq 0 ]
 	check_cpu_quota 600000 900000 "670ms"
 	check_cpu_shares 200
@@ -528,7 +529,7 @@ EOF
 	TMP_CONSOLE_SOCKET="$TMP_RECVTTY_DIR/console.sock"
 	CONTAINER_OUTPUT="$TMP_RECVTTY_DIR/output"
 	("$RECVTTY" --no-stdin --pid-file "$TMP_RECVTTY_PID" \
-		--mode single "$TMP_CONSOLE_SOCKET" &>"$CONTAINER_OUTPUT") &
+					--mode single "$TMP_CONSOLE_SOCKET" &>"$CONTAINER_OUTPUT") &
 	retry 10 0.1 [ -e "$TMP_CONSOLE_SOCKET" ]
 
 	# Run the container in the background.

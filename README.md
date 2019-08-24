@@ -2,17 +2,11 @@
 
 ## Introduction
 
-`sysbox-runc` is a fork of the OCI runc, modified for running containers that
-enhance regular Docker containers in two ways:
+`sysbox-runc` is a fork of the OCI runc, modified for running system
+containers.
 
-* It expands the types of programs that can run within the container.
-
-* It hardens the isolation of the container from the rest of the
-  system.
-
-Refer to the [Sysbox repo](https://github.com/nestybox/sysbox) for
-more detailed info on Sysbox.
-
+Refer to the [Sysbox repo](../README.md) for more detailed info on
+Sysbox.
 
 ## Dependencies
 
@@ -24,12 +18,13 @@ repository.
 ## Integration with other Sysbox components
 
 sysbox-runc is tightly integrated with sysbox-fs and sysbox-mgr via
-gRPC. Refer to the [Sysbox design doc](https://github.com/nestybox/sysbox/blob/master/docs/design.md) for
+gRPC. Refer to the [Sysbox design doc](../docs/design.md) for
 further info.
 
 ## Building
 
 `sysbox-runc` currently supports the Linux platform with various architecture support.
+
 It must be built with Go version 1.13 or higher.
 
 In order to enable seccomp support you will need to install `libseccomp` on your platform.

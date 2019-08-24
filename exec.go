@@ -19,7 +19,7 @@ import (
 
 var execCommand = cli.Command{
 	Name:  "exec",
-	Usage: "execute new process inside the container",
+	Usage: "execute new process inside the system container",
 	ArgsUsage: `<container-id> <command> [command options]  || -p process.json <container-id>
 
 Where "<container-id>" is the name for the instance of the container and

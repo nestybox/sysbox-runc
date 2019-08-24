@@ -22,10 +22,10 @@ function teardown() {
 	# check state
 	testcontainer test_busybox running
 
-        runc ps test_busybox
-        [ "$status" -eq 0 ]
-        [[ ${lines[0]} =~ UID\ +PID\ +PPID\ +C\ +STIME\ +TTY\ +TIME\ +CMD+ ]]
-        [[ "${lines[1]}" == *"$UID_MAP"*[0-9]* ]]
+   runc ps test_busybox
+   [ "$status" -eq 0 ]
+   [[ ${lines[0]} =~ UID\ +PID\ +PPID\ +C\ +STIME\ +TTY\ +TIME\ +CMD+ ]]
+   [[ "${lines[1]}" == *"$UID_MAP"*[0-9]* ]]
 }
 
 @test "ps -f json" {
@@ -45,12 +45,13 @@ function teardown() {
 }
 
 @test "ps -e" {
-        # Note: in the OCI runc, this test uses "ps -e -x"; but the "-x" flag
-        # causes no processes to be listed because the process doing ps does
-        # no have the same UID as the process inside the sys container (due
-        # to sysbox's user-namespace usage).
 
-   	# ps is not supported, it requires cgroups
+   # Note: in the OCI runc, this test uses "ps -e -x"; but the "-x" flag
+   # causes no processes to be listed because the process doing ps does
+   # no have the same UID as the process inside the sys container (due
+   # to sysbox's user-namespace usage).
+
+   # ps is not supported, it requires cgroups
 	requires root
 
 	# start busybox detached
@@ -62,7 +63,7 @@ function teardown() {
 
 	runc ps test_busybox -e
 	[ "$status" -eq 0 ]
-        [[ ${lines[0]} =~ \ +PID\ +TTY\ +TIME\ +CMD+ ]]
+   [[ ${lines[0]} =~ \ +PID\ +TTY\ +TIME\ +CMD+ ]]
 	[[ "${lines[1]}" =~ [0-9]+ ]]
 }
 

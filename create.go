@@ -10,13 +10,13 @@ import (
 
 var createCommand = cli.Command{
 	Name:  "create",
-	Usage: "create a container",
+	Usage: "create a system container",
 	ArgsUsage: `<container-id>
 
-Where "<container-id>" is your name for the instance of the container that you
+Where "<container-id>" is your name for the instance of the system container that you
 are starting. The name you provide for the container instance must be unique on
 your host.`,
-	Description: `The create command creates an instance of a container for a bundle. The bundle
+	Description: `The create command creates an instance of a system container for a bundle. The bundle
 is a directory with a specification file named "` + specConfig + `" and a root
 filesystem.
 

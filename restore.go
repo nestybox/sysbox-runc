@@ -15,7 +15,7 @@ import (
 
 var restoreCommand = cli.Command{
 	Name:  "restore",
-	Usage: "restore a container from a previous checkpoint",
+	Usage: "restore a system container from a previous checkpoint",
 	ArgsUsage: `<container-id>
 
 Where "<container-id>" is the name for the instance of the container to be
@@ -79,7 +79,7 @@ using the sysbox-runc checkpoint command.`,
 		},
 		cli.BoolFlag{
 			Name:  "no-pivot",
-			Usage: "do not use pivot root to jail process inside rootfs.  This should be used whenever the rootfs is on top of a ramdisk",
+			Usage: "do not use pivot root to jail process inside rootfs. This should be used whenever the rootfs is on top of a ramdisk",
 		},
 		cli.StringSliceFlag{
 			Name:  "empty-ns",

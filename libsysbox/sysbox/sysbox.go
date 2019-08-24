@@ -20,9 +20,9 @@ import (
 type kernelRelease struct{ major, minor int }
 
 var minKernel = kernelRelease{4, 10}        // 4.10
-var minKernelUidShift = kernelRelease{5, 0} // 5.0 (see sysbox issues #160 and #180)
+var minKernelUidShift = kernelRelease{5, 0} // 5.0 (see issues #160 and #180)
 
-// See sysbox issues #160 and #180
+// See issues #160 and #180
 var uidShiftDistros = []string{"Ubuntu"}
 
 // checkUnprivilegedUserns checks if the kernel is configured to allow

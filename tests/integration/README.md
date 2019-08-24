@@ -1,6 +1,6 @@
-# runc Integration Tests
+# sysbox-runc Integration Tests
 
-Integration tests provide end-to-end testing of runc.
+Integration tests provide end-to-end testing of sysbox-runc.
 
 Note that integration tests do **not** replace unit tests.
 

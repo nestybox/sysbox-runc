@@ -1,4 +1,4 @@
-module github.com/opencontainers/runc
+module github.com/nestybox/sysbox-runc
 
 go 1.14
 
@@ -16,6 +16,7 @@ require (
 	github.com/moby/sys/mountinfo v0.4.0
 	github.com/mrunalp/fileutils v0.5.0
 	github.com/nestybox/sysbox-ipc v0.0.0-00010101000000-000000000000
+	github.com/opencontainers/runc v0.0.0-00010101000000-000000000000
 	github.com/opencontainers/runtime-spec v1.0.3-0.20200929063507-e6143ca7d51d
 	github.com/opencontainers/selinux v1.6.0
 	github.com/pkg/errors v0.9.1
@@ -27,7 +28,6 @@ require (
 	github.com/vishvananda/netlink v1.1.0
 	github.com/willf/bitset v1.1.11
 	golang.org/x/sys v0.0.0-20201107080550-4d91cf3a1aaf
-	google.golang.org/grpc v1.33.2
 )
 
 replace github.com/nestybox/sysbox-ipc => ../sysbox-ipc

@@ -3,15 +3,15 @@
 load helpers
 
 @test "runc -h" {
-  runc -h
-  [ "$status" -eq 0 ]
-  [[ ${lines[0]} =~ NAME:+ ]]
-  [[ ${lines[1]} =~ sysbox-runc\ '-'\ Nestybox\ sysbox-runc+ ]]
+	runc -h
+	[ "$status" -eq 0 ]
+	[[ ${lines[0]} =~ NAME:+ ]]
+	[[ ${lines[1]} =~ sysbox-runc\ '-'\ sysbox-runc+ ]]
 
-  runc --help
-  [ "$status" -eq 0 ]
-  [[ ${lines[0]} =~ NAME:+ ]]
-  [[ ${lines[1]} =~ sysbox-runc\ '-'\ Nestybox\ sysbox-runc+ ]]
+	runc --help
+	[ "$status" -eq 0 ]
+	[[ ${lines[0]} =~ NAME:+ ]]
+	[[ ${lines[1]} =~ sysbox-runc\ '-'\ sysbox-runc+ ]]
 }
 
 @test "runc command -h" {
@@ -51,7 +51,7 @@ load helpers
 	[ "$status" -eq 0 ]
 	[[ ${lines[1]} =~ runc\ pause+ ]]
 
-	# # sysbox-runc does not yet support checkpoint/restore
+	# sysbox-runc does not yet support checkpoint/restore
 	# runc restore -h
 	# [ "$status" -eq 0 ]
 	# [[ ${lines[1]} =~ runc\ restore+ ]]

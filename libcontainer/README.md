@@ -1,6 +1,7 @@
-# libcontainer
+# sysbox-runc libcontainer
 
-[![GoDoc](https://godoc.org/github.com/opencontainers/runc/libcontainer?status.svg)](https://godoc.org/github.com/opencontainers/runc/libcontainer)
+The sysbox-runc libcontainer is a fork of the OCI runc libcontainer library. It
+has been modified to support creation and management of system containers.
 
 Libcontainer provides a native Go implementation for creating containers
 with namespaces, cgroups, capabilities, and filesystem access controls.
