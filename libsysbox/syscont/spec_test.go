@@ -1,10 +1,10 @@
 package syscont
 
 import (
-	"testing"
-	"os"
 	"bytes"
+	"os"
 	"path/filepath"
+	"testing"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
 
@@ -39,7 +39,7 @@ func genSeccompWhitelist(syscalls []string) []specs.LinuxSyscall {
 	specSyscalls := []specs.LinuxSyscall{}
 	for _, s := range syscalls {
 		newSpecSyscall := specs.LinuxSyscall{
-			Names: []string{s},
+			Names:  []string{s},
 			Action: specs.ActAllow,
 		}
 		specSyscalls = append(specSyscalls, newSpecSyscall)
@@ -59,7 +59,7 @@ func TestCfgSeccomp(t *testing.T) {
 	seccomp = &specs.LinuxSeccomp{
 		DefaultAction: specs.ActErrno,
 		Architectures: []specs.Arch{specs.ArchARM},
-		Syscalls: []specs.LinuxSyscall{},
+		Syscalls:      []specs.LinuxSyscall{},
 	}
 	if err := cfgSeccomp(seccomp); err != nil {
 		t.Errorf("cfgSeccomp: failed to handle unsupported arch: %v", err)
@@ -69,7 +69,7 @@ func TestCfgSeccomp(t *testing.T) {
 	seccomp = &specs.LinuxSeccomp{
 		DefaultAction: specs.ActErrno,
 		Architectures: []specs.Arch{specs.ArchX86_64},
-		Syscalls: []specs.LinuxSyscall{},
+		Syscalls:      []specs.LinuxSyscall{},
 	}
 	if err := cfgSeccomp(seccomp); err != nil {
 		t.Errorf("cfgSeccomp: returned error: %v", err)
@@ -82,7 +82,7 @@ func TestCfgSeccomp(t *testing.T) {
 	seccomp = &specs.LinuxSeccomp{
 		DefaultAction: specs.ActErrno,
 		Architectures: []specs.Arch{specs.ArchX86_64},
-		Syscalls: genSeccompWhitelist(syscontSyscallWhitelist),
+		Syscalls:      genSeccompWhitelist(syscontSyscallWhitelist),
 	}
 	if err := cfgSeccomp(seccomp); err != nil {
 		t.Errorf("cfgSeccomp: returned error: %v", err)
@@ -96,7 +96,7 @@ func TestCfgSeccomp(t *testing.T) {
 	seccomp = &specs.LinuxSeccomp{
 		DefaultAction: specs.ActErrno,
 		Architectures: []specs.Arch{specs.ArchX86_64},
-		Syscalls: genSeccompWhitelist(partialList),
+		Syscalls:      genSeccompWhitelist(partialList),
 	}
 	if err := cfgSeccomp(seccomp); err != nil {
 		t.Errorf("cfgSeccomp: returned error: %v", err)
@@ -107,13 +107,13 @@ func TestCfgSeccomp(t *testing.T) {
 
 	// Test handling of whitelist with multiple syscalls per LinuxSyscall entry
 	linuxSyscall := specs.LinuxSyscall{
-		Names: syscontSyscallWhitelist,
+		Names:  syscontSyscallWhitelist,
 		Action: specs.ActAllow,
 	}
 	seccomp = &specs.LinuxSeccomp{
 		DefaultAction: specs.ActErrno,
 		Architectures: []specs.Arch{specs.ArchX86_64},
-		Syscalls: []specs.LinuxSyscall{linuxSyscall},
+		Syscalls:      []specs.LinuxSyscall{linuxSyscall},
 	}
 	if err := cfgSeccomp(seccomp); err != nil {
 		t.Errorf("cfgSeccomp: returned error: %v", err)
@@ -123,7 +123,7 @@ func TestCfgSeccomp(t *testing.T) {
 	}
 
 	// Docker uses whitelists, so we skip the blacklist tests for now
-	// TODO: :Test handling of empty blacklist
+	// TODO: Test handling of empty blacklist
 	// TODO: Test handling of conflicting blacklist
 	// TODO: Test handling of non-conflicting blacklist
 }
@@ -161,5 +161,158 @@ func TestCfgLibModMount(t *testing.T) {
 	spec.Mounts[0].Options = []string{}
 	if err := cfgLibModMount(spec, false); err != nil {
 		t.Errorf("cfgLibModMount: failed conflicting mount test: %v", err)
+	}
+}
+
+func TestCfgMaskedPaths(t *testing.T) {
+	spec := new(specs.Spec)
+	spec.Linux = new(specs.Linux)
+	spec.Linux.MaskedPaths = []string{"/proc", "/some/path", "/proc/sys", "/other/path"}
+
+	cfgMaskedPaths(spec)
+
+	for _, mp := range spec.Linux.MaskedPaths {
+		for _, ep := range sysboxExposedPaths {
+			if mp == ep {
+				t.Errorf("cfgMaskedPaths: failed to unmask path %s", ep)
+			}
+		}
+	}
+
+	want := []string{"/some/path", "/other/path"}
+	if !stringSliceEqual(spec.Linux.MaskedPaths, want) {
+		t.Errorf("cfgMaskedPaths: removed unexpected path; got %v, want %v", spec.Linux.MaskedPaths, want)
+	}
+}
+
+func TestCfgReadonlyPaths(t *testing.T) {
+	spec := new(specs.Spec)
+	spec.Linux = new(specs.Linux)
+	spec.Linux.ReadonlyPaths = []string{"/proc", "/some/path", "/proc/sys", "/other/path"}
+
+	cfgReadonlyPaths(spec)
+
+	for _, rop := range spec.Linux.ReadonlyPaths {
+		for _, rwp := range sysboxRwPaths {
+			if rop == rwp {
+				t.Errorf("cfgReadonlyPaths: failed to remove read-only on path %s", rwp)
+			}
+		}
+	}
+
+	want := []string{"/some/path", "/other/path"}
+	if !stringSliceEqual(spec.Linux.ReadonlyPaths, want) {
+		t.Errorf("cfgReadonlyPaths: removed unexpected path; got %v, want %v", spec.Linux.ReadonlyPaths, want)
+	}
+}
+
+func TestCfgSysboxFsMounts(t *testing.T) {
+
+	spec := new(specs.Spec)
+	spec.Mounts = []specs.Mount{
+		{
+			Destination: "/proc",
+			Type:        "bind",
+			Source:      "/some/source",
+			Options:     []string{"ro"},
+		},
+		{
+			Destination: "/proc/cpuinfo",
+			Type:        "bind",
+			Source:      "/some/source",
+			Options:     []string{"ro"},
+		},
+		{
+			Destination: "/var/lib",
+			Type:        "bind",
+			Source:      "/some/source",
+			Options:     []string{"rw"},
+		},
+		{
+			Destination: "/sys/bus",
+			Type:        "bind",
+			Source:      "/some/source",
+			Options:     []string{"rw"},
+		},
+		{
+			Destination: "/sys/fs/cgroup",
+			Type:        "bind",
+			Source:      "/some/source",
+			Options:     []string{"ro"},
+		},
+	}
+
+	cfgSysboxFsMounts(spec)
+
+	want := []specs.Mount{
+		{
+			Destination: "/proc",
+			Type:        "bind",
+			Source:      "/some/source",
+			Options:     []string{"ro"},
+		},
+		{
+			Destination: "/var/lib",
+			Type:        "bind",
+			Source:      "/some/source",
+			Options:     []string{"rw"},
+		},
+		{
+			Destination: "/sys/fs/cgroup",
+			Type:        "bind",
+			Source:      "/some/source",
+			Options:     []string{"ro"},
+		},
+	}
+
+	want = append(want, sysboxFsMounts...)
+
+	if len(spec.Mounts) != len(want) {
+		t.Errorf("cfgSysboxFsMounts: got %v, want %v", spec.Mounts, want)
+	}
+
+	for i := 0; i < len(spec.Mounts); i++ {
+		if spec.Mounts[i].Destination != want[i].Destination {
+			t.Errorf("cfgSysboxFsMounts: got %v, want %v", spec.Mounts, want)
+		}
+	}
+}
+
+func testCfgCgroups(t *testing.T) {
+	spec := new(specs.Spec)
+	spec.Mounts = []specs.Mount{
+		{
+			Destination: "/proc",
+			Type:        "bind",
+			Source:      "/some/source",
+			Options:     []string{"ro"},
+		},
+		{
+			Destination: "/sys/bus",
+			Type:        "bind",
+			Source:      "/some/source",
+			Options:     []string{"rw"},
+		},
+		{
+			Destination: "/sys/fs/cgroup",
+			Type:        "cgroup",
+			Source:      "/some/source",
+			Options:     []string{"ro", "rbind"},
+		},
+	}
+
+	want := spec.Mounts
+	want[2].Options = []string{"rbind"}
+
+	cfgCgroups(spec)
+
+	if len(spec.Mounts) != len(want) {
+		t.Errorf("cfgCfgCgroups: got %v, want %v", spec.Mounts, want)
+	}
+
+	for i := 0; i < len(spec.Mounts); i++ {
+		if !stringSliceEqual(spec.Mounts[i].Options, want[i].Options) {
+			t.Errorf("cfgCfgCgroups: got %v, want %v", spec.Mounts[i].Options, want[i].Options)
+		}
 	}
 }

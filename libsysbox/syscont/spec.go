@@ -291,51 +291,26 @@ func cfgCapabilities(p *specs.Process) {
 // cfgMaskedPaths removes from the container's config any masked paths for which
 // sysbox-fs will handle accesses.
 func cfgMaskedPaths(spec *specs.Spec) {
-	specPaths := spec.Linux.MaskedPaths
-	for i := 0; i < len(specPaths); i++ {
-		for _, path := range sysboxExposedPaths {
-			if specPaths[i] == path {
-				specPaths = append(specPaths[:i], specPaths[i+1:]...)
-				i--
-				logrus.Debugf("removed masked path %s from spec", path)
-				break
-			}
-		}
-	}
-	spec.Linux.MaskedPaths = specPaths
+	maskedPaths := stringSliceRemove(spec.Linux.MaskedPaths, sysboxExposedPaths)
+	spec.Linux.MaskedPaths = maskedPaths
 }
 
 // cfgReadonlyPaths removes from the container's config any read-only paths
 // that must be read-write in the system container
 func cfgReadonlyPaths(spec *specs.Spec) {
-	specPaths := spec.Linux.ReadonlyPaths
-	for i := 0; i < len(specPaths); i++ {
-		for _, path := range sysboxRwPaths {
-			if specPaths[i] == path {
-				specPaths = append(specPaths[:i], specPaths[i+1:]...)
-				i--
-				logrus.Debugf("removed read-only path %s from spec", path)
-				break
-			}
-		}
-	}
-	spec.Linux.ReadonlyPaths = specPaths
+	roPaths := stringSliceRemove(spec.Linux.ReadonlyPaths, sysboxRwPaths)
+	spec.Linux.ReadonlyPaths = roPaths
 }
 
 // cfgSysboxFsMounts adds the sysbox-fs mounts to the containers config.
 func cfgSysboxFsMounts(spec *specs.Spec) {
 
-	// disallow all mounts over /proc/* or /sys/* (except for /sys/fs/cgroup);
+	// disallow all spec mounts over /proc/* or /sys/* (except for /sys/fs/cgroup);
 	// only sysbox-fs mounts are allowed there.
-	for i := 0; i < len(spec.Mounts); i++ {
-		m := spec.Mounts[i]
-		if strings.HasPrefix(m.Destination, "/proc/") ||
-			(strings.HasPrefix(m.Destination, "/sys/") && (m.Destination != "/sys/fs/cgroup")) {
-			spec.Mounts = append(spec.Mounts[:i], spec.Mounts[i+1:]...)
-			i--
-			logrus.Debugf("removed mount %s from spec (not compatible with sysbox-runc)", m.Destination)
-		}
-	}
+	spec.Mounts = mountSliceRemoveMatch(spec.Mounts, func(m specs.Mount) bool {
+		return strings.HasPrefix(m.Destination, "/proc/") ||
+			(strings.HasPrefix(m.Destination, "/sys/") && (m.Destination != "/sys/fs/cgroup"))
+	})
 
 	// add sysbox-fs mounts to the config
 	for _, mount := range sysboxFsMounts {
@@ -352,17 +327,14 @@ func cfgCgroups(spec *specs.Spec) error {
 	// sys container's resources; thus, root processes inside the sys container will be
 	// able to allocate cgroup resources yet not modify the resources allocated to the sys
 	// container itself.
+
 	for i, mount := range spec.Mounts {
 		if mount.Type == "cgroup" {
-			for j := 0; j < len(mount.Options); j++ {
-				if mount.Options[j] == "ro" {
-					mount.Options = append(mount.Options[:j], mount.Options[j+1:]...)
-					j--
-					logrus.Debugf("removed read-only attr for cgroup mount %s", mount.Destination)
-				}
-			}
-			spec.Mounts[i].Options = mount.Options
+			mount.Options = stringSliceRemoveMatch(mount.Options, func(opt string) bool {
+				return opt == "ro"
+			})
 		}
+		spec.Mounts[i].Options = mount.Options
 	}
 
 	return nil
@@ -604,7 +576,14 @@ func getSupConfig(mgr *sysbox.Mgr, spec *specs.Spec, shiftUids bool) error {
 	if err != nil {
 		return fmt.Errorf("failed to request supplementary mounts from sysbox-mgr: %v", err)
 	}
-	spec.Mounts = append(spec.Mounts, mounts...)
+
+	// if a supplementary mount point in the sys container conflicts with a mount in the
+	// sys container's spec, honor the mount in the spec.
+	supMounts := mountSliceRemove(mounts, spec.Mounts, func(m1, m2 specs.Mount) bool {
+		return m1.Destination == m2.Destination
+	})
+
+	spec.Mounts = append(spec.Mounts, supMounts...)
 	return nil
 }
 
