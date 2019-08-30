@@ -1,3 +1,7 @@
+//
+// Copyright: (C) 2019 Nestybox Inc.  All rights reserved.
+//
+
 package syscont
 
 import "github.com/opencontainers/runtime-spec/specs-go"

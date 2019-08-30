@@ -1,3 +1,7 @@
+//
+// Copyright: (C) 2019 Nestybox Inc.  All rights reserved.
+//
+
 package sysbox
 
 import (
