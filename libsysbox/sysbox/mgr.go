@@ -1,3 +1,7 @@
+//
+// Copyright: (C) 2019 Nestybox Inc.  All rights reserved.
+//
+
 // Exposes functions for sysbox-runc to interact with sysbox-mgr
 
 package sysbox
