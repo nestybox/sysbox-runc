@@ -3,8 +3,7 @@
 	    test unittest integration \
 	    cross localcross recvtty
 
-# Let's make use of go's top-of-tree binary till 1.13 comes out.
-GO := gotip
+GO := go
 
 RUNC_TARGET := sysbox-runc
 RUNC_DEBUG_TARGET := sysbox-runc-debug
