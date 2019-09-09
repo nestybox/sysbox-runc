@@ -1,4 +1,4 @@
-# Note: the golang version should match that used by the sysboxd test container Dockerfile.
+# Note: the golang version should match that used by the sysbox test container Dockerfile.
 FROM golang:1.12-stretch
 
 RUN dpkg --add-architecture armel \

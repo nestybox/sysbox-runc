@@ -54,7 +54,7 @@ function teardown() {
 	[[ "${output}" == *"Device or resource busy"* ]]
 }
 
-# sysbox-runc: this test is expected to fail until sysboxd can intercept
+# sysbox-runc: this test is expected to fail until sysbox can intercept
 # the mount syscall to prevent umounting of mounts for masked paths
 # @test "mask path umounting" {
 # 	run busybox detached

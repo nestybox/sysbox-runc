@@ -19,7 +19,7 @@ import (
 )
 
 // The min supported kernel release is chosen based on whether it contains all kernel
-// fixes required to run sysboxd. Refer to the sysboxd github issues and search for
+// fixes required to run sysbox. Refer to the sysbox github issues and search for
 // "kernel".
 type kernelRelease struct{ major, minor int }
 

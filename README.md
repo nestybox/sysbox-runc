@@ -5,8 +5,8 @@
 `sysbox-runc` is a fork of the OCI runc, modified for running system
 containers.
 
-Refer to the [Sysboxd repo](../README.md) for more detailed info on
-Sysboxd.
+Refer to the [Sysbox repo](../README.md) for more detailed info on
+Sysbox.
 
 ## Dependencies
 
@@ -15,10 +15,10 @@ as well as the OCI [runtime-spec](https://github.com/opencontainers/runtime-spec
 repository.
 
 
-## Integration with other Sysboxd components
+## Integration with other Sysbox components
 
 sysbox-runc is tightly integrated with sysbox-fs and sysbox-mgr via
-gRPC. Refer to the [Sysboxd design doc](../docs/design.md) for
+gRPC. Refer to the [Sysbox design doc](../docs/design.md) for
 further info.
 
 ## Building

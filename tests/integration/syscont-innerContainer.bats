@@ -18,7 +18,7 @@ function teardown() {
 # TODO: container nesting tests
 
 @test "syscont: inner container procfs" {
-  skip "wait until sysboxd implements intercept of mount syscall"
+  skip "wait until sysbox implements intercept of mount syscall"
   # Verify that mounting procfs inside an nested container
   # does not expose resources outside of the system container
 }

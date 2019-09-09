@@ -34,11 +34,11 @@ function teardown() {
 }
 
 @test "syscont: sysbox-fs can't be unmounted" {
-  skip "wait until sysboxd implements intercept of mount syscall"
+  skip "wait until sysbox implements intercept of mount syscall"
   # Verify that the sys container root can't unmount sysbox-fs mounts
 }
 
 @test "syscont: procfs remount" {
-  skip "wait until sysboxd implements intercept of umount syscall"
+  skip "wait until sysbox implements intercept of umount syscall"
   # Verify that unmounting procfs inside the sys container is not allowed
 }
