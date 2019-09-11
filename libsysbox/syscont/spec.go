@@ -574,14 +574,34 @@ func getSupConfig(mgr *sysbox.Mgr, spec *specs.Spec, shiftUids bool) error {
 	uid := spec.Linux.UIDMappings[0].HostID
 	gid := spec.Linux.GIDMappings[0].HostID
 
-	mounts, err := mgr.ReqSupMounts(spec.Root.Path, uid, gid, shiftUids)
+	supMounts, err := mgr.ReqSupMounts(spec.Root.Path, uid, gid, shiftUids)
 	if err != nil {
 		return fmt.Errorf("failed to request supplementary mounts from sysbox-mgr: %v", err)
 	}
 
-	// if a supplementary mount point in the sys container conflicts with a mount in the
-	// sys container's spec, honor the mount in the spec.
-	supMounts := mountSliceRemove(mounts, spec.Mounts, func(m1, m2 specs.Mount) bool {
+	// Ideally, if a sysbox-mgr supplementary mount conflicts with a mount in the sys
+	// container's spec, we would honor the sys container's spec. This would allow a user
+	// to override the mount of /var/lib/docker inside the container in cases where he/she
+	// wants to mount a volume into it (e.g., to make the inner docker's cache persistent).
+	//
+	// But doing this forces sysbox to mount shiftfs on the directory associated with the
+	// spec's mount when using uid shifting (to ensure root in the sys container has the
+	// right ownership on the mount).
+	//
+	// This would in turn mean that when the inner Docker daemon runs, it would mount
+	// overlayfs on top of /var/lib/docker, meaning that it would mount overlayfs on top of
+	// shiftfs.
+	//
+	// However, mounting overlayfs on shiftfs does not currently work (see issue #93).
+	//
+	// Thus, our best option right now is to prioritize the supplementary mount in all cases,
+	// even if the sys container's spec has a conflicting mount. And this unfortunately
+	// means that users are not currently allowed to mount volumes into the sys container's
+	// /var/lib/docker.
+	//
+	// We should revisit this once we fix issue #93.
+
+	spec.Mounts = mountSliceRemove(spec.Mounts, supMounts, func(m1, m2 specs.Mount) bool {
 		return m1.Destination == m2.Destination
 	})
 

@@ -1090,8 +1090,8 @@ func mountShiftfsOnRootfs(rootfs string, pipe io.ReadWriter) error {
 	return nil
 }
 
-// sysbox-runc: mountShiftfs mounts shiftfs over the source of bind mounts. Since the
-// shiftfs mount must be done by true root, it requests the parent runc to do the mount.
+// sysbox-runc: mounts shiftfs over the source of bind mounts. Since the shiftfs mount
+// must be done by true root, it requests the parent runc to do the mount.
 func mountShiftfsOnBindSources(config *configs.Config, pipe io.ReadWriter) error {
 
 	mounts := []shiftMount{}
