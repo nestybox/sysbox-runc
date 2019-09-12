@@ -1,5 +1,5 @@
 # Note: the golang version should match that used by the sysbox test container Dockerfile.
-FROM golang:1.12-stretch
+FROM golang:1.13.0-buster
 
 RUN dpkg --add-architecture armel \
     && dpkg --add-architecture armhf \
@@ -16,7 +16,7 @@ RUN dpkg --add-architecture armel \
     libaio-dev \
     libcap-dev \
     libprotobuf-dev \
-    libprotobuf-c0-dev \
+    libprotobuf-c-dev \
     libnl-3-dev \
     libnet-dev \
     libseccomp2 \
