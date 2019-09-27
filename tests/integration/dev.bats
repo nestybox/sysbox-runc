@@ -38,22 +38,22 @@ function teardown() {
 			| .linux.devices = [{"path": "/dev/kmsg", "type": "c", "major": 1, "minor": 11}]
 			| .process.args |= ["sh"]'
 
-	runc run -d --console-socket "$CONSOLE_SOCKET" test_deny
+	runc run -d --console-socket "$CONSOLE_SOCKET" test_dev
 	[ "$status" -eq 0 ]
 
 	# test write
-	runc exec test_deny sh -c 'hostname | tee /dev/kmsg'
+	runc exec test_dev sh -c 'hostname | tee /dev/kmsg'
 	[ "$status" -eq 1 ]
 	[[ "${output}" == *'Permission denied'* ]]
 
 	# test read
-	runc exec test_deny sh -c 'head -n 1 /dev/kmsg'
+	runc exec test_dev sh -c 'head -n 1 /dev/kmsg'
 	[ "$status" -eq 1 ]
 	[[ "${output}" == *'Operation not permitted'* ]]
 }
 
 @test "runc run [device cgroup allow rw char device]" {
-        skip "Unsupported"
+   skip "Unsupported"
 
 	requires root
 
@@ -62,21 +62,21 @@ function teardown() {
 			| .process.args |= ["sh"]
 			| .hostname = "myhostname"'
 
-	runc run -d --console-socket "$CONSOLE_SOCKET" test_allow_char
+	runc run -d --console-socket "$CONSOLE_SOCKET" test_dev
 	[ "$status" -eq 0 ]
 
 	# test write
-	runc exec test_allow_char sh -c 'hostname | tee /dev/kmsg'
+	runc exec test_dev sh -c 'hostname | tee /dev/kmsg'
 	[ "$status" -eq 0 ]
 	[[ "${lines[0]}" == *'myhostname'* ]]
 
 	# test read
-	runc exec test_allow_char sh -c 'head -n 1 /dev/kmsg'
+	runc exec test_dev sh -c 'head -n 1 /dev/kmsg'
 	[ "$status" -eq 0 ]
 }
 
 @test "runc run [device cgroup allow rm block device]" {
-        skip "Unsupported"
+   skip "Unsupported"
 
 	requires root
 
@@ -93,14 +93,14 @@ function teardown() {
 			| .process.capabilities.inheritable += ["CAP_MKNOD"]
 			| .process.capabilities.permitted += ["CAP_MKNOD"]'
 
-	runc run -d --console-socket "$CONSOLE_SOCKET" test_allow_block
+	runc run -d --console-socket "$CONSOLE_SOCKET" test_dev
 	[ "$status" -eq 0 ]
 
 	# test mknod
-	runc exec test_allow_block sh -c 'mknod /dev/fooblock b '"$major"' '"$minor"''
+	runc exec test_dev sh -c 'mknod /dev/fooblock b '"$major"' '"$minor"''
 	[ "$status" -eq 0 ]
 
 	# test read
-	runc exec test_allow_block sh -c 'fdisk -l '"$device"''
+	runc exec test_dev sh -c 'fdisk -l '"$device"''
 	[ "$status" -eq 0 ]
 }

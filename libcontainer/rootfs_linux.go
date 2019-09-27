@@ -10,8 +10,8 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
-	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	securejoin "github.com/cyphar/filepath-securejoin"
@@ -25,6 +25,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/utils"
 	libcontainerUtils "github.com/opencontainers/runc/libcontainer/utils"
 
+	"github.com/opencontainers/runc/libsysbox/shiftfs"
 	"github.com/opencontainers/runc/libsysbox/syscont"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/opencontainers/selinux/go-selinux/label"
@@ -61,6 +62,16 @@ func prepareRootfs(pipe io.ReadWriter, iConfig *initConfig) (err error) {
 		}
 		if err := mountShiftfsOnBindSources(config, pipe); err != nil {
 			return newSystemErrorWithCause(err, "mounting shiftfs on bind sources")
+		}
+	}
+
+	// Setup the sys container's user-ns ID-mappings after shiftfs mounts are done as once
+	// the mapping occurs, the container's init process may loose permission to access the
+	// shiftfs mountpoints. Do this only if a new user-ns was created for the container (not
+	// if we are joining another container's user-ns)
+	if config.Namespaces.Contains(configs.NEWUSER) && config.Namespaces.PathOf(configs.NEWUSER) == "" {
+		if err := mapUserIDs(config, pipe); err != nil {
+			return newSystemErrorWithCause(err, "setting up container user-ns uid(gid) mappings")
 		}
 	}
 
@@ -292,7 +303,7 @@ func mountCgroupV2(m *configs.Mount, rootfs, mountLabel string, enableCgroupns b
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(cgroupPath, 0755); err != nil {
+	if err := mkdirall(cgroupPath, 0755); err != nil {
 		return err
 	}
 	if err := unix.Mount(m.Source, cgroupPath, "cgroup2", uintptr(m.Flags), m.Data); err != nil {
@@ -302,6 +313,32 @@ func mountCgroupV2(m *configs.Mount, rootfs, mountLabel string, enableCgroupns b
 		}
 		return err
 	}
+	return nil
+}
+
+// mkdirall calls into os.Mkdirall(), but precedes the call with an open of the current
+// working directory (cwd). This avoids permission-denied problems on the Mkdirall call
+// when shiftfs is mounted on the cwd. The exact cause of the permission problem is not
+// clear and needs further investigation.
+func mkdirall(path string, mode os.FileMode) error {
+
+	fd, err := syscall.Open(".", unix.O_PATH|unix.O_CLOEXEC|unix.O_DIRECTORY, 0)
+	if err != nil {
+		return fmt.Errorf("failed to open current dir.")
+	}
+
+	if err := syscall.Fchdir(fd); err != nil {
+		return fmt.Errorf("fchdir %s failed: %v", path, err)
+	}
+
+	if err := os.MkdirAll(path, mode); err != nil {
+		return fmt.Errorf("mkdirall %s with mode %o failed: %v", path, mode, err)
+	}
+
+	if err := syscall.Close(fd); err != nil {
+		return fmt.Errorf("failed to close fd %d", fd)
+	}
+
 	return nil
 }
 
@@ -328,13 +365,13 @@ func mountToRootfs(m *configs.Mount, rootfs, mountLabel string, enableCgroupns, 
 		} else if fi.Mode()&os.ModeDir == 0 {
 			return fmt.Errorf("filesystem %q must be mounted on ordinary directory", m.Device)
 		}
-		if err := os.MkdirAll(dest, 0755); err != nil {
-			return err
+		if err := mkdirall(dest, 0755); err != nil {
+			return fmt.Errorf("failed to created dir for %s mount: %v", m.Device, err)
 		}
 		// Selinux kernels do not support labeling of /proc or /sys
 		return mountPropagate(m, "")
 	case "mqueue":
-		if err := os.MkdirAll(dest, 0755); err != nil {
+		if err := mkdirall(dest, 0755); err != nil {
 			return err
 		}
 		if err := mountPropagate(m, ""); err != nil {
@@ -346,7 +383,7 @@ func mountToRootfs(m *configs.Mount, rootfs, mountLabel string, enableCgroupns, 
 		tmpDir := ""
 		stat, err := os.Stat(dest)
 		if err != nil {
-			if err := os.MkdirAll(dest, 0755); err != nil {
+			if err := mkdirall(dest, 0755); err != nil {
 				return err
 			}
 		}
@@ -395,25 +432,25 @@ func mountToRootfs(m *configs.Mount, rootfs, mountLabel string, enableCgroupns, 
 		}
 		return nil
 	case "bind":
-		// sysbox-runc: in order to support uid shifting on bind mounts, we handle bind
-		// mounts differently than the OCI runc; in particular, we perform the bind mount by
-		// asking the parent runc to spawn a helper child process which enters the
-		// container's mount namespace only and performs the mount. The helper process is
-		// needed to overcome the problem whereby the container's init process has no search
-		// permission to the bind mount source. Since this helper is not in the container's
-		// user namespace, it has true root credentials and thus can access the bind mount
-		// source yet perform the mount in the container's mount namespace.
+		// sysbox-runc: the sys container's init process is in a dedicated
+		// user-ns, so it may not have search permission to the bind mount source
+		// (and thus can't perform the bind mount itself). As a result,
+		// we perform the bind mount by asking the parent runc to spawn a helper child
+		// process which enters the container's mount namespace (only) and performs the
+		// mount. That helper process has true root credentials (because it's in the
+		// initial user-ns rather than the sys container's user-ns) yet it can perform
+		// mounts inside the container.
 		if err := prepareBindDest(m, rootfs, false); err != nil {
 			return err
 		}
-		mountInfo := &mountReqInfo{
+		mountInfo := &opReq{
 			Op:     bind,
 			Mount:  *m,
 			Label:  mountLabel,
 			Rootfs: rootfs,
 		}
-		if err := syncParentDoMount(mountInfo, pipe); err != nil {
-			return newSystemErrorWithCause(err, "sync parent do mount")
+		if err := syncParentDoOp(mountInfo, pipe); err != nil {
+			return newSystemErrorWithCause(err, "syncing with parent runc to perform bind mount")
 		}
 	case "cgroup":
 		if cgroups.IsCgroup2UnifiedMode() {
@@ -425,7 +462,7 @@ func mountToRootfs(m *configs.Mount, rootfs, mountLabel string, enableCgroupns, 
 		// any previous mounts can invalidate the next mount's destination.
 		// this can happen when a user specifies mounts within other mounts to cause breakouts or other
 		// evil stuff to try to escape the container's rootfs.
-		if err := os.MkdirAll(dest, 0755); err != nil {
+		if err := mkdirall(dest, 0755); err != nil {
 			return err
 		}
 		return mountPropagate(m, mountLabel)
@@ -560,7 +597,7 @@ func createDeviceNode(node *configs.Device, bind bool) error {
 	}
 	dest := filepath.Join(".", node.Path)
 
-	if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
+	if err := mkdirall(filepath.Dir(dest), 0755); err != nil {
 		return err
 	}
 	if bind {
@@ -841,9 +878,9 @@ func createIfNotExists(path string, isDir bool) error {
 	if _, err := os.Stat(path); err != nil {
 		if os.IsNotExist(err) {
 			if isDir {
-				return os.MkdirAll(path, 0755)
+				return mkdirall(path, 0755)
 			}
-			if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			if err := mkdirall(filepath.Dir(path), 0755); err != nil {
 				return err
 			}
 			f, err := os.OpenFile(path, os.O_CREATE, 0755)
@@ -948,6 +985,7 @@ func mountPropagate(m *configs.Mount, mountLabel string) error {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -1054,10 +1092,9 @@ func needUidShiftOnBindSrc(mount *configs.Mount, config *configs.Config) (bool, 
 // mount. It does this by reopening the rootfs directory.
 func effectRootfsMount() error {
 
-	// The method for reopening the rootfs directory is pretty lame,
-	// but I could not find any other. Note that the "dev" subdirectory
-	// is guaranteed to be present, as it's created by our parent
-	// sysbox-runc.
+	// The method for reopening the rootfs directory is pretty lame, but I could not find
+	// any other. Note that per the Linux FHS, /dev is required on a Linux host and thus
+	// will always be present in a system container
 
 	if err := os.Chdir("dev"); err != nil {
 		return newSystemErrorWithCause(err, "chdir dev")
@@ -1070,90 +1107,55 @@ func effectRootfsMount() error {
 }
 
 // sysbox-runc: mountShiftfsOnRootfs mounts shiftfs over the container's rootfs.
-// Since the shiftfs mount must be done by true root, mountShitfsOnRootfs requests the
-// parent runc to do the mount.
 func mountShiftfsOnRootfs(rootfs string, pipe io.ReadWriter) error {
-	mountInfo := &mountReqInfo{
-		Op:     shiftRootfs,
-		Rootfs: rootfs,
+	if err := shiftfs.Mount(rootfs); err != nil {
+		return newSystemErrorWithCause(err, "mounting shiftfs on rootfs")
 	}
-
-	err := syncParentDoMount(mountInfo, pipe)
-	if err != nil {
-		return newSystemErrorWithCause(err, "syncing with parent runc to perform mount")
-	}
-
 	if err := effectRootfsMount(); err != nil {
-		return newSystemErrorWithCause(err, "effecting rootfs mount")
+		return newSystemErrorWithCause(err, "effecting shiftfs on rootfs mount")
 	}
-
 	return nil
 }
 
-// sysbox-runc: mounts shiftfs over the source of bind mounts. Since the shiftfs mount
-// must be done by true root, it requests the parent runc to do the mount.
+// sysbox-runc: mounts shiftfs over the source of bind mounts.
 func mountShiftfsOnBindSources(config *configs.Config, pipe io.ReadWriter) error {
-
-	mounts := []shiftMount{}
-
-	// cleanup bind sources
-	for _, m := range config.Mounts {
-		if m.Device == "bind" {
-
-			needShiftfs, err := needUidShiftOnBindSrc(m, config)
-			if err != nil {
-				return newSystemErrorWithCause(err, "checking bind source")
-			}
-
-			if !needShiftfs {
-				continue
-			}
-
-			if err := allowShiftfsBindSource(m.Source, config.Rootfs); err != nil {
-				return newSystemErrorWithCause(err, "validating bind source")
-			}
-
-			sm := shiftMount{
-				Source:   m.Source,
-				Readonly: m.Flags&unix.MS_RDONLY == unix.MS_RDONLY,
-			}
-
-			mounts = append(mounts, sm)
+	for _, m := range config.ShiftfsMounts {
+		if err := shiftfs.Mount(m.Source); err != nil {
+			return err
 		}
 	}
+	return nil
+}
 
-	if len(mounts) == 0 {
-		return nil
+// sysbox-runc: set up the sys container's userns uid(gid) mappings.
+// Since the mapping uses arbitrary uid(gid)s, this must be done from the parent user-ns,
+// meaning we must request the parent runc to do the mapping for us.
+func mapUserIDs(config *configs.Config, pipe io.ReadWriter) error {
+
+	// Request sysbox-runc to set up the uid(gid) mapping for the container's user-ns
+	req := &opReq{
+		Op: mapUid,
 	}
-
-	// To avoid shiftfs-on-shiftfs, if we see paths such as /x/y and /x/y/z, mount
-	// shiftfs on /x/y only (i.e., the base path)
-	sort.Slice(mounts, func(i, j int) bool {
-		return !filepath.HasPrefix(mounts[i].Source, mounts[j].Source)
-	})
-
-	baseMounts := []shiftMount{mounts[0]}
-	for i := 1; i < len(mounts); i++ {
-		found := false
-		for _, b := range baseMounts {
-			if strings.Contains(mounts[i].Source, b.Source) {
-				found = true
-			}
-		}
-		if !found {
-			baseMounts = append(baseMounts, mounts[i])
-		}
-	}
-
-	mountInfo := &mountReqInfo{
-		Op:      shiftBind,
-		Shiftfs: baseMounts,
-	}
-
-	err := syncParentDoMount(mountInfo, pipe)
+	err := syncParentDoOp(req, pipe)
 	if err != nil {
-		return newSystemErrorWithCause(err, "syncing with parent runc to perform mount")
+		return newSystemErrorWithCause(err, "syncing with parent runc to perform uid mapping")
+	}
+
+	// Now that the user-ns mappings are set, become root in the sys container's user-ns.
+	// Note that the following syscalls only apply to the current Go thread, which should
+	// be the only user-space thread since we are running under GOMAXPROCS(1) and
+	// LockOSThread() (see init.c)
+
+	if err := syscall.Setresuid(0, 0, 0); err != nil {
+		return newSystemErrorWithCause(err, "setresuid")
+	}
+	if err := syscall.Setresgid(0, 0, 0); err != nil {
+		return newSystemErrorWithCause(err, "setresgid")
+	}
+	if err := syscall.Setgroups([]int{0}); err != nil {
+		return newSystemErrorWithCause(err, "setgroups")
 	}
 
 	return nil
+
 }

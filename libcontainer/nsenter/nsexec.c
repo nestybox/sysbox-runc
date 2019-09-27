@@ -226,97 +226,105 @@ static void update_setgroups(int pid, enum policy_t setgroup)
 	}
 }
 
-static int try_mapping_tool(const char *app, int pid, char *map, size_t map_len)
-{
-	int child;
+/*
+ * In sysbox-runc, nsexec must not set the user-ns ID mappings as
+ * otherwise the container's init process looses permissions required
+ * to setup the container's context (e.g., mounts, etc). Instead, the
+ * ID mappings are setup later in the sysbox-runc Go runtime that
+ * performs the container's rootfs setup.
+ */
 
-	/*
-	 * If @app is NULL, execve will segfault. Just check it here and bail (if
-	 * we're in this path, the caller is already getting desperate and there
-	 * isn't a backup to this failing). This usually would be a configuration
-	 * or programming issue.
-	 */
-	if (!app)
-		bail("mapping tool not present");
+/* static int try_mapping_tool(const char *app, int pid, char *map, size_t map_len) */
+/* { */
+/* 	int child; */
 
-	child = fork();
-	if (child < 0)
-		bail("failed to fork");
+/* 	/\* */
+/* 	 * If @app is NULL, execve will segfault. Just check it here and bail (if */
+/* 	 * we're in this path, the caller is already getting desperate and there */
+/* 	 * isn't a backup to this failing). This usually would be a configuration */
+/* 	 * or programming issue. */
+/* 	 *\/ */
+/* 	if (!app) */
+/* 		bail("mapping tool not present"); */
 
-	if (!child) {
-#define MAX_ARGV 20
-		char *argv[MAX_ARGV];
-		char *envp[] = { NULL };
-		char pid_fmt[16];
-		int argc = 0;
-		char *next;
+/* 	child = fork(); */
+/* 	if (child < 0) */
+/* 		bail("failed to fork"); */
 
-		snprintf(pid_fmt, 16, "%d", pid);
+/* 	if (!child) { */
+/* #define MAX_ARGV 20 */
+/* 		char *argv[MAX_ARGV]; */
+/* 		char *envp[] = { NULL }; */
+/* 		char pid_fmt[16]; */
+/* 		int argc = 0; */
+/* 		char *next; */
 
-		argv[argc++] = (char *)app;
-		argv[argc++] = pid_fmt;
-		/*
-		 * Convert the map string into a list of argument that
-		 * newuidmap/newgidmap can understand.
-		 */
+/* 		snprintf(pid_fmt, 16, "%d", pid); */
 
-		while (argc < MAX_ARGV) {
-			if (*map == '\0') {
-				argv[argc++] = NULL;
-				break;
-			}
-			argv[argc++] = map;
-			next = strpbrk(map, "\n ");
-			if (next == NULL)
-				break;
-			*next++ = '\0';
-			map = next + strspn(next, "\n ");
-		}
+/* 		argv[argc++] = (char *)app; */
+/* 		argv[argc++] = pid_fmt; */
+/* 		/\* */
+/* 		 * Convert the map string into a list of argument that */
+/* 		 * newuidmap/newgidmap can understand. */
+/* 		 *\/ */
 
-		execve(app, argv, envp);
-		bail("failed to execv");
-	} else {
-		int status;
+/* 		while (argc < MAX_ARGV) { */
+/* 			if (*map == '\0') { */
+/* 				argv[argc++] = NULL; */
+/* 				break; */
+/* 			} */
+/* 			argv[argc++] = map; */
+/* 			next = strpbrk(map, "\n "); */
+/* 			if (next == NULL) */
+/* 				break; */
+/* 			*next++ = '\0'; */
+/* 			map = next + strspn(next, "\n "); */
+/* 		} */
 
-		while (true) {
-			if (waitpid(child, &status, 0) < 0) {
-				if (errno == EINTR)
-					continue;
-				bail("failed to waitpid");
-			}
-			if (WIFEXITED(status) || WIFSIGNALED(status))
-				return WEXITSTATUS(status);
-		}
-	}
+/* 		execve(app, argv, envp); */
+/* 		bail("failed to execv"); */
+/* 	} else { */
+/* 		int status; */
 
-	return -1;
-}
+/* 		while (true) { */
+/* 			if (waitpid(child, &status, 0) < 0) { */
+/* 				if (errno == EINTR) */
+/* 					continue; */
+/* 				bail("failed to waitpid"); */
+/* 			} */
+/* 			if (WIFEXITED(status) || WIFSIGNALED(status)) */
+/* 				return WEXITSTATUS(status); */
+/* 		} */
+/* 	} */
 
-static void update_uidmap(const char *path, int pid, char *map, size_t map_len)
-{
-	if (map == NULL || map_len <= 0)
-		return;
+/* 	return -1; */
+/* } */
 
-	if (write_file(map, map_len, "/proc/%d/uid_map", pid) < 0) {
-		if (errno != EPERM)
-			bail("failed to update /proc/%d/uid_map", pid);
-		if (try_mapping_tool(path, pid, map, map_len))
-			bail("failed to use newuid map on %d", pid);
-	}
-}
+/* static void update_uidmap(const char *path, int pid, char *map, size_t map_len) */
+/* { */
+/* 	if (map == NULL || map_len <= 0) */
+/* 		return; */
 
-static void update_gidmap(const char *path, int pid, char *map, size_t map_len)
-{
-	if (map == NULL || map_len <= 0)
-		return;
+/* 	if (write_file(map, map_len, "/proc/%d/uid_map", pid) < 0) { */
+/* 		if (errno != EPERM) */
+/* 			bail("failed to update /proc/%d/uid_map", pid); */
+/* 		if (try_mapping_tool(path, pid, map, map_len)) */
+/* 			bail("failed to use newuid map on %d", pid); */
+/* 	} */
+/* } */
 
-	if (write_file(map, map_len, "/proc/%d/gid_map", pid) < 0) {
-		if (errno != EPERM)
-			bail("failed to update /proc/%d/gid_map", pid);
-		if (try_mapping_tool(path, pid, map, map_len))
-			bail("failed to use newgid map on %d", pid);
-	}
-}
+/* static void update_gidmap(const char *path, int pid, char *map, size_t map_len) */
+/* { */
+/* 	if (map == NULL || map_len <= 0) */
+/* 		return; */
+
+/* 	if (write_file(map, map_len, "/proc/%d/gid_map", pid) < 0) { */
+/* 		if (errno != EPERM) */
+/* 			bail("failed to update /proc/%d/gid_map", pid); */
+/* 		if (try_mapping_tool(path, pid, map, map_len)) */
+/* 			bail("failed to use newgid map on %d", pid); */
+/* 	} */
+/* } */
 
 static void update_oom_score_adj(char *data, size_t len)
 {
@@ -739,9 +747,17 @@ void nsexec(void)
 					if (config.is_rootless_euid && !config.is_setgroup)
 						update_setgroups(child, SETGROUPS_DENY);
 
-					/* Set up mappings. */
-					update_uidmap(config.uidmappath, child, config.uidmap, config.uidmap_len);
-					update_gidmap(config.gidmappath, child, config.gidmap, config.gidmap_len);
+               /*
+                * sysbox-runc: do not set up the userns mappings here
+                * as this will prevent the sys container's init
+                * process from mapping shiftfs on sources for whom the
+                * sys container's uid(gid) has no permission to
+                * access. This mapping will be done later in the
+                * sysbox-runc Go runtime, after shiftfs mounts are
+                * done.
+                */
+					//update_uidmap(config.uidmappath, child, config.uidmap, config.uidmap_len);
+					//update_gidmap(config.gidmappath, child, config.gidmap, config.gidmap_len);
 
 					s = SYNC_USERMAP_ACK;
 					if (write(syncfd, &s, sizeof(s)) != sizeof(s)) {
@@ -828,6 +844,7 @@ void nsexec(void)
 	case JUMP_CHILD:{
 			pid_t child;
 			enum sync_t s;
+         bool revert_newuser = false;
 
 			/* We're in a child and thus need to tell the parent if we die. */
 			syncfd = sync_child_pipe[0];
@@ -867,7 +884,9 @@ void nsexec(void)
 			if (config.cloneflags & CLONE_NEWUSER) {
 				if (unshare(CLONE_NEWUSER) < 0)
 					bail("failed to unshare user namespace");
-				config.cloneflags &= ~CLONE_NEWUSER;
+
+            config.cloneflags &= ~CLONE_NEWUSER;
+            revert_newuser = true;
 
 				/*
 				 * We don't have the privileges to do any mapping here (see the
@@ -889,15 +908,16 @@ void nsexec(void)
 					bail("failed to sync with parent: read(SYNC_USERMAP_ACK)");
 				if (s != SYNC_USERMAP_ACK)
 					bail("failed to sync with parent: SYNC_USERMAP_ACK: got %u", s);
+
 				/* Switching is only necessary if we joined namespaces. */
 				if (config.namespaces) {
 					if (prctl(PR_SET_DUMPABLE, 0, 0, 0, 0) < 0)
 						bail("failed to set process as dumpable");
 				}
 
-				/* Become root in the namespace proper. */
-				if (setresuid(0, 0, 0) < 0)
-					bail("failed to become root in user namespace");
+            /* sysbox-runc: since user-ns mappings are not yet set, we skip this. */
+            /* if (setresuid(0, 0, 0) < 0) */
+            /*    bail("failed to become root in user namespace"); */
 			}
 			/*
 			 * Unshare all of the namespaces. Now, it should be noted that this
@@ -911,6 +931,13 @@ void nsexec(void)
 			 */
 			if (unshare(config.cloneflags & ~CLONE_NEWCGROUP) < 0)
 				bail("failed to unshare namespaces");
+
+         /*
+          * Now that we're done unsharing, if we cleared the CLONE_NEWUSER
+          * flag earlier revert it so our child can see it's true value.
+          */
+         if (revert_newuser)
+            config.cloneflags |= CLONE_NEWUSER;
 
 			/*
 			 * TODO: What about non-namespace clone flags that we're dropping here?
@@ -987,16 +1014,21 @@ void nsexec(void)
 			if (setsid() < 0)
 				bail("setsid failed");
 
-			if (setuid(0) < 0)
-				bail("setuid failed");
+         // sysbox-runc: if we created a new user namespace, we
+         // haven't set the ID mappings yet, so we can't yet call
+         // setuid(), setgid(), or setgroups().
+			if (! (config.cloneflags & CLONE_NEWUSER)) {
+            if (setuid(0) < 0)
+               bail("setuid failed");
 
-			if (setgid(0) < 0)
-				bail("setgid failed");
+            if (setgid(0) < 0)
+               bail("setgid failed");
 
-			if (!config.is_rootless_euid && config.is_setgroup) {
-				if (setgroups(0, NULL) < 0)
-					bail("setgroups failed");
-			}
+            if (!config.is_rootless_euid && config.is_setgroup) {
+               if (setgroups(0, NULL) < 0)
+                  bail("setgroups failed");
+            }
+         }
 
 			/* ... wait until our topmost parent has finished cgroup setup in p.manager.Apply() ... */
 			if (config.cloneflags & CLONE_NEWCGROUP) {

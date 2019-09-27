@@ -10,6 +10,7 @@ import (
 	"fmt"
 
 	"github.com/nestybox/sysbox-ipc/sysboxMgrGrpc"
+	"github.com/opencontainers/runc/libcontainer/configs"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
 
@@ -46,7 +47,7 @@ func (mgr *Mgr) Unregister() error {
 func (mgr *Mgr) ReqSubid(size uint32) (uint32, uint32, error) {
 	uid, gid, err := sysboxMgrGrpc.SubidAlloc(mgr.Id, uint64(size))
 	if err != nil {
-		return 0, 0, fmt.Errorf("failed to req subid from sysbox-mgr: %v", err)
+		return 0, 0, fmt.Errorf("failed to request subid from sysbox-mgr: %v", err)
 	}
 	return uid, gid, nil
 }
@@ -54,4 +55,11 @@ func (mgr *Mgr) ReqSubid(size uint32) (uint32, uint32, error) {
 func (mgr *Mgr) ReqSupMounts(rootfs string, uid, gid uint32, shiftUids bool) ([]specs.Mount, error) {
 	// TODO: implement this function
 	return nil, nil
+}
+
+func (mgr *Mgr) ReqShiftfsMark(rootfs string, mounts []configs.ShiftfsMount) error {
+	if err := sysboxMgrGrpc.ReqShiftfsMark(mgr.Id, rootfs, mounts); err != nil {
+		return fmt.Errorf("failed to request shiftfs marking to sysbox-mgr: %v", err)
+	}
+	return nil
 }

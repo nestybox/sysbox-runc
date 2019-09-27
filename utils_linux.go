@@ -448,8 +448,8 @@ const (
 func startContainer(context *cli.Context, spec *specs.Spec, action CtAct, criuOpts *libcontainer.CriuOpts, shiftUids bool, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs) (int, error) {
 
 	if shiftUids {
-		if err := sysbox.KernelModSupported("nbox_shiftfs"); err != nil {
-			return -1, fmt.Errorf("container requires uid shifting but error was found: %v", err)
+		if err := sysbox.KernelModSupported("shiftfs"); err != nil {
+			return -1, fmt.Errorf("container requires uid(gid) shifting but error was found: %v", err)
 		}
 	}
 

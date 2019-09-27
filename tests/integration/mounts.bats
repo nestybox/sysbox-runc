@@ -3,6 +3,7 @@
 load helpers
 
 function setup_busybox_tmpfs() {
+
 	mkdir -p /tmp/busyboxtest/rootfs
 	mount -t tmpfs tmpfs /tmp/busyboxtest/rootfs
 
@@ -14,20 +15,19 @@ function setup_busybox_tmpfs() {
 		chown -R "$UID_MAP":"$GID_MAP" /tmp/busyboxtest
 	fi
 
-	# sysbox-runc: restrict path to bundle when using
-	# uid-shift, as required by sysbox-runc's shiftfs
-	# mount security check
-	if [ -n "$SHIFT_UIDS" ]; then
-		chmod 700 /tmp/busyboxtest
-	fi
-
 	cd /tmp/busyboxtest
 	runc_spec
 }
 
 function cleanup_busybox_tmpfs() {
 	cd
-	umount /tmp/busyboxtest/rootfs
+	teardown_running_container $1
+
+	run sh -c 'findmnt -o TARGET | grep /tmp/busyboxtest/rootfs'
+	if [ "$status" -eq 0 ]; then
+		umount /tmp/busyboxtest/rootfs
+	fi
+
 	rm -rf /tmp/busyboxtest
 }
 
@@ -43,12 +43,6 @@ function teardown() {
 
 @test "runc run [bind mount]" {
 	mkdir -p /mnt/test-dir
-
-	# need this to pass sysbox-runc's shiftfs mount security check
-	if [ -n "$SHIFT_UIDS" ]; then
-		chmod 700 /mnt/test-dir
-	fi
-
 	touch /mnt/test-dir/test-file
 
 	update_config ' .mounts |= . + [{"source": "/mnt/test-dir", "destination": "/mnt/test-dir", "options": ["bind"]}] | .process.args = ["ls", "/mnt/test-dir/"]'
@@ -134,17 +128,11 @@ function teardown() {
 	runc kill test_bind_mount
 	[ "$status" -eq 0 ]
 
-	cleanup_busybox_tmpfs
+	cleanup_busybox_tmpfs test_bind_mount
 }
 
 @test "runc run [bind mount on tmpfs]" {
 	mkdir -p /tmp/busyboxtest/test-dir
-
-	# need this to pass sysbox-runc's shiftfs mount security check
-	if [ -n "$SHIFT_UIDS" ]; then
-		chmod 700 /tmp/busyboxtest
-	fi
-
 	mount -t tmpfs tmpfs /tmp/busyboxtest/test-dir
 	touch /tmp/busyboxtest/test-dir/test-file
 

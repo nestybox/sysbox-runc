@@ -3,17 +3,18 @@ package libcontainer
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 
-	"github.com/opencontainers/runc/libsysbox/shiftfs"
+	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/selinux/go-selinux/label"
 	"golang.org/x/sys/unix"
 )
 
 type linuxRootfsInit struct {
-	pipe      *os.File
-	mountInfo *mountReqInfo
+	pipe *os.File
+	req  *opReq
 }
 
 // getDir returns the path to the directory that contains the file at the given path
@@ -29,6 +30,27 @@ func getDir(file string) (string, error) {
 	}
 }
 
+func doBindMount(m *configs.Mount) error {
+	// sysbox-runc: For some reason, invoking the "mount" syscall fails with "permission
+	// denied" when the bind-mount source is on shiftfs. I investigated for several hours
+	// but was never able to find the underlying cause. As a work-around, we are invoking
+	// the /bin/mount command instead of the syscall. This should be fine, as all Linux
+	// systems are required to have /bin/mount per the Linux FHS.
+	cmd := exec.Command("/bin/mount", "--rbind", m.Source, m.Destination)
+	err := cmd.Run()
+	if err != nil {
+		return err
+	}
+
+	for _, pflag := range m.PropagationFlags {
+		if err := unix.Mount("", m.Destination, "", uintptr(pflag), ""); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // sysbox-runc:
 // Init performs container rootfs initialization actions from within the container's mount
 // namespace only. By virtue of only entering the mount namespace, Init has true
@@ -38,45 +60,19 @@ func (l *linuxRootfsInit) Init() error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	switch l.mountInfo.Op {
-	case shiftRootfs:
-		if err := shiftfs.Mount(l.mountInfo.Rootfs, l.mountInfo.Pid, true); err != nil {
-			return newSystemErrorWithCause(err, "mounting shiftfs on rootfs")
-		}
-	case shiftBind:
-		for _, m := range l.mountInfo.Shiftfs {
-
-			// If the bind mount corresponds to a regular file, mount shiftfs on the
-			// directory that contains the file. This is safe because the container does not
-			// have access to the full directory, only the bind mounted file.
-			dir, err := getDir(m.Source)
-			if err != nil {
-				return newSystemErrorWithCause(err, "finding bind source dir")
-			}
-
-			// We skip the shiftfs security check for read-only mounts, because processes in
-			// the container won't be able to write to it. But if the read-only bind mount is
-			// on a regular file and we are mounting shiftfs on the directory above it, we
-			// don't skip the check because the read-only attribute applies to the file, not
-			// on the directory.
-			skipSecCheck := m.Readonly && (dir == m.Source)
-
-			if err := shiftfs.Mount(dir, l.mountInfo.Pid, !skipSecCheck); err != nil {
-				return newSystemErrorWithCause(err, "mounting shiftfs on bind source")
-			}
-		}
+	switch l.req.Op {
 	case bind:
-		rootfs := l.mountInfo.Rootfs
-		m := &l.mountInfo.Mount
-		mountLabel := l.mountInfo.Label
+		rootfs := l.req.Rootfs
+		m := &l.req.Mount
+		mountLabel := l.req.Label
 
 		// The call to mountPropagate below requires that the process cwd be the rootfs directory
 		if err := unix.Chdir(rootfs); err != nil {
 			return newSystemErrorWithCausef(err, "chdir to rootfs %s", rootfs)
 		}
 
-		if err := mountPropagate(m, mountLabel); err != nil {
-			return newSystemErrorWithCausef(err, "mounting %s to %s", m.Source, m.Destination)
+		if err := doBindMount(m); err != nil {
+			return newSystemErrorWithCausef(err, "bind mounting %s to %s", m.Source, m.Destination)
 		}
 
 		// The bind mount won't change mount options, we need remount to make mount options effective.
@@ -102,7 +98,7 @@ func (l *linuxRootfsInit) Init() error {
 		return newSystemError(fmt.Errorf("invalid init type"))
 	}
 
-	if err := writeSync(l.pipe, mountDone); err != nil {
+	if err := writeSync(l.pipe, opDone); err != nil {
 		return err
 	}
 	l.pipe.Close()

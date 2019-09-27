@@ -24,15 +24,17 @@ import (
 )
 
 func TestExecPS(t *testing.T) {
-	testExecPS(t, false)
-}
-
-func TestUsernsExecPS(t *testing.T) {
-	if _, err := os.Stat("/proc/self/ns/user"); os.IsNotExist(err) {
-		t.Skip("userns is unsupported")
-	}
 	testExecPS(t, true)
 }
+
+// sysbox-runc: sys container's always have the user-ns, so the following test is the same as TestExecPS
+
+// func TestUsernsExecPS(t *testing.T) {
+// 	if _, err := os.Stat("/proc/self/ns/user"); os.IsNotExist(err) {
+// 		t.Skip("userns is unsupported")
+// 	}
+// 	testExecPS(t, true)
+// }
 
 func testExecPS(t *testing.T, userns bool) {
 	if testing.Short() {
@@ -41,6 +43,7 @@ func testExecPS(t *testing.T, userns bool) {
 	rootfs, err := newRootfs()
 	ok(t, err)
 	defer remove(rootfs)
+
 	config := newTemplateConfig(&tParam{
 		rootfs: rootfs,
 		userns: userns,
@@ -865,8 +868,13 @@ func TestContainerState(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	config := newTemplateConfig(&tParam{rootfs: rootfs})
+	config := newTemplateConfig(&tParam{
+		rootfs: rootfs,
+		userns: true,
+	})
+
 	config.Namespaces = configs.Namespaces([]configs.Namespace{
+		{Type: configs.NEWUSER},
 		{Type: configs.NEWNS},
 		{Type: configs.NEWUTS},
 		// host for IPC
@@ -1520,9 +1528,9 @@ func TestRootfsPropagationSlaveMount(t *testing.T) {
 	}
 }
 
-// Launch container with rootfsPropagation 0 so no propagation flags are
-// applied. Also bind mount a volume /mnt1host at /mnt1cont at the time of
-// launch. Now do a mount in container (/mnt1cont/mnt2cont) and this new
+// Launch container with rootfsPropagation 0 so no propagation flags are applied. Also
+// bind mount a volume /mnt1host at /mnt1cont at the time of launch. The /mnt1host volume
+// has shared propagation. Now do a mount in container (/mnt1cont/mnt2cont) and this new
 // mount should propagate to host (/mnt1host/mnt2cont)
 
 func TestRootfsPropagationSharedMount(t *testing.T) {
@@ -1539,6 +1547,22 @@ func TestRootfsPropagationSharedMount(t *testing.T) {
 	defer remove(rootfs)
 	config := newTemplateConfig(&tParam{rootfs: rootfs})
 	config.RootPropagation = unix.MS_PRIVATE
+
+	// Shared mounts only work without user-ns. Per mount_namespaces(7):
+	//
+	// *  A mount namespace has an owner  user namespace.  A mount namespace whose
+	//    owner user namespace  is different from the owner user  namespace of its
+	//    parent mount namespace is considered a less privileged mount namespace.
+	//
+	// *  When  creating a  less  privileged mount  namespace,  shared mounts  are
+	//    reduced to slave mounts.  (Shared and slave mounts are discussed below.)
+	//    This ensures that mappings performed in less privileged mount namespaces
+	//    will not propagate to more privileged mount namespaces.
+	//
+	// Thus, we must remove the user-ns that comes in the template config.
+	config.Namespaces.Remove(configs.NEWUSER)
+	config.UidMappings = nil
+	config.GidMappings = nil
 
 	// Bind mount a volume
 	dir1host, err := ioutil.TempDir("", "mnt1host")
@@ -1641,6 +1665,11 @@ func TestRootfsPropagationSharedMount(t *testing.T) {
 }
 
 func TestPIDHost(t *testing.T) {
+
+	// sysbox-runc: sys containers always use all namespaces; this test is not applicable
+	// as it spawns a container without the pid ns.
+	t.Skip("not applicable")
+
 	if testing.Short() {
 		return
 	}
@@ -1720,6 +1749,7 @@ func TestPIDHostInitProcessWait(t *testing.T) {
 }
 
 func TestInitJoinPID(t *testing.T) {
+
 	if testing.Short() {
 		return
 	}
@@ -1728,7 +1758,11 @@ func TestInitJoinPID(t *testing.T) {
 	defer remove(rootfs)
 
 	// Execute a long-running container
-	container1, err := newContainer(newTemplateConfig(&tParam{rootfs: rootfs}))
+	container1, err := newContainer(newTemplateConfig(&tParam{
+		rootfs: rootfs,
+		userns: true,
+	}))
+
 	ok(t, err)
 	defer container1.Destroy()
 
@@ -1750,10 +1784,19 @@ func TestInitJoinPID(t *testing.T) {
 	state1, err := container1.State()
 	ok(t, err)
 	pidns1 := state1.NamespacePaths[configs.NEWPID]
+	userns1 := state1.NamespacePaths[configs.NEWUSER]
 
 	// Run a container inside the existing pidns but with different cgroups
-	config2 := newTemplateConfig(&tParam{rootfs: rootfs})
+	config2 := newTemplateConfig(&tParam{
+		rootfs: rootfs,
+		userns: true,
+	})
+
+	// sysbox-runc: since sys containers always have user-ns, we must also join it (we
+	// can't just joint the pid-ns and not the user-ns as the kernel balks with "operation
+	// not permitted")
 	config2.Namespaces.Add(configs.NEWPID, pidns1)
+	config2.Namespaces.Add(configs.NEWUSER, userns1)
 	config2.Cgroups.Path = "integration/test2"
 	container2, err := newContainerWithName("testCT2", config2)
 	ok(t, err)
@@ -2004,7 +2047,10 @@ func TestCGROUPHost(t *testing.T) {
 	l, err := os.Readlink("/proc/1/ns/cgroup")
 	ok(t, err)
 
+	// This test only makes sense when the container is not using the cgroup-ns.
 	config := newTemplateConfig(&tParam{rootfs: rootfs})
+	config.Namespaces.Remove(configs.NEWCGROUP)
+
 	buffers, exitCode, err := runContainer(config, "", "readlink", "/proc/self/ns/cgroup")
 	ok(t, err)
 

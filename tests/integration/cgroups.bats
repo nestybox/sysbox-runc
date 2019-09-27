@@ -39,6 +39,7 @@ function setup() {
 	# update kernel memory tcp limit
 	runc update test_cgroups_kmem --kernel-memory-tcp 41943040
 	[ "$status" -eq 0 ]
+
 	check_cgroup_value "memory.kmem.tcp.limit_in_bytes" 41943040
 }
 

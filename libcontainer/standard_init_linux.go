@@ -27,28 +27,21 @@ type linuxStandardInit struct {
 	config        *initConfig
 }
 
-// sysbox-runc: info passed when container init process requests its parent runc to perform
-// a mount operation on its behalf.
-type mountReqType int
+// sysbox-runc: info passed when the sys container's init process requests its parent runc
+// to perform an operation on its behalf.
+type opReqType int
 
 const (
-	shiftRootfs mountReqType = iota
-	shiftBind
-	bind
+	bind = iota
+	mapUid
 )
 
-type shiftMount struct {
-	Source   string
-	Readonly bool
-}
-
-type mountReqInfo struct {
-	Op      mountReqType  `json:"type"`
-	Rootfs  string        `json:"rootfs"`  // container's rootfs path
-	Shiftfs []shiftMount  `json:"shiftfs"` // shiftfs mount paths
-	Mount   configs.Mount `json:"mount"`   // bind mount info
-	Label   string        `json:"label"`   // bind mount label
-	Pid     int           `json:"pid"`     // container's init pid
+type opReq struct {
+	Op     opReqType     `json:"type"`   // op request type
+	Rootfs string        `json:"rootfs"` // container's rootfs path
+	Mount  configs.Mount `json:"mount"`  // bind mount info
+	Label  string        `json:"label"`  // bind mount label
+	Pid    int           `json:"pid"`    // pid of container's init process
 }
 
 func (l *linuxStandardInit) getSessionRingParams() (string, uint32, uint32) {
