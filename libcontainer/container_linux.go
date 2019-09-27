@@ -14,6 +14,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall" // only for SysProcAttr and Signal
@@ -26,8 +28,10 @@ import (
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/intelrdt"
+	"github.com/opencontainers/runc/libcontainer/mount"
 	"github.com/opencontainers/runc/libcontainer/system"
 	"github.com/opencontainers/runc/libcontainer/utils"
+	"github.com/opencontainers/runc/libsysbox/shiftfs"
 	"github.com/opencontainers/runc/libsysbox/sysbox"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
@@ -242,9 +246,15 @@ func (c *linuxContainer) Set(config configs.Config) error {
 func (c *linuxContainer) Start(process *Process) error {
 	c.m.Lock()
 	defer c.m.Unlock()
+
 	if process.Init {
 		if err := c.createExecFifo(); err != nil {
 			return err
+		}
+		if c.config.ShiftUids {
+			if err := c.setupShiftfsMarks(); err != nil {
+				return err
+			}
 		}
 	}
 	if err := c.start(process); err != nil {
@@ -621,7 +631,28 @@ func (c *linuxContainer) newInitConfig(process *Process) *initConfig {
 func (c *linuxContainer) Destroy() error {
 	c.m.Lock()
 	defer c.m.Unlock()
-	return c.state.destroy()
+
+	err := c.state.destroy()
+
+	if c.sysFs.Enabled() {
+		if ferr := c.sysFs.Unregister(); err == nil {
+			err = ferr
+		}
+	}
+
+	if c.sysMgr.Enabled() {
+		if merr := c.sysMgr.Unregister(); err == nil {
+			err = merr
+		}
+	} else {
+		// If sysbox-mgr is not present (i.e., unit testing), then we teardown
+		// shiftfs marks here.
+		if serr := c.teardownShiftfsMarkLocal(); err == nil {
+			err = serr
+		}
+	}
+
+	return err
 }
 
 func (c *linuxContainer) Pause() error {
@@ -2071,13 +2102,73 @@ func requiresRootOrMappingTool(c *configs.Config) bool {
 	return !reflect.DeepEqual(c.GidMappings, gidMap)
 }
 
-// sysbox-runc: initMount creates a child helper process that assists the container's
-// init process with rootfs mount initializations. This helper process enters the
-// container's mount namespace (only) and performs the requested mount action. By virtue
-// of only entering the mount namespace, the helper process has true root-level access to
-// the host and thus can perform operations that the container's init process is not
-// allowed to. The helper process is spawned using sysivor-runc's reexec mechanism.
-func (c *linuxContainer) initMount(childPid int, mountInfo *mountReqInfo) error {
+// Borrowed from https://golang.org/src/syscall/exec_linux.go  (BSD-license)
+func formatIDMappings(idMap []configs.IDMap) []byte {
+	var data []byte
+	for _, im := range idMap {
+		data = append(data, []byte(strconv.Itoa(im.ContainerID)+" "+strconv.Itoa(im.HostID)+" "+strconv.Itoa(im.Size)+"\n")...)
+	}
+	return data
+}
+
+// writeIDMappings writes the user namespace User ID or Group ID mappings to the specified path.
+// Adapted from https://golang.org/src/syscall/exec_linux.go  (BSD-license)
+func writeIDMappings(path string, idMap []configs.IDMap) error {
+	fd, err := os.OpenFile(path, os.O_RDWR, 0)
+	if err != nil {
+		return err
+	}
+
+	if _, err := fd.Write(formatIDMappings(idMap)); err != nil {
+		fd.Close()
+		return err
+	}
+
+	if err := fd.Close(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// sysbox-runc: initHelper handles requests from the container's init process for helper
+// actions that can't be done by it (e.g., due to lack of permissions, etc.). Actions
+// include setting up uid(gid) mappings for the container's user-ns, marking shiftfs on
+// the container's rootfs or bind mount sources, or performing bind mounts in cases where
+// the container's init process has no permission to access to the source of the mount.
+//
+// The initHelper handler may perform the action directly in its context, or it may
+// dispatch a child helper to enter a namespace of the sys container to perform the action
+// (e.g., it's capable of entering the mount namespace of the container to setup the bind
+// mount). The child helper is dispatched via sysbox-runc's reexec mechanism.
+func (c *linuxContainer) initHelper(childPid int, req *opReq) error {
+
+	switch req.Op {
+	case mapUid:
+		uidf := "/proc/" + strconv.Itoa(childPid) + "/uid_map"
+		if err := writeIDMappings(uidf, c.config.UidMappings); err != nil {
+			return newSystemErrorWithCause(err, "setting uid-mapping")
+		}
+		gidf := "/proc/" + strconv.Itoa(childPid) + "/gid_map"
+		if err := writeIDMappings(gidf, c.config.GidMappings); err != nil {
+			return newSystemErrorWithCause(err, "setting gid-mapping")
+		}
+	case bind:
+		return c.initHelperBind(childPid, req)
+	default:
+		return newSystemError(fmt.Errorf("invalid opReq type %d", int(req.Op)))
+	}
+
+	return nil
+}
+
+// sysbox-runc: initHelperBind performs a bind mount on the system container's rootfs.  It
+// does this by dispatching a child helper process that uses sysbox-runc's reexec mechanism
+// to enter the mount namespace of the sys container to perform the bind mount. By virtue
+// of only entering the mount namespace, the child helper can perform mounts inside the
+// sys container but bypass any permission restrictions that the container's init process
+// may have (e.g., as a result of user-ns uid(gid) mappings).
+func (c *linuxContainer) initHelperBind(childPid int, req *opReq) error {
 
 	// create a socket pair
 	parentPipe, childPipe, err := utils.NewSockPair("initMount")
@@ -2147,15 +2238,15 @@ func (c *linuxContainer) initMount(childPid int, mountInfo *mountReqInfo) error 
 	cmd.Process = process
 
 	// send the mount info to the rootfsInitProcess
-	mountInfo.Pid = childPid
-	if err := utils.WriteJSON(parentPipe, mountInfo); err != nil {
+	req.Pid = childPid
+	if err := utils.WriteJSON(parentPipe, req); err != nil {
 		return newSystemErrorWithCause(err, "writing init mount info to pipe")
 	}
 
 	// wait for msg from the initMount child indicating that it's done
 	ierr := parseSync(parentPipe, func(sync *syncT) error {
 		switch sync.Type {
-		case mountDone:
+		case opDone:
 			// no further action; parseSync will wait for pipe to be closed on the other side.
 		default:
 			return newSystemError(fmt.Errorf("invalid JSON payload from initSetRootfs child"))
@@ -2174,5 +2265,125 @@ func (c *linuxContainer) initMount(childPid int, mountInfo *mountReqInfo) error 
 	}
 
 	cmd.Wait()
+	return nil
+}
+
+// sysbox-runc: sets up the shiftfs marks for the container
+func (c *linuxContainer) setupShiftfsMarks() error {
+
+	// Figure out the sys container's shiftfs mountpoints (other than the container's rootfs)
+	config := c.config
+	mounts := []configs.ShiftfsMount{}
+
+	for _, m := range config.Mounts {
+		if m.Device == "bind" {
+			needShiftfs, err := needUidShiftOnBindSrc(m, config)
+			if err != nil {
+				return newSystemErrorWithCause(err, "checking bind source")
+			}
+
+			if !needShiftfs {
+				continue
+			}
+
+			if err := allowShiftfsBindSource(m.Source, config.Rootfs); err != nil {
+				return newSystemErrorWithCause(err, "validating bind source")
+			}
+
+			var dir string
+			if !m.BindSrcInfo.IsDir {
+				dir = filepath.Dir(m.Source)
+			} else {
+				dir = m.Source
+			}
+
+			sm := configs.ShiftfsMount{
+				Source:   dir,
+				Readonly: m.Flags&unix.MS_RDONLY == unix.MS_RDONLY,
+			}
+
+			mounts = append(mounts, sm)
+		}
+	}
+
+	baseMounts := []configs.ShiftfsMount{}
+
+	if len(mounts) > 0 {
+		// To avoid shiftfs-on-shiftfs, if we see paths such as /x/y and /x/y/z, mount
+		// shiftfs on /x/y only (i.e., the base path)
+		sort.Slice(mounts, func(i, j int) bool {
+			return !filepath.HasPrefix(mounts[i].Source, mounts[j].Source)
+		})
+
+		baseMounts = append(baseMounts, mounts[0])
+		for i := 1; i < len(mounts); i++ {
+			found := false
+			for _, b := range baseMounts {
+				if strings.Contains(mounts[i].Source, b.Source) {
+					found = true
+				}
+			}
+			if !found {
+				baseMounts = append(baseMounts, mounts[i])
+			}
+		}
+	}
+
+	// The shiftfs mark points will be used later by the container's init process to
+	// actually mount shiftfs in the container's mount-ns.
+	c.config.ShiftfsMounts = baseMounts
+
+	// Perform the shiftfs marks; normally this is done by sysbox-mgr as it can track
+	// shiftfs mark-points on the host even when some of these are shared among sys
+	// containers. But for sysbox-runc unit testing the sysbox-mgr is not present, so we do
+	// the shiftfs marking locally (which only works when sys containers are not sharing
+	// mount points)
+
+	if c.sysMgr.Enabled() {
+		return c.sysMgr.ReqShiftfsMark(c.config.Rootfs, baseMounts)
+	} else {
+		return c.setupShiftfsMarkLocal()
+	}
+}
+
+// Setup shiftfs marks; meant for testing only
+func (c *linuxContainer) setupShiftfsMarkLocal() error {
+
+	allMounts := c.config.ShiftfsMounts
+	allMounts = append(allMounts, configs.ShiftfsMount{c.config.Rootfs, false})
+
+	for _, m := range allMounts {
+		mounted, err := mount.MountedWithFs(m.Source, "shiftfs")
+		if err != nil {
+			return newSystemErrorWithCausef(err, "checking for shiftfs mount at %s", m.Source)
+		}
+		if !mounted {
+			if err := shiftfs.Mark(m.Source); err != nil {
+				return newSystemErrorWithCausef(err, "marking shiftfs on %s", m.Source)
+			}
+		}
+	}
+
+	return nil
+}
+
+// Teardown shiftfs marks; meant for testing only
+func (c *linuxContainer) teardownShiftfsMarkLocal() error {
+
+	allMounts := c.config.ShiftfsMounts
+	allMounts = append(allMounts, configs.ShiftfsMount{c.config.Rootfs, false})
+
+	for _, m := range allMounts {
+		mounted, err := mount.MountedWithFs(m.Source, "shiftfs")
+		if err != nil {
+			return newSystemErrorWithCausef(err, "checking for shiftfs mount at %s", m.Source)
+		}
+		if mounted {
+			if err := shiftfs.Unmount(m.Source); err != nil {
+				return newSystemErrorWithCausef(err, "unmarking shiftfs on %s", m.Source)
+			}
+		}
+	}
+
 	return nil
 }

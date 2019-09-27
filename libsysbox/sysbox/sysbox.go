@@ -23,10 +23,9 @@ import (
 // "kernel".
 type kernelRelease struct{ major, minor int }
 
-var minKernel = kernelRelease{4, 10}        // 4.10
-var minKernelUidShift = kernelRelease{5, 0} // 5.0 (see issues #160 and #180)
+var minKernel = kernelRelease{4, 10} // 4.10 (see issue #89)
 
-// See issues #160 and #180
+// uid shifting requires shiftfs, currenlty present in Ubuntu only.
 var uidShiftDistros = []string{"Ubuntu"}
 
 // checkUnprivilegedUserns checks if the kernel is configured to allow
@@ -125,11 +124,6 @@ func checkKernel(uidShift bool) error {
 	kmaj := minKernel.major
 	kmin := minKernel.minor
 
-	if uidShift {
-		kmaj = minKernelUidShift.major
-		kmin = minKernelUidShift.minor
-	}
-
 	supported := false
 	if major > kmaj {
 		supported = true
@@ -163,8 +157,6 @@ func CheckHostConfig(context *cli.Context, shiftUids bool) error {
 	if err := checkUnprivilegedUserns(); err != nil {
 		return fmt.Errorf("host is not configured properly: %v", err)
 	}
-
-	// TODO: check for fuse module presence (needed by sysbox-fs)
 
 	return nil
 }

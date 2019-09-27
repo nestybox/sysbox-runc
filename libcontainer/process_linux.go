@@ -122,6 +122,9 @@ func (p *setnsProcess) start() (err error) {
 		case procHooks:
 			// This shouldn't happen.
 			panic("unexpected procHooks in setns")
+		case reqOp:
+			// This shouldn't happen.
+			panic("unexpected reqOp in setns")
 		default:
 			return newSystemError(fmt.Errorf("invalid JSON payload from child"))
 		}
@@ -341,8 +344,9 @@ func (p *initProcess) start() error {
 		}
 	}
 
-	// sysbox-runc: register the container with sysbox-fs (must be done before
-	// prestart hooks so that sysbox-fs is ready to respond by the time the hooks run).
+	// sysbox-runc: register the container with sysbox-fs (must be done after childPid is
+	// obtained but before prestart hooks so that sysbox-fs is ready to respond by the time
+	// the hooks run).
 	sysFs := p.container.sysFs
 	if sysFs.Enabled() {
 		c := p.container
@@ -417,6 +421,7 @@ func (p *initProcess) start() error {
 				return newSystemErrorWithCause(err, "writing syncT 'run'")
 			}
 			sentRun = true
+
 		case procHooks:
 			if p.intelRdtManager != nil {
 				if err := p.intelRdtManager.Set(p.config.Config); err != nil {
@@ -442,20 +447,22 @@ func (p *initProcess) start() error {
 				return newSystemErrorWithCause(err, "writing syncT 'resume'")
 			}
 			sentResume = true
-		case doMount:
-			var mountInfo mountReqInfo
-			if err := writeSync(p.parentPipe, sendMountInfo); err != nil {
-				return newSystemErrorWithCause(err, "writing syncT 'mountInfoReq'")
+
+		case reqOp:
+			var req opReq
+			if err := writeSync(p.parentPipe, sendOpInfo); err != nil {
+				return newSystemErrorWithCause(err, "writing syncT 'sendOpInfo'")
 			}
-			if err := json.NewDecoder(p.parentPipe).Decode(&mountInfo); err != nil {
+			if err := json.NewDecoder(p.parentPipe).Decode(&req); err != nil {
 				return newSystemErrorWithCause(err, "receiving / decoding mountInfo'")
 			}
-			if err := p.container.initMount(childPid, &mountInfo); err != nil {
-				return newSystemErrorWithCausef(err, "initMount")
+			if err := p.container.initHelper(childPid, &req); err != nil {
+				return newSystemErrorWithCausef(err, "initHelper")
 			}
-			if err := writeSync(p.parentPipe, mountDone); err != nil {
-				return newSystemErrorWithCause(err, "writing syncT 'mountDone'")
+			if err := writeSync(p.parentPipe, opDone); err != nil {
+				return newSystemErrorWithCause(err, "writing syncT 'opDone'")
 			}
+
 		default:
 			return newSystemError(fmt.Errorf("invalid JSON payload from child"))
 		}

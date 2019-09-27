@@ -101,13 +101,13 @@ func newContainerInit(t initType, pipe *os.File, consoleSocket *os.File, fifoFd 
 			}, nil
 		}
 	} else if t == initMount {
-		var mountInfo *mountReqInfo
-		if err := json.NewDecoder(pipe).Decode(&mountInfo); err != nil {
+		var req *opReq
+		if err := json.NewDecoder(pipe).Decode(&req); err != nil {
 			return nil, err
 		}
 		return &linuxRootfsInit{
-			pipe:      pipe,
-			mountInfo: mountInfo,
+			pipe: pipe,
+			req:  req,
 		}, nil
 	}
 
@@ -250,21 +250,21 @@ func syncParentHooks(pipe io.ReadWriter) error {
 }
 
 // sysbox-runc:
-// syncParentDoMount signals the parent runc to perform a mount on behalf of the
-// container's init process; this is useful in cases where the container's init process
-// can't do the mount because it may not have search permissions to the bind mount
-// source. See sync.go for the sync sequence.
-func syncParentDoMount(mountInfo *mountReqInfo, pipe io.ReadWriter) error {
-	if err := writeSync(pipe, doMount); err != nil {
+// syncParentDoOp signals the parent runc to perform an operation on behalf of the
+// sys container's init process; this is useful in cases where the container's init process
+// can't do the operation because it may not have appropriate permissions.
+// See sync.go for the sync sequence.
+func syncParentDoOp(req *opReq, pipe io.ReadWriter) error {
+	if err := writeSync(pipe, reqOp); err != nil {
 		return err
 	}
-	if err := readSync(pipe, sendMountInfo); err != nil {
+	if err := readSync(pipe, sendOpInfo); err != nil {
 		return err
 	}
-	if err := utils.WriteJSON(pipe, mountInfo); err != nil {
+	if err := utils.WriteJSON(pipe, req); err != nil {
 		return err
 	}
-	if err := readSync(pipe, mountDone); err != nil {
+	if err := readSync(pipe, opDone); err != nil {
 		return err
 	}
 	return nil

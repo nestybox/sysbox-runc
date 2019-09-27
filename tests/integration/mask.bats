@@ -11,8 +11,10 @@ function setup() {
 	echo "Forbidden information!" > rootfs/testfile
 
         # sysbox-runc
-        chown "$UID_MAP":"$GID_MAP" rootfs/testdir
-        chown "$UID_MAP":"$GID_MAP" rootfs/testfile
+        if [ -z "$SHIFT_UIDS" ]; then
+          chown "$UID_MAP":"$GID_MAP" rootfs/testdir
+          chown "$UID_MAP":"$GID_MAP" rootfs/testfile
+        fi
 
 	# add extra masked paths
 	sed -i 's;"maskedPaths": \[;"maskedPaths": \["/testdir","/testfile",;g' config.json

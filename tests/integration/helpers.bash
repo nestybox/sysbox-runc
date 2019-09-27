@@ -60,6 +60,33 @@ UID_MAP=100000
 GID_MAP=100000
 ID_MAP_SIZE=65536
 
+# Call this from setup() to run a single test
+#
+# E.g.,
+# function setup() {
+#    run_only_test "disable_ipv6 lookup"
+#    other_setup_actions
+# }
+#
+# or
+#
+# function setup() {
+#    run_only_test_num 2
+#    other_setup_actions
+# }
+
+run_only_test() {
+  if [ "$BATS_TEST_DESCRIPTION" != "$1" ]; then
+    skip
+  fi
+}
+
+run_only_test_num() {
+  if [ "$BATS_TEST_NUMBER" -ne "$1" ]; then
+    skip
+  fi
+}
+
 # Wrapper for runc.
 function runc() {
 	run __runc "$@"
@@ -281,7 +308,8 @@ function teardown_recvtty() {
 function setup_busybox() {
 	setup_recvtty
 	run mkdir "$BUSYBOX_BUNDLE"
-	run mkdir "$BUSYBOX_BUNDLE"/rootfs
+	run mkdir "$BUSYBOX_BUNDLE/rootfs"
+
 	if [ -e "/testdata/busybox.tar" ]; then
 		BUSYBOX_IMAGE="/testdata/busybox.tar"
 	fi
@@ -296,13 +324,6 @@ function setup_busybox() {
             chown -R "$UID_MAP":"$GID_MAP" "$BUSYBOX_BUNDLE"
         fi
 
-        # sysbox-runc: restrict path to bundle when using
-        # uid-shift, as required by sysbox-runc's shiftfs
-        # mount security check
-        if [ -n "$SHIFT_UIDS" ]; then
-          chmod 700 "$BUSYBOX_BUNDLE"
-        fi
-
 	cd "$BUSYBOX_BUNDLE"
 
 	runc_spec
@@ -311,8 +332,8 @@ function setup_busybox() {
 function setup_hello() {
 	setup_recvtty
 	run mkdir "$HELLO_BUNDLE"
-	run mkdir "$HELLO_BUNDLE"/rootfs
-	tar --exclude './dev/*' -C "$HELLO_BUNDLE"/rootfs -xf "$HELLO_IMAGE"
+	run mkdir "$HELLO_BUNDLE/rootfs"
+	tar --exclude './dev/*' -C "$HELLO_BUNDLE/rootfs" -xf "$HELLO_IMAGE"
 
         # sysbox-runc: set bundle ownership to match system
         # container's uid/gid map, except if using uid-shifting

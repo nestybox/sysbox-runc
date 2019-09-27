@@ -74,6 +74,12 @@ type Syscall struct {
 	Args   []*Arg `json:"args"`
 }
 
+// ShiftfsMount describes a shiftfs mount point
+type ShiftfsMount struct {
+	Source   string
+	Readonly bool
+}
+
 // TODO Windows. Many of these fields should be factored out into those parts
 // which are common across platforms, and those which are platform specific.
 
@@ -202,6 +208,9 @@ type Config struct {
 
 	// ShiftUids indicates if the container uses uid/gid shifting via the shiftfs kernel module.
 	ShiftUids bool `json:"shift_uids,omitempty"`
+
+	// ShiftfsMounts is a list of directories on which shiftfs needs to be mounted
+	ShiftfsMounts []ShiftfsMount `json:"shiftfs_mounts,omitempty"`
 }
 
 type Hooks struct {

@@ -1,6 +1,8 @@
 package integration
 
 import (
+	"os"
+
 	"github.com/opencontainers/runc/libcontainer/configs"
 
 	"golang.org/x/sys/unix"
@@ -15,6 +17,47 @@ var standardEnvironment = []string{
 
 const defaultMountFlags = unix.MS_NOEXEC | unix.MS_NOSUID | unix.MS_NODEV
 
+var linuxCaps = []string{
+	"CAP_CHOWN",
+	"CAP_DAC_OVERRIDE",
+	"CAP_FSETID",
+	"CAP_FOWNER",
+	"CAP_MKNOD",
+	"CAP_NET_RAW",
+	"CAP_SETGID",
+	"CAP_SETUID",
+	"CAP_SETFCAP",
+	"CAP_SETPCAP",
+	"CAP_NET_BIND_SERVICE",
+	"CAP_SYS_CHROOT",
+	"CAP_KILL",
+	"CAP_AUDIT_WRITE",
+	"CAP_DAC_READ_SEARCH",
+	"CAP_LINUX_IMMUTABLE",
+	"CAP_NET_BROADCAST",
+	"CAP_NET_ADMIN",
+	"CAP_IPC_LOCK",
+	"CAP_IPC_OWNER",
+	"CAP_SYS_MODULE",
+	"CAP_SYS_RAWIO",
+	"CAP_SYS_PTRACE",
+	"CAP_SYS_PACCT",
+	"CAP_SYS_ADMIN",
+	"CAP_SYS_BOOT",
+	"CAP_SYS_NICE",
+	"CAP_SYS_RESOURCE",
+	"CAP_SYS_TIME",
+	"CAP_SYS_TTY_CONFIG",
+	"CAP_LEASE",
+	"CAP_AUDIT_CONTROL",
+	"CAP_MAC_OVERRIDE",
+	"CAP_MAC_ADMIN",
+	"CAP_SYSLOG",
+	"CAP_WAKE_ALARM",
+	"CAP_BLOCK_SUSPEND",
+	"CAP_AUDIT_READ",
+}
+
 // newTemplateConfig returns a base template for running a container
 //
 // it uses a network strategy of just setting a loopback interface
@@ -24,86 +67,11 @@ func newTemplateConfig(rootfs string) *configs.Config {
 	return &configs.Config{
 		Rootfs: rootfs,
 		Capabilities: &configs.Capabilities{
-			Bounding: []string{
-				"CAP_CHOWN",
-				"CAP_DAC_OVERRIDE",
-				"CAP_FSETID",
-				"CAP_FOWNER",
-				"CAP_MKNOD",
-				"CAP_NET_RAW",
-				"CAP_SETGID",
-				"CAP_SETUID",
-				"CAP_SETFCAP",
-				"CAP_SETPCAP",
-				"CAP_NET_BIND_SERVICE",
-				"CAP_SYS_CHROOT",
-				"CAP_KILL",
-				"CAP_AUDIT_WRITE",
-			},
-			Permitted: []string{
-				"CAP_CHOWN",
-				"CAP_DAC_OVERRIDE",
-				"CAP_FSETID",
-				"CAP_FOWNER",
-				"CAP_MKNOD",
-				"CAP_NET_RAW",
-				"CAP_SETGID",
-				"CAP_SETUID",
-				"CAP_SETFCAP",
-				"CAP_SETPCAP",
-				"CAP_NET_BIND_SERVICE",
-				"CAP_SYS_CHROOT",
-				"CAP_KILL",
-				"CAP_AUDIT_WRITE",
-			},
-			Inheritable: []string{
-				"CAP_CHOWN",
-				"CAP_DAC_OVERRIDE",
-				"CAP_FSETID",
-				"CAP_FOWNER",
-				"CAP_MKNOD",
-				"CAP_NET_RAW",
-				"CAP_SETGID",
-				"CAP_SETUID",
-				"CAP_SETFCAP",
-				"CAP_SETPCAP",
-				"CAP_NET_BIND_SERVICE",
-				"CAP_SYS_CHROOT",
-				"CAP_KILL",
-				"CAP_AUDIT_WRITE",
-			},
-			Ambient: []string{
-				"CAP_CHOWN",
-				"CAP_DAC_OVERRIDE",
-				"CAP_FSETID",
-				"CAP_FOWNER",
-				"CAP_MKNOD",
-				"CAP_NET_RAW",
-				"CAP_SETGID",
-				"CAP_SETUID",
-				"CAP_SETFCAP",
-				"CAP_SETPCAP",
-				"CAP_NET_BIND_SERVICE",
-				"CAP_SYS_CHROOT",
-				"CAP_KILL",
-				"CAP_AUDIT_WRITE",
-			},
-			Effective: []string{
-				"CAP_CHOWN",
-				"CAP_DAC_OVERRIDE",
-				"CAP_FSETID",
-				"CAP_FOWNER",
-				"CAP_MKNOD",
-				"CAP_NET_RAW",
-				"CAP_SETGID",
-				"CAP_SETUID",
-				"CAP_SETFCAP",
-				"CAP_SETPCAP",
-				"CAP_NET_BIND_SERVICE",
-				"CAP_SYS_CHROOT",
-				"CAP_KILL",
-				"CAP_AUDIT_WRITE",
-			},
+			Bounding:    linuxCaps,
+			Effective:   linuxCaps,
+			Inheritable: linuxCaps,
+			Permitted:   linuxCaps,
+			Ambient:     linuxCaps,
 		},
 		Namespaces: configs.Namespaces([]configs.Namespace{
 			{Type: configs.NEWNS},
@@ -111,7 +79,25 @@ func newTemplateConfig(rootfs string) *configs.Config {
 			{Type: configs.NEWIPC},
 			{Type: configs.NEWPID},
 			{Type: configs.NEWNET},
+			{Type: configs.NEWUSER},
+			{Type: configs.NEWCGROUP},
 		}),
+
+		UidMappings: []configs.IDMap{
+			{
+				HostID:      int(os.Geteuid()),
+				ContainerID: 0,
+				Size:        1000,
+			},
+		},
+		GidMappings: []configs.IDMap{
+			{
+				HostID:      int(os.Geteuid()),
+				ContainerID: 0,
+				Size:        1000,
+			},
+		},
+
 		Cgroups: &configs.Cgroup{
 			Path: "integration/test",
 			Resources: &configs.Resources{

@@ -559,9 +559,10 @@ func needUidShiftOnRootfs(spec *specs.Spec) (bool, error) {
 	rootfsUid := st.Uid
 	rootfsGid := st.Gid
 
-	// use shifting when the rootfs is owned by true root, the containers uid/gid root
+	// Use shifting when the rootfs is owned by true root, the containers uid/gid root
 	// mapping don't match the container's rootfs owner, and the host ID for the uid and
 	// gid mappings is the same.
+
 	if rootfsUid == 0 && rootfsGid == 0 &&
 		hostUidMap != rootfsUid && hostGidMap != rootfsGid &&
 		hostUidMap == hostGidMap {

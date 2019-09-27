@@ -14,41 +14,36 @@ function setup_busybox_tmpfs() {
     chown -R "$UID_MAP":"$GID_MAP" /tmp/busyboxtest
   fi
 
-  # sysbox-runc: restrict path to bundle when using
-  # uid-shift, as required by sysbox-runc's shiftfs
-  # mount security check
-  if [ -n "$SHIFT_UIDS" ]; then
-    chmod 700 /tmp/busyboxtest
-  fi
-
   cd /tmp/busyboxtest
   runc_spec
 }
 
 function cleanup_busybox_tmpfs() {
   cd
-  umount /tmp/busyboxtest/rootfs
+  teardown_running_container test_bind_mount
+
+  run sh -c 'findmnt -o TARGET | grep /tmp/busyboxtest/rootfs'
+  if [ "$status" -eq 0 ]; then
+    umount /tmp/busyboxtest/rootfs
+  fi
+
   rm -rf /tmp/busyboxtest
 }
 
-function setup() {
+function teardown() {
+  teardown_running_container test_bind_mount
   teardown_busybox
-  setup_busybox
 }
 
-function teardown() {
-  teardown_busybox
+function setup() {
+  teardown
+  setup_busybox
 }
 
 @test "bind mount" {
 
   mkdir -p /mnt/test-dir
   [ "$status" -eq 0 ]
-
-  # need this to pass sysbox-runc's shiftfs mount security check
-  if [ -n "$SHIFT_UIDS" ]; then
-    chmod 700 /mnt/test-dir
-  fi
 
   run touch /mnt/test-dir/test-file
   [ "$status" -eq 0 ]
@@ -121,9 +116,11 @@ function teardown() {
   runc exec test_bind_mount ls /root
   [ "$status" -eq 0 ]
   [[ "${lines[0]}" =~ '' ]]
+
 }
 
 @test "rootfs on tmpfs" {
+  cleanup_busybox_tmpfs
   setup_busybox_tmpfs
 
   runc run -d --console-socket $CONSOLE_SOCKET test_bind_mount
@@ -138,11 +135,6 @@ function teardown() {
 @test "bind mount on tmpfs" {
   mkdir -p /tmp/busyboxtest/test-dir
   [ "$status" -eq 0 ]
-
-  # need this to pass sysbox-runc's shiftfs mount security check
-  if [ -n "$SHIFT_UIDS" ]; then
-    chmod 700 /tmp/busyboxtest
-  fi
 
   mount -t tmpfs tmpfs /tmp/busyboxtest/test-dir
   [ "$status" -eq 0 ]

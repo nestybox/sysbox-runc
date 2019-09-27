@@ -16,10 +16,10 @@ type syncType string
 //
 // [  child  ] <-> [   parent   ]
 //
-// doMount      -->
-//              <-- sendMountInfo
+// opReq        -->
+//              <-- sendOpInfo
 // [send(info)] --> [recv(info)]
-//              <-- mountDone
+//              <-- opDone
 //
 // procHooks    --> [run hooks]
 //              <-- procResume
@@ -33,9 +33,9 @@ const (
 	procHooks  syncType = "procHooks"
 	procResume syncType = "procResume"
 
-	doMount       syncType = "doMount"
-	sendMountInfo syncType = "sendMountInfo"
-	mountDone     syncType = "mountDone"
+	reqOp      syncType = "reqOp"
+	sendOpInfo syncType = "sendOpInfo"
+	opDone     syncType = "opDone"
 )
 
 type syncT struct {

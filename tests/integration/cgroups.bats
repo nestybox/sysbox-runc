@@ -49,7 +49,7 @@ EOF
     runc update test_cgroups_kmem --kernel-memory 50331648
     [ "$status" -eq 0 ]
 
-	# check the value
+    # check the value
     check_cgroup_value $CGROUP_MEMORY "memory.kmem.limit_in_bytes" 50331648
 }
 
