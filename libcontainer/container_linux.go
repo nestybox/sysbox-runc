@@ -2392,15 +2392,21 @@ func (c *linuxContainer) setupShiftfsMarks() error {
 				continue
 			}
 
-			if err := allowShiftfsBindSource(m.Source, config.Rootfs); err != nil {
-				return newSystemErrorWithCause(err, "validating bind source")
-			}
-
+			// shiftfs mounts must be on directories (not on files)
 			var dir string
 			if !m.BindSrcInfo.IsDir {
 				dir = filepath.Dir(m.Source)
 			} else {
 				dir = m.Source
+			}
+
+			if err := allowShiftfsBindSource(dir, config.Rootfs); err != nil {
+				return newSystemErrorWithCause(err, "validating bind source")
+			}
+
+			if err := skipShiftfsBindSource(dir); err != nil {
+				logrus.Infof(err.Error())
+				continue
 			}
 
 			sm := configs.ShiftfsMount{
