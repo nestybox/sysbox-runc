@@ -449,7 +449,7 @@ func startContainer(context *cli.Context, spec *specs.Spec, action CtAct, criuOp
 
 	if shiftUids {
 		if err := sysbox.KernelModSupported("shiftfs"); err != nil {
-			return -1, fmt.Errorf("container requires uid(gid) shifting but error was found: %v", err)
+			return -1, fmt.Errorf("container requires user-ID shifting but error was found: %v", err)
 		}
 	}
 

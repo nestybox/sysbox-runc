@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 
@@ -163,9 +162,6 @@ func CheckHostConfig(context *cli.Context, shiftUids bool) error {
 
 // KernelModSupported returns nil if the given module is loaded in the kernel.
 func KernelModSupported(mod string) error {
-
-	// Load the module (if present in directory /lib/modules/`uname -r`)
-	exec.Command("modprobe", mod).Run()
 
 	// Check if the module is in the kernel
 	f, err := os.Open("/proc/filesystems")
