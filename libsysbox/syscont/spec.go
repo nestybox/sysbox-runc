@@ -112,6 +112,41 @@ var sysboxFsMounts = []specs.Mount{
 	// },
 }
 
+// sysbox's systemd mount requirements
+var sysboxSystemdMounts = []specs.Mount{
+
+	specs.Mount{
+		Destination: "/run",
+		Source:      "tmpfs",
+		Type:        "tmpfs",
+		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "tmpcopyup", "size=65536k"},
+	},
+	specs.Mount{
+		Destination: "/run/lock",
+		Source:      "tmpfs",
+		Type:        "tmpfs",
+		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "tmpcopyup", "size=65536k"},
+	},
+	specs.Mount{
+		Destination: "/tmp",
+		Source:      "tmpfs",
+		Type:        "tmpfs",
+		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "tmpcopyup", "size=65536k"},
+	},
+	specs.Mount{
+		Destination: "/var/log/journal",
+		Source:      "tmpfs",
+		Type:        "tmpfs",
+		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "tmpcopyup", "size=65536k"},
+	},
+	specs.Mount{
+		Destination: "/dev/kmsg",
+		Source:      "tmpfs",
+		Type:        "tmpfs",
+		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev"},
+	},
+}
+
 // sysboxRwPaths list the paths within the sys container's rootfs
 // that must have read-write permission
 var sysboxRwPaths = []string{
@@ -320,6 +355,18 @@ func cfgSysboxFsMounts(spec *specs.Spec) {
 	for _, mount := range sysboxFsMounts {
 		spec.Mounts = append(spec.Mounts, mount)
 		logrus.Debugf("added sysbox-fs mount %s to spec", mount.Destination)
+	}
+}
+
+// cfgSystemdMounts adds the mounts required by systemd.
+func cfgSystemdMounts(spec *specs.Spec) {
+
+	// Deal with overlapping mounts coming from OCI specs. TBD.
+
+	// add systemd mounts to the config
+	for _, mount := range sysboxSystemdMounts {
+		spec.Mounts = append(spec.Mounts, mount)
+		logrus.Debugf("added sysbox's systemd mount %s to spec", mount.Destination)
 	}
 }
 
@@ -659,6 +706,7 @@ func ConvertSpec(context *cli.Context, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs, spe
 		cfgMaskedPaths(spec)
 		cfgReadonlyPaths(spec)
 		cfgSysboxFsMounts(spec)
+		cfgSystemdMounts(spec)
 	}
 
 	if err := cfgSeccomp(spec.Linux.Seccomp); err != nil {
