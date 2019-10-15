@@ -636,43 +636,31 @@ func getSupConfig(mgr *sysbox.Mgr, spec *specs.Spec, shiftUids bool) error {
 	uid := spec.Linux.UIDMappings[0].HostID
 	gid := spec.Linux.GIDMappings[0].HostID
 
-	mounts, err := mgr.ReqSupMounts(spec.Root.Path, uid, gid, shiftUids)
+	supMounts, err := mgr.ReqSupMounts(spec.Root.Path, uid, gid, shiftUids)
 	if err != nil {
 		return fmt.Errorf("failed to request supplementary mounts from sysbox-mgr: %v", err)
 	}
 
-	// Ideally, if a sysbox-mgr supplementary mount conflicts with a mount in the sys
-	// container's spec, we would honor the sys container's spec. This would allow a user
-	// to override the mount of /var/lib/docker inside the container in cases where he/she
-	// wants to mount host storage into it (e.g., to make the inner docker's cache
-	// persistent).
-	//
-	// But unfortunately we can't do this when using uid-shifting, because it requires that
-	// we mount shiftfs over the mountpoint in the sys container's spec and mount it into
-	// /var/lib/docker. That's fine, except that a Docker instance inside the sys container
-	// will want to mount overlayfs on top of that directory, and overlayfs can't be mounted
-	// over shiftfs yet (it's expected that this will soon be fixed in Ubuntu kernels). See
-	// issue #93.
-	//
-	// As a result, we only honor the sys container's spec mounts over /var/lib/docker when
-	// not using uid shifting (e.g., when the Docker on the host is configured with
-	// userns-remap).
+	// Allow user-defined mounts to override sysbox-mgr mounts, except for bind mounts on
+	// the sys container's /var/lib/docker when using uid-shifting (see issue #93).
 
-	if shiftUids {
-		// prioritize conflicting supplementary mounts
-		specm := mountSliceRemove(spec.Mounts, mounts, func(m1, m2 specs.Mount) bool {
-			return m1.Destination == m2.Destination
-		})
-		spec.Mounts = append(specm, mounts...)
+	userMounts := spec.Mounts
 
-	} else {
-		// prioritize conflicting spec mounts
-		supMounts := mountSliceRemove(mounts, spec.Mounts, func(m1, m2 specs.Mount) bool {
-			return m1.Destination == m2.Destination
-		})
-		spec.Mounts = append(spec.Mounts, supMounts...)
+	for _, m := range userMounts {
+		if m.Destination == "/var/lib/docker" && shiftUids {
+			// prioritize sysbox-mgr mount
+			spec.Mounts = mountSliceRemove(spec.Mounts, []specs.Mount{m}, func(m1, m2 specs.Mount) bool {
+				return m1.Destination == m2.Destination
+			})
+		} else {
+			// prioritize user-defined mount
+			supMounts = mountSliceRemove(supMounts, []specs.Mount{m}, func(m1, m2 specs.Mount) bool {
+				return m1.Destination == m2.Destination
+			})
+		}
 	}
 
+	spec.Mounts = append(spec.Mounts, supMounts...)
 	return nil
 }
 
