@@ -79,3 +79,15 @@ func mountSliceRemoveMatch(s []specs.Mount, match func(specs.Mount) bool) []spec
 	}
 	return r
 }
+
+// mountSliceRemoveElement removes from slice 's' any elements matching the
+// string 'str'.
+func mountSliceRemoveElement(s []specs.Mount, str string) []specs.Mount {
+	var r []specs.Mount
+	for i := 0; i < len(s); i++ {
+		if s[i].Destination != str {
+			r = append(r, s[i])
+		}
+	}
+	return r
+}

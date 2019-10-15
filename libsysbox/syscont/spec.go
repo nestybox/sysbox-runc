@@ -361,10 +361,24 @@ func cfgSysboxFsMounts(spec *specs.Spec) {
 // cfgSystemdMounts adds the mounts required by systemd.
 func cfgSystemdMounts(spec *specs.Spec) {
 
-	// Deal with overlapping mounts coming from OCI specs. TBD.
+	var systemdOn = false
 
-	// add systemd mounts to the config
+	// Spec will be only adjusted if systemd is part of the entrypoint
+	// instruction passed by the user.
+	for _, cmd := range spec.Process.Args {
+		if cmd == "/sbin/init" {
+			systemdOn = true
+			break
+		}
+	}
+	if !systemdOn {
+		return
+	}
+
+	// Add systemd mounts to the spec.
 	for _, mount := range sysboxSystemdMounts {
+		// Let's first eliminate any overlapping mount present in original spec.
+		spec.Mounts = mountSliceRemoveElement(spec.Mounts, mount.Destination)
 		spec.Mounts = append(spec.Mounts, mount)
 		logrus.Debugf("added sysbox's systemd mount %s to spec", mount.Destination)
 	}
