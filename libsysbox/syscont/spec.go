@@ -147,6 +147,15 @@ var sysboxSystemdMounts = []specs.Mount{
 	},
 }
 
+// sysbox's systemd env-vars requirements
+var sysboxSystemdEnvVars = []string{
+
+	// Allow systemd to identify the virtualization mode to operate on (container
+	// with user-namespace). See 'ConditionVirtualization' attribute here:
+	// https://www.freedesktop.org/software/systemd/man/systemd.unit.html
+	"container=private-users",
+}
+
 // sysboxRwPaths list the paths within the sys container's rootfs
 // that must have read-write permission
 var sysboxRwPaths = []string{
@@ -359,7 +368,7 @@ func cfgSysboxFsMounts(spec *specs.Spec) {
 }
 
 // cfgSystemdMounts adds the mounts required by systemd.
-func cfgSystemdMounts(spec *specs.Spec) {
+func cfgSystemd(spec *specs.Spec) {
 
 	var systemdOn = false
 
@@ -380,7 +389,14 @@ func cfgSystemdMounts(spec *specs.Spec) {
 		// Let's first eliminate any overlapping mount present in original spec.
 		spec.Mounts = mountSliceRemoveElement(spec.Mounts, mount.Destination)
 		spec.Mounts = append(spec.Mounts, mount)
-		logrus.Debugf("added sysbox's systemd mount %s to spec", mount.Destination)
+		logrus.Debugf("added sysbox's systemd mount %v to spec", mount.Destination)
+	}
+
+	// Add env-vars required for proper operation.
+	for _, env := range sysboxSystemdEnvVars {
+		spec.Process.Env = stringSliceRemove(spec.Process.Env, []string{env})
+		spec.Process.Env = append(spec.Process.Env, env)
+		logrus.Debugf("added sysbox's systemd env-var %v to spec", env)
 	}
 }
 
@@ -708,7 +724,7 @@ func ConvertSpec(context *cli.Context, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs, spe
 		cfgMaskedPaths(spec)
 		cfgReadonlyPaths(spec)
 		cfgSysboxFsMounts(spec)
-		cfgSystemdMounts(spec)
+		cfgSystemd(spec)
 	}
 
 	if err := cfgSeccomp(spec.Linux.Seccomp); err != nil {
