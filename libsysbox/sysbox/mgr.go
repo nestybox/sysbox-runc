@@ -63,3 +63,10 @@ func (mgr *Mgr) ReqShiftfsMark(rootfs string, mounts []configs.ShiftfsMount) err
 	}
 	return nil
 }
+
+func (mgr *Mgr) Pause() error {
+	if err := sysboxMgrGrpc.Pause(mgr.Id); err != nil {
+		return fmt.Errorf("failed to notify pause to sysbox-mgr: %v", err)
+	}
+	return nil
+}
