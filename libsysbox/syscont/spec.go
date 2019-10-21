@@ -134,16 +134,22 @@ var sysboxSystemdMounts = []specs.Mount{
 		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "tmpcopyup", "size=65536k"},
 	},
 	specs.Mount{
-		Destination: "/var/log/journal",
-		Source:      "tmpfs",
-		Type:        "tmpfs",
-		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "tmpcopyup", "size=65536k"},
-	},
-	specs.Mount{
 		Destination: "/dev/kmsg",
 		Source:      "tmpfs",
 		Type:        "tmpfs",
-		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev"},
+		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "size=65536k"},
+	},
+	specs.Mount{
+		Destination: "/sys/kernel/config",
+		Source:      "tmpfs",
+		Type:        "tmpfs",
+		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "size=65536k"},
+	},
+	specs.Mount{
+		Destination: "/sys/kernel/debug",
+		Source:      "tmpfs",
+		Type:        "tmpfs",
+		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "size=65536k"},
 	},
 }
 
