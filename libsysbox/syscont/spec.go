@@ -132,12 +132,6 @@ var sysboxSystemdMounts = []specs.Mount{
 		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "tmpcopyup", "size=65536k"},
 	},
 	specs.Mount{
-		Destination: "/dev/kmsg",
-		Source:      "tmpfs",
-		Type:        "tmpfs",
-		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "size=65536k"},
-	},
-	specs.Mount{
 		Destination: "/sys/kernel/config",
 		Source:      "tmpfs",
 		Type:        "tmpfs",
@@ -158,6 +152,17 @@ var sysboxSystemdEnvVars = []string{
 	// with user-namespace). See 'ConditionVirtualization' attribute here:
 	// https://www.freedesktop.org/software/systemd/man/systemd.unit.html
 	"container=private-users",
+}
+
+// sysbox's generic mount requirements
+var sysboxMounts = []specs.Mount{
+
+	specs.Mount{
+		Destination: "/dev/kmsg",
+		Source:      "tmpfs",
+		Type:        "tmpfs",
+		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "size=65536k", "mode=644"},
+	},
 }
 
 // sysboxRwPaths list the paths within the sys container's rootfs
@@ -354,6 +359,18 @@ func cfgReadonlyPaths(spec *specs.Spec) {
 	spec.Linux.ReadonlyPaths = roPaths
 }
 
+// cfgSysboxMounts adds sysbox generic mounts to the containers config.
+func cfgSysboxMounts(spec *specs.Spec) {
+
+	// Add systemd mounts to the spec.
+	for _, mount := range sysboxMounts {
+		// Eliminate any overlapping mount present in original spec.
+		spec.Mounts = mountSliceRemoveElement(spec.Mounts, mount.Destination)
+		spec.Mounts = append(spec.Mounts, mount)
+		logrus.Debugf("added sysbox mount %v to spec", mount.Destination)
+	}
+}
+
 // cfgSysboxFsMounts adds the sysbox-fs mounts to the containers config.
 func cfgSysboxFsMounts(spec *specs.Spec) {
 
@@ -371,7 +388,7 @@ func cfgSysboxFsMounts(spec *specs.Spec) {
 	}
 }
 
-// cfgSystemdMounts adds the mounts required by systemd.
+// cfgSystemd adds the mounts and env-vars required by systemd.
 func cfgSystemd(spec *specs.Spec) {
 
 	var systemdOn = false
@@ -390,7 +407,7 @@ func cfgSystemd(spec *specs.Spec) {
 
 	// Add systemd mounts to the spec.
 	for _, mount := range sysboxSystemdMounts {
-		// Let's first eliminate any overlapping mount present in original spec.
+		// Eliminate any overlapping mount present in original spec.
 		spec.Mounts = mountSliceRemoveElement(spec.Mounts, mount.Destination)
 		spec.Mounts = append(spec.Mounts, mount)
 		logrus.Debugf("added sysbox's systemd mount %v to spec", mount.Destination)
@@ -727,6 +744,7 @@ func ConvertSpec(context *cli.Context, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs, spe
 	if sysFs.Enabled() {
 		cfgMaskedPaths(spec)
 		cfgReadonlyPaths(spec)
+		cfgSysboxMounts(spec)
 		cfgSysboxFsMounts(spec)
 		cfgSystemd(spec)
 	}
