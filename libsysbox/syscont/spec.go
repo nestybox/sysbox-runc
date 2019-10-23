@@ -133,18 +133,6 @@ var sysboxSystemdMounts = []specs.Mount{
 		Type:        "tmpfs",
 		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "tmpcopyup", "size=65536k"},
 	},
-	specs.Mount{
-		Destination: "/sys/kernel/config",
-		Source:      "tmpfs",
-		Type:        "tmpfs",
-		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "size=65536k"},
-	},
-	specs.Mount{
-		Destination: "/sys/kernel/debug",
-		Source:      "tmpfs",
-		Type:        "tmpfs",
-		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "size=65536k"},
-	},
 }
 
 // sysbox's systemd env-vars requirements
@@ -158,12 +146,26 @@ var sysboxSystemdEnvVars = []string{
 
 // sysbox's generic mount requirements
 var sysboxMounts = []specs.Mount{
-
+	// we don't yet support /dev/kmsg; create a dummy one.
 	specs.Mount{
 		Destination: "/dev/kmsg",
 		Source:      "tmpfs",
 		Type:        "tmpfs",
 		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "size=65536k", "mode=644"},
+	},
+	// we don't yet support configfs; create a dummy one.
+	specs.Mount{
+		Destination: "/sys/kernel/config",
+		Source:      "tmpfs",
+		Type:        "tmpfs",
+		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "size=65536k"},
+	},
+	// we don't support debugfs; create a dummy one.
+	specs.Mount{
+		Destination: "/sys/kernel/debug",
+		Source:      "tmpfs",
+		Type:        "tmpfs",
+		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "size=65536k"},
 	},
 }
 
@@ -179,6 +181,26 @@ var sysboxRwPaths = []string{
 var sysboxExposedPaths = []string{
 	"/proc",
 	"/proc/sys",
+}
+
+// sysboxSystemdExposedPaths list the paths within the sys container's rootfs
+// that must not be masked when the sys container runs systemd
+var sysboxSystemdExposedPaths = []string{
+	"/run",
+	"/run/lock",
+	"/tmp",
+	"/sys/kernel/config",
+	"/sys/kernel/debug",
+}
+
+// sysboxRwPaths list the paths within the sys container's rootfs
+// that must have read-write permission
+var sysboxSystemdRwPaths = []string{
+	"/run",
+	"/run/lock",
+	"/tmp",
+	"/sys/kernel/config",
+	"/sys/kernel/debug",
 }
 
 // linuxCaps is the full list of Linux capabilities
@@ -364,6 +386,12 @@ func cfgReadonlyPaths(spec *specs.Spec) {
 // cfgSysboxMounts adds sysbox generic mounts to the containers config.
 func cfgSysboxMounts(spec *specs.Spec) {
 
+	// Disallow all spec mounts over /proc/* or /sys/* (except for /sys/fs/cgroup); only sysbox mounts are allowed there.
+	spec.Mounts = mountSliceRemoveMatch(spec.Mounts, func(m specs.Mount) bool {
+		return strings.HasPrefix(m.Destination, "/proc/") ||
+			(strings.HasPrefix(m.Destination, "/sys/") && (m.Destination != "/sys/fs/cgroup"))
+	})
+
 	// Add sysbox generic mounts to the spec.
 	for _, mount := range sysboxMounts {
 
@@ -384,13 +412,6 @@ func cfgSysboxMounts(spec *specs.Spec) {
 // cfgSysboxFsMounts adds the sysbox-fs mounts to the containers config.
 func cfgSysboxFsMounts(spec *specs.Spec) {
 
-	// disallow all spec mounts over /proc/* or /sys/* (except for /sys/fs/cgroup);
-	// only sysbox-fs mounts are allowed there.
-	spec.Mounts = mountSliceRemoveMatch(spec.Mounts, func(m specs.Mount) bool {
-		return strings.HasPrefix(m.Destination, "/proc/") ||
-			(strings.HasPrefix(m.Destination, "/sys/") && (m.Destination != "/sys/fs/cgroup"))
-	})
-
 	// add sysbox-fs mounts to the config
 	for _, mount := range sysboxFsMounts {
 		spec.Mounts = append(spec.Mounts, mount)
@@ -401,17 +422,8 @@ func cfgSysboxFsMounts(spec *specs.Spec) {
 // cfgSystemd adds the mounts and env-vars required by systemd.
 func cfgSystemd(spec *specs.Spec) {
 
-	var systemdOn = false
-
-	// Spec will be only adjusted if systemd is part of the entrypoint
-	// instruction passed by the user.
-	for _, cmd := range spec.Process.Args {
-		if cmd == "/sbin/init" {
-			systemdOn = true
-			break
-		}
-	}
-	if !systemdOn {
+	// Spec will be only adjusted if systemd is the sys container's init process
+	if spec.Process.Args[0] != "/sbin/init" {
 		return
 	}
 
@@ -430,6 +442,14 @@ func cfgSystemd(spec *specs.Spec) {
 		spec.Mounts = append(spec.Mounts, mount)
 		logrus.Debugf("added sysbox's systemd mount %v to spec", mount.Destination)
 	}
+
+	// Remove any conflicting masked paths
+	maskedPaths := stringSliceRemove(spec.Linux.MaskedPaths, sysboxSystemdExposedPaths)
+	spec.Linux.MaskedPaths = maskedPaths
+
+	// Remove any conflicting read-only paths
+	roPaths := stringSliceRemove(spec.Linux.ReadonlyPaths, sysboxSystemdRwPaths)
+	spec.Linux.ReadonlyPaths = roPaths
 
 	// Add env-vars required for proper operation.
 	for _, env := range sysboxSystemdEnvVars {
