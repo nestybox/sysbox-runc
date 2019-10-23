@@ -362,10 +362,18 @@ func cfgReadonlyPaths(spec *specs.Spec) {
 // cfgSysboxMounts adds sysbox generic mounts to the containers config.
 func cfgSysboxMounts(spec *specs.Spec) {
 
-	// Add systemd mounts to the spec.
+	// Add sysbox generic mounts to the spec.
 	for _, mount := range sysboxMounts {
+
 		// Eliminate any overlapping mount present in original spec.
-		spec.Mounts = mountSliceRemoveElement(spec.Mounts, mount.Destination)
+		spec.Mounts = mountSliceRemoveStrMatch(
+			spec.Mounts,
+			mount.Destination,
+			func(m specs.Mount, str string) bool {
+				return m.Source == str || m.Destination == str
+			},
+		)
+
 		spec.Mounts = append(spec.Mounts, mount)
 		logrus.Debugf("added sysbox mount %v to spec", mount.Destination)
 	}
@@ -407,8 +415,16 @@ func cfgSystemd(spec *specs.Spec) {
 
 	// Add systemd mounts to the spec.
 	for _, mount := range sysboxSystemdMounts {
+
 		// Eliminate any overlapping mount present in original spec.
-		spec.Mounts = mountSliceRemoveElement(spec.Mounts, mount.Destination)
+		spec.Mounts = mountSliceRemoveStrMatch(
+			spec.Mounts,
+			mount.Destination,
+			func(m specs.Mount, str string) bool {
+				return m.Source == str || m.Destination == str
+			},
+		)
+
 		spec.Mounts = append(spec.Mounts, mount)
 		logrus.Debugf("added sysbox's systemd mount %v to spec", mount.Destination)
 	}
