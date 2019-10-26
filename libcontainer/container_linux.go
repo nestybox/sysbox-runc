@@ -667,8 +667,10 @@ func (c *linuxContainer) Pause() error {
 		if err := c.cgroupManager.Freeze(configs.Frozen); err != nil {
 			return err
 		}
-		if err := c.sysMgr.Pause(); err != nil {
-			return err
+		if c.sysMgr.Enabled() {
+			if err := c.sysMgr.Pause(); err != nil {
+				return err
+			}
 		}
 		return c.state.transition(&pausedState{
 			c: c,
