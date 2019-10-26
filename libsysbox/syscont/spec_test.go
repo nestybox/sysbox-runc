@@ -246,30 +246,9 @@ func TestCfgSysboxFsMounts(t *testing.T) {
 		},
 	}
 
+	want := append(spec.Mounts, sysboxFsMounts...)
+
 	cfgSysboxFsMounts(spec)
-
-	want := []specs.Mount{
-		{
-			Destination: "/proc",
-			Type:        "bind",
-			Source:      "/some/source",
-			Options:     []string{"ro"},
-		},
-		{
-			Destination: "/var/lib",
-			Type:        "bind",
-			Source:      "/some/source",
-			Options:     []string{"rw"},
-		},
-		{
-			Destination: "/sys/fs/cgroup",
-			Type:        "bind",
-			Source:      "/some/source",
-			Options:     []string{"ro"},
-		},
-	}
-
-	want = append(want, sysboxFsMounts...)
 
 	if len(spec.Mounts) != len(want) {
 		t.Errorf("cfgSysboxFsMounts: got %v, want %v", spec.Mounts, want)
