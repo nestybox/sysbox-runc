@@ -340,6 +340,10 @@ func validateIDMappings(spec *specs.Spec) error {
 		return fmt.Errorf("sysbox-runc requires gid mapping specify a container with at least %d gids starting at gid 0; found %v", IdRangeMin, gidMap)
 	}
 
+	if uidMap.HostID != gidMap.HostID {
+		return fmt.Errorf("sysbox-runc requires matching uid & gid mappings; found uid = %v, gid = %d", uidMap, gidMap)
+	}
+
 	return nil
 }
 
