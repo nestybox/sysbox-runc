@@ -6,7 +6,9 @@ package shiftfs
 
 import (
 	"fmt"
+	"path/filepath"
 
+	"github.com/opencontainers/runc/libcontainer/mount"
 	"golang.org/x/sys/unix"
 )
 
@@ -31,4 +33,12 @@ func Unmount(path string) error {
 		return fmt.Errorf("failed to unmount %s: %v", path, err)
 	}
 	return nil
+}
+
+func Mounted(path string) (bool, error) {
+	realPath, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return false, err
+	}
+	return mount.MountedWithFs(realPath, "shiftfs")
 }
