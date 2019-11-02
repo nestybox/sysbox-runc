@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/opencontainers/runc/libsysbox/sysbox"
 	"github.com/opencontainers/runtime-spec/specs-go"
 
 	"golang.org/x/sys/unix"
@@ -297,5 +298,177 @@ func testCfgCgroups(t *testing.T) {
 		if !stringSliceEqual(spec.Mounts[i].Options, want[i].Options) {
 			t.Errorf("cfgCfgCgroups: got %v, want %v", spec.Mounts[i].Options, want[i].Options)
 		}
+	}
+}
+
+func TestGetEnvVar(t *testing.T) {
+
+	spec := new(specs.Spec)
+	spec.Process = new(specs.Process)
+	spec.Process.Env = []string{"A=1", "B=2", "C=hi", "SYSBOX_USERNS_REMAP=identity"}
+
+	type testData struct {
+		key   string
+		val   string
+		found bool
+	}
+
+	data := []testData{
+		{"A", "1", true},
+		{"B", "2", true},
+		{"C", "hi", true},
+		{"D", "", false},
+		{"SYSBOX_USERNS_REMAP", "identity", true},
+	}
+
+	for _, d := range data {
+		val, found := getEnvVar(spec, d.key)
+		if found != d.found || val != d.val {
+			t.Errorf("getEnvVar(%s) failed: want %s, %v; got %s, %v", d.key, d.val, d.found, val, found)
+		}
+	}
+}
+
+func TestRemoveSysboxCfgEnvVars(t *testing.T) {
+	spec := new(specs.Spec)
+	spec.Process = new(specs.Process)
+	spec.Process.Env = []string{"A=1", "B=2", "C=hi", "SYSBOX_USERNS_REMAP=identity", "D=3"}
+
+	removeSysboxCfgEnvVars(spec.Process)
+
+	want := []string{"A=1", "B=2", "C=hi", "D=3"}
+
+	if !stringSliceEqual(spec.Process.Env, want) {
+		t.Errorf("removeSysboxCfgEnvVars() failed: got %v; want %v", spec.Process.Env, want)
+	}
+}
+
+func TestAllocIDMappings(t *testing.T) {
+
+	sysMgr := sysbox.NewMgr("container", false)
+
+	spec := new(specs.Spec)
+	spec.Process = new(specs.Process)
+	spec.Linux = new(specs.Linux)
+
+	// verify default allocation
+
+	if err := allocIDMappings(sysMgr, spec); err != nil {
+		t.Errorf("allocIDMappings() returned error")
+	}
+
+	wantIDMap := specs.LinuxIDMapping{
+		ContainerID: 0,
+		HostID:      defaultUid,
+		Size:        IdRangeMin,
+	}
+
+	if spec.Linux.UIDMappings[0] != wantIDMap {
+		t.Errorf("allocIDMappings(): want %v; got %v", wantIDMap, spec.Linux.UIDMappings[0])
+	}
+	if spec.Linux.GIDMappings[0] != wantIDMap {
+		t.Errorf("allocIDMappings(): want %v; got %v", wantIDMap, spec.Linux.GIDMappings[0])
+	}
+
+	// verify allocation when a mount over the sys container's /var/lib/docker is detected
+
+	spec = new(specs.Spec)
+	spec.Process = new(specs.Process)
+	spec.Linux = new(specs.Linux)
+	spec.Mounts = []specs.Mount{
+		{
+			Destination: "/var/lib/docker",
+			Source:      "/some/dir",
+			Type:        "bind",
+		},
+	}
+
+	if err := allocIDMappings(sysMgr, spec); err != nil {
+		t.Errorf("allocIDMappings() returned error")
+	}
+
+	wantIDMap = specs.LinuxIDMapping{
+		ContainerID: 0,
+		HostID:      0,
+		Size:        IdRangeMin,
+	}
+
+	if spec.Linux.UIDMappings[0] != wantIDMap {
+		t.Errorf("allocIDMappings(): want %v; got %v", wantIDMap, spec.Linux.UIDMappings[0])
+	}
+	if spec.Linux.GIDMappings[0] != wantIDMap {
+		t.Errorf("allocIDMappings(): want %v; got %v", wantIDMap, spec.Linux.GIDMappings[0])
+	}
+
+	// verify allocation when env var SYSBOX_USERNS_REMAP is set to "identity"
+
+	spec = new(specs.Spec)
+	spec.Process = new(specs.Process)
+	spec.Process.Env = []string{"SYSBOX_USERNS_REMAP=identity"}
+	spec.Linux = new(specs.Linux)
+
+	if err := allocIDMappings(sysMgr, spec); err != nil {
+		t.Errorf("allocIDMappings() returned error")
+	}
+
+	wantIDMap = specs.LinuxIDMapping{
+		ContainerID: 0,
+		HostID:      0,
+		Size:        IdRangeMin,
+	}
+
+	if spec.Linux.UIDMappings[0] != wantIDMap {
+		t.Errorf("allocIDMappings(): want %v; got %v", wantIDMap, spec.Linux.UIDMappings[0])
+	}
+	if spec.Linux.GIDMappings[0] != wantIDMap {
+		t.Errorf("allocIDMappings(): want %v; got %v", wantIDMap, spec.Linux.GIDMappings[0])
+	}
+
+	// verify allocation when env var SYSBOX_USERNS_REMAP is set to "exclusive"
+
+	spec = new(specs.Spec)
+	spec.Process = new(specs.Process)
+	spec.Process.Env = []string{"SYSBOX_USERNS_REMAP=exclusive"}
+	spec.Linux = new(specs.Linux)
+
+	if err := allocIDMappings(sysMgr, spec); err != nil {
+		t.Errorf("allocIDMappings() returned error")
+	}
+
+	wantIDMap = specs.LinuxIDMapping{
+		ContainerID: 0,
+		HostID:      defaultUid,
+		Size:        IdRangeMin,
+	}
+
+	if spec.Linux.UIDMappings[0] != wantIDMap {
+		t.Errorf("allocIDMappings(): want %v; got %v", wantIDMap, spec.Linux.UIDMappings[0])
+	}
+	if spec.Linux.GIDMappings[0] != wantIDMap {
+		t.Errorf("allocIDMappings(): want %v; got %v", wantIDMap, spec.Linux.GIDMappings[0])
+	}
+
+	// verify allocation when env var SYSBOX_USERNS_REMAP is set to "unknown"
+
+	spec = new(specs.Spec)
+	spec.Process = new(specs.Process)
+	spec.Process.Env = []string{"SYSBOX_USERNS_REMAP=unknown"}
+	spec.Linux = new(specs.Linux)
+
+	if err := allocIDMappings(sysMgr, spec); err != nil {
+		t.Errorf("allocIDMappings() returned error")
+	}
+
+	wantIDMap = specs.LinuxIDMapping{
+		ContainerID: 0,
+		HostID:      defaultUid,
+		Size:        IdRangeMin,
+	}
+
+	if spec.Linux.UIDMappings[0] != wantIDMap {
+		t.Errorf("allocIDMappings(): want %v; got %v", wantIDMap, spec.Linux.UIDMappings[0])
+	}
+	if spec.Linux.GIDMappings[0] != wantIDMap {
+		t.Errorf("allocIDMappings(): want %v; got %v", wantIDMap, spec.Linux.GIDMappings[0])
 	}
 }

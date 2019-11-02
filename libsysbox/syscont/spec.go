@@ -142,6 +142,11 @@ var sysboxSystemdEnvVars = []string{
 	"container=private-users",
 }
 
+// sysbox configuration env vars
+var sysboxCfgEnvVars = []string{
+	"SYSBOX_USERNS_REMAP",
+}
+
 // sysbox's generic mount requirements
 var sysboxMounts = []specs.Mount{
 	// we don't yet support /dev/kmsg; create a dummy one.
@@ -284,19 +289,65 @@ func cfgNamespaces(spec *specs.Spec) error {
 	return nil
 }
 
+// getEnvVar searches for a given environment variable in sys container's process spec and
+// returns its value. If none if found, returns ("", false).
+func getEnvVar(spec *specs.Spec, name string) (string, bool) {
+	for _, str := range spec.Process.Env {
+		tokens := strings.SplitN(str, "=", 2)
+		if len(tokens) != 2 {
+			return "", false
+		}
+		key := tokens[0]
+		val := tokens[1]
+		if key == name {
+			return val, true
+		}
+	}
+	return "", false
+}
+
+// mustUseIdentityMap returns true if the system container must use userns-remap identity mode.
+func mustUseIdentityMap(spec *specs.Spec) bool {
+	// Mounts over the system container "/var/lib/docker" require identity map mode because
+	// otherwise shiftfs would need to be mounted on the source of the mount, and then
+	// Docker inside the sys container will mount overlayfs on top, and overlayfs can't be
+	// mounted on shiftfs (yet); see Sysbox issue #93.
+	for _, m := range spec.Mounts {
+		if m.Destination == "/var/lib/docker" {
+			return true
+		}
+	}
+	return false
+}
+
 // allocIDMappings performs uid and gid allocation for the system container
 func allocIDMappings(sysMgr *sysbox.Mgr, spec *specs.Spec) error {
 	var uid, gid uint32
 	var err error
 
+	sysboxUsernsRemapEnv, _ := getEnvVar(spec, "SYSBOX_USERNS_REMAP")
+
+	allocMode := ""
+	if mustUseIdentityMap(spec) {
+		allocMode = "identity"
+	} else if sysboxUsernsRemapEnv != "" {
+		allocMode = sysboxUsernsRemapEnv
+	}
+
 	if sysMgr.Enabled() {
-		uid, gid, err = sysMgr.ReqSubid(IdRangeMin)
+		uid, gid, err = sysMgr.ReqSubid(IdRangeMin, allocMode)
 		if err != nil {
 			return fmt.Errorf("subid allocation failed: %v", err)
 		}
 	} else {
-		uid = defaultUid
-		gid = defaultGid
+		// sysbox-runc unit tests
+		if allocMode == "identity" {
+			uid = 0
+			gid = 0
+		} else {
+			uid = defaultUid
+			gid = defaultGid
+		}
 	}
 
 	uidMap := specs.LinuxIDMapping{
@@ -346,8 +397,7 @@ func validateIDMappings(spec *specs.Spec) error {
 }
 
 // cfgIDMappings checks if the uid/gid mappings are present and valid; if they are not
-// present, it allocates them. Note that we don't disallow mappings that map to the host
-// root UID (i.e., we always honor the ID config); some runc tests use such mappings.
+// present, it allocates them.
 func cfgIDMappings(sysMgr *sysbox.Mgr, spec *specs.Spec) error {
 	if len(spec.Linux.UIDMappings) == 0 && len(spec.Linux.GIDMappings) == 0 {
 		return allocIDMappings(sysMgr, spec)
@@ -720,27 +770,28 @@ func getSupConfig(mgr *sysbox.Mgr, spec *specs.Spec, shiftUids bool) error {
 		return fmt.Errorf("failed to request supplementary mounts from sysbox-mgr: %v", err)
 	}
 
-	// Allow user-defined mounts to override sysbox-mgr mounts, except for bind mounts on
-	// the sys container's /var/lib/docker when using uid-shifting (see issue #93).
-
-	userMounts := spec.Mounts
-
-	for _, m := range userMounts {
-		if m.Destination == "/var/lib/docker" && shiftUids {
-			// prioritize sysbox-mgr mount
-			spec.Mounts = mountSliceRemove(spec.Mounts, []specs.Mount{m}, func(m1, m2 specs.Mount) bool {
-				return m1.Destination == m2.Destination
-			})
-		} else {
-			// prioritize user-defined mount
-			supMounts = mountSliceRemove(supMounts, []specs.Mount{m}, func(m1, m2 specs.Mount) bool {
-				return m1.Destination == m2.Destination
-			})
-		}
+	// Allow user-defined mounts to override sysbox-mgr mounts
+	for _, m := range spec.Mounts {
+		supMounts = mountSliceRemove(supMounts, []specs.Mount{m}, func(m1, m2 specs.Mount) bool {
+			return m1.Destination == m2.Destination
+		})
 	}
 
 	spec.Mounts = append(spec.Mounts, supMounts...)
 	return nil
+}
+
+// removeSysboxCfgEnvVars removes sysbox config env vars from the sys container's process spec.
+func removeSysboxCfgEnvVars(p *specs.Process) {
+	for _, env := range sysboxCfgEnvVars {
+		p.Env = stringSliceRemoveMatch(p.Env, func(v string) bool {
+			tokens := strings.SplitN(v, "=", 2)
+			if len(tokens) != 2 {
+				return false
+			}
+			return tokens[0] == env
+		})
+	}
 }
 
 // Configure the container's process spec for system containers
@@ -751,6 +802,7 @@ func ConvertProcessSpec(p *specs.Process) error {
 		return fmt.Errorf("failed to configure AppArmor profile: %v", err)
 	}
 
+	removeSysboxCfgEnvVars(p)
 	return nil
 }
 
@@ -759,10 +811,6 @@ func ConvertSpec(context *cli.Context, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs, spe
 
 	if err := checkSpec(spec); err != nil {
 		return false, fmt.Errorf("invalid or unsupported container spec: %v", err)
-	}
-
-	if err := ConvertProcessSpec(spec.Process); err != nil {
-		return false, fmt.Errorf("failed to configure process spec: %v", err)
 	}
 
 	if err := cfgNamespaces(spec); err != nil {
@@ -806,8 +854,11 @@ func ConvertSpec(context *cli.Context, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs, spe
 		}
 	}
 
-	// TODO: ensure /proc and /sys are mounted (if not present in the container spec)
+	if err := ConvertProcessSpec(spec.Process); err != nil {
+		return false, fmt.Errorf("failed to configure process spec: %v", err)
+	}
 
+	// TODO: ensure /proc and /sys are mounted (if not present in the container spec)
 	// TODO: ensure /dev is mounted
 
 	return shiftUids, nil
