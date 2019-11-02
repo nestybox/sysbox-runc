@@ -4,7 +4,9 @@
 
 package syscont
 
-import "github.com/opencontainers/runtime-spec/specs-go"
+import (
+	"github.com/opencontainers/runtime-spec/specs-go"
+)
 
 // stringSliceEqual compares two slices and returns true if they match
 func stringSliceEqual(a, b []string) bool {

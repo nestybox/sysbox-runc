@@ -44,8 +44,8 @@ func (mgr *Mgr) Unregister() error {
 	return nil
 }
 
-func (mgr *Mgr) ReqSubid(size uint32) (uint32, uint32, error) {
-	uid, gid, err := sysboxMgrGrpc.SubidAlloc(mgr.Id, uint64(size))
+func (mgr *Mgr) ReqSubid(size uint32, mode string) (uint32, uint32, error) {
+	uid, gid, err := sysboxMgrGrpc.SubidAlloc(mgr.Id, uint64(size), mode)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to request subid from sysbox-mgr: %v", err)
 	}
