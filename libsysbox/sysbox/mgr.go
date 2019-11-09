@@ -52,9 +52,14 @@ func (mgr *Mgr) ReqSubid(size uint32) (uint32, uint32, error) {
 	return uid, gid, nil
 }
 
-func (mgr *Mgr) ReqSupMounts(rootfs string, uid, gid uint32, shiftUids bool) ([]specs.Mount, error) {
+func (mgr *Mgr) ReqDockerStoreMount(rootfs string, uid, gid uint32, shiftUids bool) (specs.Mount, error) {
 	// TODO: implement this function
-	return nil, nil
+	return specs.Mount{}, nil
+}
+
+func (mgr *Mgr) PrepDockerStoreMount(path string, uid, gid uint32, shiftUids bool) error {
+	// TODO: implement this function
+	return nil
 }
 
 func (mgr *Mgr) ReqShiftfsMark(rootfs string, mounts []configs.ShiftfsMount) error {
