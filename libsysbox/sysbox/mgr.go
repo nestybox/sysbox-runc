@@ -52,25 +52,27 @@ func (mgr *Mgr) ReqSubid(size uint32) (uint32, uint32, error) {
 	return uid, gid, nil
 }
 
-func (mgr *Mgr) ReqSupMounts(rootfs string, uid, gid uint32, shiftUids bool) ([]specs.Mount, error) {
-	mounts, err := sysboxMgrGrpc.ReqSupMounts(mgr.Id, rootfs, uid, gid, shiftUids)
+func (mgr *Mgr) ReqDockerStoreMount(rootfs string, uid, gid uint32, shiftUids bool) (specs.Mount, error) {
+	m, err := sysboxMgrGrpc.ReqDockerStoreMount(mgr.Id, rootfs, uid, gid, shiftUids)
 	if err != nil {
-		return []specs.Mount{}, fmt.Errorf("failed to request supplementary mounts from sysbox-mgr: %v", err)
+		return specs.Mount{}, fmt.Errorf("failed to request docker-store mount from sysbox-mgr: %v", err)
 	}
 
-	// convert mounts to []spec.Mount
-	specMounts := []specs.Mount{}
-	for _, m := range mounts {
-		specMount := specs.Mount{
-			Source:      m.GetSource(),
-			Destination: m.GetDest(),
-			Type:        m.GetType(),
-			Options:     m.GetOpt(),
-		}
-		specMounts = append(specMounts, specMount)
+	specMount := specs.Mount{
+		Source:      m.GetSource(),
+		Destination: m.GetDest(),
+		Type:        m.GetType(),
+		Options:     m.GetOpt(),
 	}
 
-	return specMounts, nil
+	return specMount, nil
+}
+
+func (mgr *Mgr) PrepDockerStoreMount(path string, uid, gid uint32, shiftUids bool) error {
+	if err := sysboxMgrGrpc.PrepDockerStoreMount(mgr.Id, path, uid, gid, shiftUids); err != nil {
+		return fmt.Errorf("failed to request docker-store prep from sysbox-mgr: %v", err)
+	}
+	return nil
 }
 
 func (mgr *Mgr) ReqShiftfsMark(rootfs string, mounts []configs.ShiftfsMount) error {

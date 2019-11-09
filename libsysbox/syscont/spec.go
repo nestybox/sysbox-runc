@@ -712,24 +712,32 @@ func needUidShiftOnRootfs(spec *specs.Spec) (bool, error) {
 	return false, nil
 }
 
-// getSupConfig obtains supplementary config from the sysbox-mgr for the container with the given id
-func getSupConfig(mgr *sysbox.Mgr, spec *specs.Spec, shiftUids bool) error {
+// prepMounts requests the sysbox-mgr to prepare Sysbox-specific mounts for the container
+func prepMounts(mgr *sysbox.Mgr, spec *specs.Spec, shiftUids bool) error {
 	uid := spec.Linux.UIDMappings[0].HostID
 	gid := spec.Linux.GIDMappings[0].HostID
 
-	supMounts, err := mgr.ReqSupMounts(spec.Root.Path, uid, gid, shiftUids)
+	// If the spec has a bind-mount over the sys container's "/var/lib/docker", tell the
+	// sysbox-mgr about it. In case the spec has multiple mounts over "/var/lib/docker"
+	// (unlikely corner case), we only act on the last one.
+	for i := len(spec.Mounts) - 1; i >= 0; i-- {
+		m := spec.Mounts[i]
+		if m.Destination == "/var/lib/docker" && m.Type == "bind" {
+			if err := mgr.PrepDockerStoreMount(m.Source, uid, gid, shiftUids); err != nil {
+				return fmt.Errorf("preparing docker-store mount at %s failed: %v", m.Source, err)
+			}
+			return nil
+		}
+	}
+
+	// Request the sysbox-mgr to setup a host directory to back the sys container's
+	// "/var/lib/docker".
+	m, err := mgr.ReqDockerStoreMount(spec.Root.Path, uid, gid, shiftUids)
 	if err != nil {
-		return fmt.Errorf("failed to request supplementary mounts from sysbox-mgr: %v", err)
+		return fmt.Errorf("request for docker-store mount failed: %v", err)
 	}
+	spec.Mounts = append(spec.Mounts, m)
 
-	// Allow user-defined mounts to override sysbox-mgr mounts
-	for _, m := range spec.Mounts {
-		supMounts = mountSliceRemove(supMounts, []specs.Mount{m}, func(m1, m2 specs.Mount) bool {
-			return m1.Destination == m2.Destination
-		})
-	}
-
-	spec.Mounts = append(spec.Mounts, supMounts...)
 	return nil
 }
 
@@ -785,10 +793,9 @@ func ConvertSpec(context *cli.Context, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs, spe
 		return false, fmt.Errorf("error while checking for uid-shifting need: %v", err)
 	}
 
-	// Must be done after needUidShiftOnRootfs()
 	if sysMgr.Enabled() {
-		if err := getSupConfig(sysMgr, spec, shiftUids); err != nil {
-			return false, fmt.Errorf("failed to get supplementary config: %v", err)
+		if err := prepMounts(sysMgr, spec, shiftUids); err != nil {
+			return false, fmt.Errorf("failed to prepare sysbox mount points: %v", err)
 		}
 	}
 
