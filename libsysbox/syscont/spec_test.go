@@ -299,3 +299,116 @@ func testCfgCgroups(t *testing.T) {
 		}
 	}
 }
+
+func TestGetEnvVarInfo(t *testing.T) {
+
+	test := []string{"a=b", "var=1", "other-var=hello", "var2="}
+	name := []string{"a", "var", "other-var", "var2"}
+	val := []string{"b", "1", "hello", ""}
+
+	for i, _ := range test {
+		n, v, err := getEnvVarInfo(test[i])
+		if err != nil {
+			t.Errorf("getEnvVarInfo(%s) failed: returned unexpected error %v", test[i], err)
+		}
+		if n != name[i] || v != val[i] {
+			t.Errorf("getEnvVarInfo(%s) failed: want %s, %s; got %s, %s", test[i], name[i], val[i], n, v)
+		}
+	}
+
+	if _, _, err := getEnvVarInfo("a=b=c"); err == nil {
+		t.Errorf("getEnvVarInfo(%s) failed: expected error, got no error.", "a=b=c")
+	}
+}
+
+func TestCfgSystemd(t *testing.T) {
+
+	spec := new(specs.Spec)
+	spec.Process = new(specs.Process)
+	spec.Linux = new(specs.Linux)
+
+	// Create a spec that has intentional conflicts with systemd resources
+
+	spec.Process.Args = []string{"/sbin/init"}
+	spec.Process.Env = []string{"container=docker", "a=b"}
+
+	spec.Mounts = []specs.Mount{
+		specs.Mount{
+			Destination: "/run",
+			Source:      "/somepath",
+			Type:        "bind",
+			Options:     []string{"ro", "rprivate"},
+		},
+		specs.Mount{
+			Destination: "/run/lock",
+			Source:      "/otherpath",
+			Type:        "bind",
+			Options:     []string{"rw"},
+		},
+		specs.Mount{
+			Destination: "/test",
+			Source:      "/somepath",
+			Type:        "bind",
+			Options:     []string{"ro", "rprivate"},
+		},
+		specs.Mount{
+			Destination: "/tmp",
+			Source:      "/another/path",
+			Type:        "bind",
+			Options:     []string{"rw", "rprivate", "noexec"},
+		},
+	}
+
+	spec.Linux.MaskedPaths = []string{"/sys/kernel/debug", "/some/other/path", "/sys/kernel/config"}
+	spec.Linux.ReadonlyPaths = []string{"/tmp", "/run/lock", "/yet/another/path", "/sys/kernel/debug"}
+
+	// This call should remove the conflicting info above
+	cfgSystemd(spec)
+
+	wantEnv := []string{"a=b", "container=private-users"}
+	if !stringSliceEqual(spec.Process.Env, wantEnv) {
+		t.Errorf("cfgSystemd() failed: spec.Process.Env: want %v, got %v", wantEnv, spec.Process.Env)
+	}
+
+	wantMounts := []specs.Mount{
+		specs.Mount{
+			Destination: "/test",
+			Source:      "/somepath",
+			Type:        "bind",
+			Options:     []string{"ro", "rprivate"},
+		},
+		specs.Mount{
+			Destination: "/run",
+			Source:      "tmpfs",
+			Type:        "tmpfs",
+			Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "tmpcopyup", "size=65536k"},
+		},
+		specs.Mount{
+			Destination: "/run/lock",
+			Source:      "tmpfs",
+			Type:        "tmpfs",
+			Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "tmpcopyup", "size=65536k"},
+		},
+		specs.Mount{
+			Destination: "/tmp",
+			Source:      "tmpfs",
+			Type:        "tmpfs",
+			Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "tmpcopyup", "size=65536k"},
+		},
+	}
+
+	if !mountSliceEqual(spec.Mounts, wantMounts) {
+		t.Errorf("cfgSystemd() failed: spec.Mounts: want %v, got %v", wantMounts, spec.Mounts)
+	}
+
+	wantMasked := []string{"/some/other/path"}
+	if !stringSliceEqual(spec.Linux.MaskedPaths, wantMasked) {
+		t.Errorf("cfgSystemd() failed: spec.Linux.MaskedPaths: want %v, got %v", wantMasked, spec.Linux.MaskedPaths)
+	}
+
+	wantRo := []string{"/yet/another/path"}
+	if !stringSliceEqual(spec.Linux.ReadonlyPaths, wantRo) {
+		t.Errorf("cfgSystemd() failed: spec.Linux.MaskedPaths: want %v, got %v", wantRo, spec.Linux.ReadonlyPaths)
+	}
+
+}
