@@ -114,7 +114,6 @@ var sysboxFsMounts = []specs.Mount{
 
 // sysbox's systemd mount requirements
 var sysboxSystemdMounts = []specs.Mount{
-
 	specs.Mount{
 		Destination: "/run",
 		Source:      "tmpfs",
@@ -423,7 +422,7 @@ func cfgSysboxFsMounts(spec *specs.Spec) {
 	}
 }
 
-// cfgSystemd adds the mounts and env-vars required by systemd.
+// cfgSystemd adds the mounts and env-vars required to run systemd inside a sys container.
 func cfgSystemd(spec *specs.Spec) {
 
 	// Spec will be only adjusted if systemd is the sys container's init process
@@ -432,6 +431,7 @@ func cfgSystemd(spec *specs.Spec) {
 	}
 
 	// Add systemd mounts to the spec.
+	// TODO: replace mounts in-place (to keep the mount order)
 	for _, mount := range sysboxSystemdMounts {
 
 		// Eliminate any overlapping mount present in original spec.
@@ -448,19 +448,26 @@ func cfgSystemd(spec *specs.Spec) {
 	}
 
 	// Remove any conflicting masked paths
-	maskedPaths := stringSliceRemove(spec.Linux.MaskedPaths, sysboxSystemdExposedPaths)
-	spec.Linux.MaskedPaths = maskedPaths
+	spec.Linux.MaskedPaths = stringSliceRemove(spec.Linux.MaskedPaths, sysboxSystemdExposedPaths)
 
 	// Remove any conflicting read-only paths
-	roPaths := stringSliceRemove(spec.Linux.ReadonlyPaths, sysboxSystemdRwPaths)
-	spec.Linux.ReadonlyPaths = roPaths
+	spec.Linux.ReadonlyPaths = stringSliceRemove(spec.Linux.ReadonlyPaths, sysboxSystemdRwPaths)
 
 	// Add env-vars required for proper operation.
-	for _, env := range sysboxSystemdEnvVars {
-		spec.Process.Env = stringSliceRemove(spec.Process.Env, []string{env})
-		spec.Process.Env = append(spec.Process.Env, env)
-		logrus.Debugf("added sysbox's systemd env-var %v to spec", env)
-	}
+	spec.Process.Env = stringSliceRemoveMatch(spec.Process.Env, func(specEnvVar string) bool {
+		name, _, err := getEnvVarInfo(specEnvVar)
+		if err != nil {
+			return false
+		}
+		for _, sysboxSysdEnvVar := range sysboxSystemdEnvVars {
+			sname, _, err := getEnvVarInfo(sysboxSysdEnvVar)
+			if err == nil && name == sname {
+				return true
+			}
+		}
+		return false
+	})
+	spec.Process.Env = append(spec.Process.Env, sysboxSystemdEnvVars...)
 }
 
 // cfgCgroups configures the system container's cgroup settings.
@@ -780,8 +787,9 @@ func ConvertSpec(context *cli.Context, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs, spe
 		cfgReadonlyPaths(spec)
 		cfgSysboxMounts(spec)
 		cfgSysboxFsMounts(spec)
-		cfgSystemd(spec)
 	}
+
+	cfgSystemd(spec)
 
 	if err := cfgSeccomp(spec.Linux.Seccomp); err != nil {
 		return false, fmt.Errorf("failed to configure seccomp: %v", err)

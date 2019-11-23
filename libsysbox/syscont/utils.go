@@ -4,7 +4,12 @@
 
 package syscont
 
-import "github.com/opencontainers/runtime-spec/specs-go"
+import (
+	"fmt"
+	"strings"
+
+	"github.com/opencontainers/runtime-spec/specs-go"
+)
 
 // stringSliceEqual compares two slices and returns true if they match
 func stringSliceEqual(a, b []string) bool {
@@ -47,6 +52,22 @@ func stringSliceRemoveMatch(s []string, match func(string) bool) []string {
 		}
 	}
 	return r
+}
+
+// Compares the given mount slices and returns true if the match
+func mountSliceEqual(a, b []specs.Mount) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i, m := range a {
+		if m.Destination != b[i].Destination ||
+			m.Source != b[i].Source ||
+			m.Type != b[i].Type ||
+			!stringSliceEqual(m.Options, b[i].Options) {
+			return false
+		}
+	}
+	return true
 }
 
 // mountSliceRemove removes from slice 's' any elements which occur on slice 'db'; the
@@ -94,4 +115,13 @@ func mountSliceRemoveStrMatch(
 		}
 	}
 	return r
+}
+
+// getEnvVarInfo returns the name and value of the given environment variable
+func getEnvVarInfo(v string) (string, string, error) {
+	tokens := strings.Split(v, "=")
+	if len(tokens) != 2 {
+		return "", "", fmt.Errorf("invalid variable %s", v)
+	}
+	return tokens[0], tokens[1], nil
 }
