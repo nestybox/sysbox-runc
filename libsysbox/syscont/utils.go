@@ -6,6 +6,8 @@ package syscont
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -52,6 +54,19 @@ func stringSliceRemoveMatch(s []string, match func(string) bool) []string {
 		}
 	}
 	return r
+}
+
+// uniquify a string slice (i.e., remove duplicate elements)
+func stringSliceUniquify(s []string) []string {
+	keys := make(map[string]bool)
+	result := []string{}
+	for _, str := range s {
+		if _, ok := keys[str]; !ok {
+			keys[str] = true
+			result = append(result, str)
+		}
+	}
+	return result
 }
 
 // Compares the given mount slices and returns true if the match
@@ -124,4 +139,139 @@ func getEnvVarInfo(v string) (string, string, error) {
 		return "", "", fmt.Errorf("invalid variable %s", v)
 	}
 	return tokens[0], tokens[1], nil
+}
+
+// finds longest-common-path among the given absolute paths
+func longestCommonPath(paths []string) string {
+
+	if len(paths) == 0 {
+		return ""
+	} else if len(paths) == 1 {
+		return paths[0]
+	}
+
+	// find the shortest and longest paths in the set
+	shortest, longest := paths[0], paths[0]
+	for _, p := range paths[1:] {
+		if p < shortest {
+			shortest = p
+		} else if p > longest {
+			longest = p
+		}
+	}
+
+	// find the first 'i' common characters between the shortest and longest paths
+	for i := 0; i < len(shortest) && i < len(longest); i++ {
+		if shortest[i] != longest[i] {
+			return shortest[:i]
+		}
+	}
+
+	return shortest
+}
+
+// returns a list of all symbolic links under the given directory
+func followSymlinksUnder(dir string) ([]string, error) {
+
+	// walk dir; if file is symlink (use os.Lstat()), readlink() and add to slice
+	symlinks := []string{}
+
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		var (
+			fi       os.FileInfo
+			realpath string
+			link     string
+		)
+
+		if path == dir {
+			return nil
+		}
+		fi, err = os.Lstat(path)
+		if err != nil {
+			return fmt.Errorf("failed to lstat %s: %v", path, err)
+		}
+		if fi.Mode()&os.ModeSymlink == 0 {
+			return nil
+		}
+
+		link, err = os.Readlink(path)
+		if err != nil {
+			return fmt.Errorf("failed to resolve symlink at %s: %v", path, err)
+		}
+
+		if filepath.IsAbs(link) {
+			realpath = link
+		} else {
+			realpath = filepath.Join(filepath.Dir(path), link)
+		}
+
+		symlinks = append(symlinks, realpath)
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return symlinks, nil
+}
+
+// createMountSpec returns a mount spec with the given source, destination, type, and
+// options. 'source' must an absolute path. 'dest' is absolute with respect to the
+// container's rootfs. If followSymlinks is true, this function follows symlinks under the
+// source path and returns additional mount specs to ensure the symlinks are valid at the
+// destination. If symlinkFilt is not empty, only symlinks that resolve to paths that
+// are prefixed by the symlinkFilt strings are allowed.
+func createMountSpec(source, dest, mountType string, mountOpt []string, followSymlinks bool, symlinkFilt []string) ([]specs.Mount, error) {
+
+	mounts := []specs.Mount{}
+	m := specs.Mount{
+		Source:      source,
+		Destination: dest,
+		Type:        mountType,
+		Options:     mountOpt,
+	}
+	mounts = append(mounts, m)
+
+	if followSymlinks {
+		links, err := followSymlinksUnder(source)
+		if err != nil {
+			return nil, fmt.Errorf("failed to follow symlinks under %s: %v", source, err)
+		}
+
+		if len(symlinkFilt) == 0 {
+			symlinkFilt = append(symlinkFilt, "")
+		}
+
+		// apply symlink filtering
+		for _, filt := range symlinkFilt {
+			filt = filepath.Clean(filt)
+			filtLinks := stringSliceRemoveMatch(links, func(s string) bool {
+				if strings.HasPrefix(s, filt+"/") {
+					return false
+				}
+				return true
+			})
+
+			if len(filtLinks) == 0 {
+				continue
+			}
+
+			lcp := longestCommonPath(filtLinks)
+			lcp = filepath.Clean(lcp)
+
+			// if the lcp is underneath the source, ignore it
+			if !strings.HasPrefix(lcp, source+"/") {
+				m := specs.Mount{
+					Source:      lcp,
+					Destination: lcp,
+					Type:        mountType,
+					Options:     mountOpt,
+				}
+				mounts = append(mounts, m)
+			}
+		}
+	}
+
+	return mounts, nil
 }

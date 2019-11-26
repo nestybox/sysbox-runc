@@ -20,7 +20,7 @@ function setup_busybox_tmpfs() {
 
 function cleanup_busybox_tmpfs() {
   cd
-  teardown_running_container test_bind_mount
+  teardown_running_container syscont
 
   run sh -c 'findmnt -o TARGET | grep /tmp/busyboxtest/rootfs'
   if [ "$status" -eq 0 ]; then
@@ -31,7 +31,7 @@ function cleanup_busybox_tmpfs() {
 }
 
 function teardown() {
-  teardown_running_container test_bind_mount
+  teardown_running_container syscont
   teardown_busybox
 }
 
@@ -51,7 +51,7 @@ function setup() {
   CONFIG=$(jq '.mounts |= . + [{"source": "/mnt/test-dir", "destination": "/mnt/test-dir", "options": ["bind"]}] | .process.args = ["ls", "/mnt/test-dir/"]' config.json)
   echo "${CONFIG}" >config.json
 
-  runc run test_bind_mount
+  runc run syscont
   [ "$status" -eq 0 ]
   [[ "${lines[0]}" =~ 'test-file' ]]
 
@@ -71,7 +71,7 @@ function setup() {
   CONFIG=$(jq '.mounts |= . + [{"source": "bindSrc", "destination": "/tmp/bind", "options": ["bind"]}] | .process.args = ["ls", "/tmp/bind/"]' config.json)
   echo "${CONFIG}" >config.json
 
-  runc run test_bind_mount
+  runc run syscont
   [ "$status" -eq 0 ]
   [[ "${lines[0]}" =~ 'test-file' ]]
 }
@@ -81,7 +81,7 @@ function setup() {
   CONFIG=$(jq '.mounts |= . + [{"source": ".", "destination": "/tmp/bind", "options": ["bind"]}] | .process.args = ["ls", "/tmp/bind/"]' config.json)
   echo "${CONFIG}" >config.json
 
-  runc run test_bind_mount
+  runc run syscont
 
   if [ -z "$SHIFT_UIDS" ]; then
       [ "$status" -eq 0 ]
@@ -96,24 +96,24 @@ function setup() {
   CONFIG=$(jq '.mounts |= . + [{"source": "rootfs/root", "destination": "/tmp/bind", "options": ["bind"]}] | .process.args = ["/bin/sh"]' config.json)
   echo "${CONFIG}" >config.json
 
-  runc run -d --console-socket $CONSOLE_SOCKET test_bind_mount
+  runc run -d --console-socket $CONSOLE_SOCKET syscont
   [ "$status" -eq 0 ]
 
-  runc exec test_bind_mount touch /root/test-file.txt
+  runc exec syscont touch /root/test-file.txt
   [ "$status" -eq 0 ]
 
-  runc exec test_bind_mount ls /root
-  [ "$status" -eq 0 ]
-  [[ "${lines[0]}" =~ 'test-file.txt' ]]
-
-  runc exec test_bind_mount ls /tmp/bind
+  runc exec syscont ls /root
   [ "$status" -eq 0 ]
   [[ "${lines[0]}" =~ 'test-file.txt' ]]
 
-  runc exec test_bind_mount rm /tmp/bind/test-file.txt
+  runc exec syscont ls /tmp/bind
+  [ "$status" -eq 0 ]
+  [[ "${lines[0]}" =~ 'test-file.txt' ]]
+
+  runc exec syscont rm /tmp/bind/test-file.txt
   [ "$status" -eq 0 ]
 
-  runc exec test_bind_mount ls /root
+  runc exec syscont ls /root
   [ "$status" -eq 0 ]
   [[ "${lines[0]}" =~ '' ]]
 
@@ -123,10 +123,10 @@ function setup() {
   cleanup_busybox_tmpfs
   setup_busybox_tmpfs
 
-  runc run -d --console-socket $CONSOLE_SOCKET test_bind_mount
+  runc run -d --console-socket $CONSOLE_SOCKET syscont
   [ "$status" -eq 0 ]
 
-  runc kill test_bind_mount
+  runc kill syscont
   [ "$status" -eq 0 ]
 
   cleanup_busybox_tmpfs
@@ -145,7 +145,7 @@ function setup() {
   CONFIG=$(jq '.mounts |= . + [{"source": "/tmp/busyboxtest/test-dir", "destination": "/tmp/bind", "options": ["bind"]}] | .process.args = ["ls", "/tmp/bind"]' config.json)
   echo "${CONFIG}" >config.json
 
-  runc run test_bind_mount
+  runc run syscont
   [ "$status" -eq 0 ]
   [[ "${lines[0]}" =~ 'test-file' ]]
 
@@ -154,4 +154,38 @@ function setup() {
 
   rm -rf /tmp/busyboxtest
   [ "$status" -eq 0 ]
+}
+
+# verify sys container has a mount for /lib/modules/<kernel>
+@test "kernel lib-module mount" {
+  kernel_rel=$(uname -r)
+
+  runc run -d --console-socket $CONSOLE_SOCKET syscont
+  [ "$status" -eq 0 ]
+
+  runc exec syscont sh -c "mount | grep \"/lib/modules/${kernel_rel}\""
+  [ "$status" -eq 0 ]
+
+  if [ -n "$SHIFT_UIDS" ]; then
+    [[ "$output" == "/lib/modules/${kernel_rel} on /lib/modules/${kernel_rel} type shiftfs (ro,relatime)" ]]
+  else
+    [[ "$output" =~ "on /lib/modules/5.0.0-36-generic".+"(ro,relatime)" ]]
+  fi
+}
+
+# verify sys container has a mount for /usr/src/linux-headers-<kernel>
+@test "kernel headers mounts" {
+  kernel_rel=$(uname -r)
+
+  runc run -d --console-socket $CONSOLE_SOCKET syscont
+  [ "$status" -eq 0 ]
+
+  runc exec syscont sh -c "mount | grep \"/usr/src/linux-headers-${kernel_rel}\""
+  [ "$status" -eq 0 ]
+
+  if [ -n "$SHIFT_UIDS" ]; then
+    [[ "${lines[0]}" == "/usr/src/linux-headers-${kernel_rel} on /usr/src/linux-headers-${kernel_rel} type shiftfs (ro,relatime)" ]]
+  else
+    [[ "${lines[0]}" =~ "on /usr/src/linux-headers-${kernel_rel}".+"(ro,relatime)" ]]
+  fi
 }

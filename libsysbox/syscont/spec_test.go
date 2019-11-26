@@ -148,7 +148,7 @@ func TestCfgLibModMount(t *testing.T) {
 	spec := new(specs.Spec)
 
 	// Test handling of spec without "/lib/modules/<kernel-release>" mount
-	if err := cfgLibModMount(spec, false); err != nil {
+	if err := cfgLibModMount(spec); err != nil {
 		t.Errorf("cfgLibModMount: returned error: %v", err)
 	}
 	m := spec.Mounts[0]
@@ -157,13 +157,13 @@ func TestCfgLibModMount(t *testing.T) {
 	}
 
 	// Test handling of spec with matching "/lib/modules/<kernel-release>" mount
-	if err := cfgLibModMount(spec, false); err != nil {
+	if err := cfgLibModMount(spec); err != nil {
 		t.Errorf("cfgLibModMount: failed matching mount test: %v", err)
 	}
 
 	// test config with conflicting /lib/modules mount
 	spec.Mounts[0].Options = []string{}
-	if err := cfgLibModMount(spec, false); err != nil {
+	if err := cfgLibModMount(spec); err != nil {
 		t.Errorf("cfgLibModMount: failed conflicting mount test: %v", err)
 	}
 }

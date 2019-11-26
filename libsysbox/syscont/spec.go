@@ -601,20 +601,12 @@ func cfgAppArmor(p *specs.Process) error {
 	return nil
 }
 
-// cfgLibModMount sets up a read-only bind mount of the host's "/lib/modules/<kernel-release>"
-// directory in the same path inside the system container; this allows system container
-// processes to verify the presence of modules via modprobe. System apps such as Docker and
-// K8s do this. Note that this does not imply module loading/unloading is supported in a
-// system container (it's not). It merely lets processes check if a module is loaded.
-func cfgLibModMount(spec *specs.Spec, doFhsCheck bool) error {
-
-	if doFhsCheck {
-		// only do the mount if the container's rootfs has a "/lib" dir
-		rootfsLibPath := filepath.Join(spec.Root.Path, "lib")
-		if _, err := os.Stat(rootfsLibPath); os.IsNotExist(err) {
-			return nil
-		}
-	}
+// cfgLibModMount configures the sys container spec with a read-only mount of the host's
+// kernel modules directory (/lib/modules/<kernel-release>). This allows system container
+// processes to verify the presence of modules via modprobe. System apps such as Docker
+// and K8s do this. Note that this does not imply module loading/unloading is supported in
+// a system container (it's not). It merely lets processes check if a module is loaded.
+func cfgLibModMount(spec *specs.Spec) error {
 
 	kernelRel, err := sysbox.GetKernelRelease()
 	if err != nil {
@@ -622,38 +614,58 @@ func cfgLibModMount(spec *specs.Spec, doFhsCheck bool) error {
 	}
 
 	path := filepath.Join("/lib/modules/", kernelRel)
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		logrus.Warnf("could not setup bind mount for %s: %v", path, err)
-		return nil
+	if _, err := os.Stat(path); err != nil {
+		return err
 	}
 
-	mount := specs.Mount{
-		Destination: path,
-		Source:      path,
-		Type:        "bind",
-		Options:     []string{"ro", "rbind", "rprivate"}, // must be read-only
+	mounts := []specs.Mount{}
+
+	// don't follow symlinks as they normally point to the linux headers which we mount in cfgLinuxHeadersMount
+	mounts, err = createMountSpec(path, path, "bind", []string{"ro", "rbind", "rprivate"}, true, []string{"/usr/src"})
+	if err != nil {
+		return fmt.Errorf("failed to create mount spec for linux modules at %s: %v", path, err)
 	}
 
-	// check if the container spec has a match or a conflict for the mount
-	for _, m := range spec.Mounts {
-		if (m.Source == mount.Source) &&
-			(m.Destination == mount.Destination) &&
-			(m.Type == mount.Type) &&
-			stringSliceEqual(m.Options, mount.Options) {
-			return nil
-		}
+	// if the mounts conflict with any in the spec (i.e., same dest), prioritize the spec ones
+	mounts = mountSliceRemove(mounts, spec.Mounts, func(m1, m2 specs.Mount) bool {
+		return m1.Destination == m2.Destination
+	})
 
-		if m.Destination == mount.Destination {
-			logrus.Debugf("honoring container spec override for mount of %s", m.Destination)
-			return nil
-		}
+	spec.Mounts = append(spec.Mounts, mounts...)
+	return nil
+}
+
+// cfgLinuxHeadersMount configures the sys container spec with a read-only mount of the
+// host's linux kernel headers. This is needed to build or run apps that interact with the
+// Linux kernel directly within a sys container.
+func cfgLinuxHeadersMount(spec *specs.Spec) error {
+
+	kernelRel, err := sysbox.GetKernelRelease()
+	if err != nil {
+		return err
 	}
 
-	// perform the mount; note that the mount will appear inside the system
-	// container as owned by nobody:nogroup; this is fine since the files
-	// are not meant to be modified from within the system container.
-	spec.Mounts = append(spec.Mounts, mount)
-	logrus.Debugf("added bind mount for %s to container's spec", path)
+	kernelHdr := "linux-headers-" + kernelRel
+
+	path := filepath.Join("/usr/src/", kernelHdr)
+	if _, err := os.Stat(path); err != nil {
+		return err
+	}
+
+	mounts := []specs.Mount{}
+
+	// follow symlinks as some distros (e.g., Ubuntu) heavily symlink the linux header directory
+	mounts, err = createMountSpec(path, path, "bind", []string{"ro", "rbind", "rprivate"}, true, []string{"/usr/src"})
+	if err != nil {
+		return fmt.Errorf("failed to create mount spec for linux headers at %s: %v", path, err)
+	}
+
+	// if the mounts conflict with any in the spec (i.e., same dest), prioritize the spec ones
+	mounts = mountSliceRemove(mounts, spec.Mounts, func(m1, m2 specs.Mount) bool {
+		return m1.Destination == m2.Destination
+	})
+
+	spec.Mounts = append(spec.Mounts, mounts...)
 	return nil
 }
 
@@ -778,8 +790,12 @@ func ConvertSpec(context *cli.Context, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs, spe
 		return false, fmt.Errorf("failed to configure cgroup mounts: %v", err)
 	}
 
-	if err := cfgLibModMount(spec, true); err != nil {
-		return false, fmt.Errorf("failed to setup /lib/module/<kernel-version> mount: %v", err)
+	if err := cfgLinuxHeadersMount(spec); err != nil {
+		return false, fmt.Errorf("failed to setup kernel headers mount: %v", err)
+	}
+
+	if err := cfgLibModMount(spec); err != nil {
+		return false, fmt.Errorf("failed to setup kernel module mount: %v", err)
 	}
 
 	if sysFs.Enabled() {

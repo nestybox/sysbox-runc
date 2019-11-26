@@ -768,7 +768,7 @@ func msMoveRoot(rootfs string) error {
 			return err
 		}
 		// Umount every syfs and proc file systems, except those under the container rootfs
-		if (info.Fstype != "proc" && info.Fstype != "sysfs") || filepath.HasPrefix(p, absRootfs) {
+		if (info.Fstype != "proc" && info.Fstype != "sysfs") || strings.HasPrefix(p, absRootfs+"/") {
 			continue
 		}
 		// Be sure umount events are not propagated to the host.
@@ -979,7 +979,7 @@ func allowShiftfsBindSource(source, rootfs string) error {
 // critical excutables for the host and mounting shiftfs on them will implicitly make
 // them non-executable in the host's mount namespace, rendering the host unusable.
 var shiftfsBlackList = []string{
-	"/bin", "/sbin", "/usr/bin", "/usr/sbin", "/usr/local/bin", "/usr/local/sbin", "/dev",
+	"/", "/bin", "/sbin", "/usr/bin", "/usr/sbin", "/usr/local/bin", "/usr/local/sbin", "/dev",
 }
 
 // sysbox-runc: skipShiftfsBindSource indicates if shiftfs mounts should be skipped on the
@@ -1004,12 +1004,12 @@ func skipShiftfsBindSource(source string) error {
 func needUidShiftOnBindSrc(mount *configs.Mount, config *configs.Config) (bool, error) {
 
 	// sysbox-fs handles uid(gid) shifting itself, so no need for mounting shiftfs on top
-	if filepath.HasPrefix(mount.Source, syscont.SysboxFsDir) {
+	if strings.HasPrefix(mount.Source, syscont.SysboxFsDir+"/") {
 		return false, nil
 	}
 
 	// Don't mount shiftfs on bind sources under the container's rootfs
-	if filepath.HasPrefix(mount.Source, config.Rootfs) {
+	if strings.HasPrefix(mount.Source, config.Rootfs+"/") {
 		return false, nil
 	}
 

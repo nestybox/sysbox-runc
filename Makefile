@@ -38,10 +38,19 @@ SHELL := $(shell command -v bash 2>/dev/null)
 LDFLAGS := '-X main.version=${VERSION} -X main.commitId=${COMMIT_ID} \
 			-X "main.builtAt=${BUILT_AT}" -X main.builtBy=${BUILT_BY}'
 
+
+KERNEL_REL := $(shell uname -r)
+HEADERS := linux-headers-$(KERNEL_REL)
+
+# hacky: works on ubuntu but may not work on other distros
+HEADERS_BASE := $(shell find /usr/src/$(HEADERS) -maxdepth 1 -type l -exec readlink {} \; | cut -d"/" -f2 | head -1)
+
 RUN_TEST_CONT := docker run ${DOCKER_RUN_PROXY} -t --privileged --rm \
 		-v $(CURDIR):$(RUNC)                                 \
-		-v $(CURDIR)/../sysbox-ipc:$(NBOX)/sysbox-ipc    \
-		-v /lib/modules:/lib/modules:ro                      \
+		-v $(CURDIR)/../sysbox-ipc:$(NBOX)/sysbox-ipc        \
+		-v /lib/modules/$(KERNEL_REL):/lib/modules/$(KERNEL_REL):ro \
+		-v /usr/src/$(HEADERS):/usr/src/$(HEADERS):ro \
+		-v /usr/src/$(HEADERS_BASE):/usr/src/$(HEADERS_BASE):ro \
 		-v $(GOPATH)/pkg/mod:/go/pkg/mod                     \
 		$(RUNC_IMAGE)
 
@@ -116,7 +125,9 @@ shell: runcimage
 	docker run ${DOCKER_RUN_PROXY} -ti --privileged --rm \
 	   -v $(CURDIR):$(RUNC)                              \
 	   -v $(CURDIR)/../sysbox-ipc:$(NBOX)/sysbox-ipc \
-	   -v /lib/modules:/lib/modules:ro                   \
+	   -v /lib/modules/$(KERNEL_REL):/lib/modules/$(KERNEL_REL):ro \
+	   -v /usr/src/$(HEADERS):/usr/src/$(HEADERS):ro \
+	   -v /usr/src/$(HEADERS_BASE):/usr/src/$(HEADERS_BASE):ro \
 	   -v $(GOPATH)/pkg/mod:/go/pkg/mod                  \
 	   $(RUNC_IMAGE) bash
 
