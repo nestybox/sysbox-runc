@@ -38,7 +38,7 @@ function setup() {
 
 function teardown() {
 	teardown_busybox
-	teardown_running_container test_bind_mount
+	teardown_running_container syscont
 }
 
 @test "runc run [bind mount]" {
@@ -47,7 +47,7 @@ function teardown() {
 
 	update_config ' .mounts |= . + [{"source": "/mnt/test-dir", "destination": "/mnt/test-dir", "options": ["bind"]}] | .process.args = ["ls", "/mnt/test-dir/"]'
 
-	runc run test_bind_mount
+	runc run syscont
 	[ "$status" -eq 0 ]
 	[[ "${lines[0]}" =~ 'test-file' ]]
 
@@ -74,7 +74,7 @@ function teardown() {
 
 	update_config ' .mounts |= . + [{"source": "bindSrc", "destination": "/tmp/bind", "options": ["bind"]}] | .process.args = ["ls", "/tmp/bind/"]'
 
-	runc run test_bind_mount
+	runc run syscont
 	[ "$status" -eq 0 ]
 	[[ "${lines[0]}" =~ 'test-file' ]]
 }
@@ -83,7 +83,7 @@ function teardown() {
 
 	update_config ' .mounts |= . + [{"source": ".", "destination": "/tmp/bind", "options": ["bind"]}] | .process.args = ["ls", "/tmp/bind/"]'
 
-	runc run test_bind_mount
+	runc run syscont
 
 	if [ -z "$SHIFT_UIDS" ]; then
       [ "$status" -eq 0 ]
@@ -97,24 +97,24 @@ function teardown() {
 
 	update_config ' .mounts |= . + [{"source": "rootfs/root", "destination": "/tmp/bind", "options": ["bind"]}] | .process.args = ["/bin/sh"]'
 
-	runc run -d --console-socket $CONSOLE_SOCKET test_bind_mount
+	runc run -d --console-socket $CONSOLE_SOCKET syscont
 	[ "$status" -eq 0 ]
 
-	runc exec test_bind_mount touch /root/test-file.txt
+	runc exec syscont touch /root/test-file.txt
 	[ "$status" -eq 0 ]
 
-	runc exec test_bind_mount ls /root
-	[ "$status" -eq 0 ]
-	[[ "${lines[0]}" =~ 'test-file.txt' ]]
-
-	runc exec test_bind_mount ls /tmp/bind
+	runc exec syscont ls /root
 	[ "$status" -eq 0 ]
 	[[ "${lines[0]}" =~ 'test-file.txt' ]]
 
-	runc exec test_bind_mount rm /tmp/bind/test-file.txt
+	runc exec syscont ls /tmp/bind
+	[ "$status" -eq 0 ]
+	[[ "${lines[0]}" =~ 'test-file.txt' ]]
+
+	runc exec syscont rm /tmp/bind/test-file.txt
 	[ "$status" -eq 0 ]
 
-	runc exec test_bind_mount ls /root
+	runc exec syscont ls /root
 	[ "$status" -eq 0 ]
 	[[ "${lines[0]}" =~ '' ]]
 }
@@ -122,13 +122,13 @@ function teardown() {
 @test "runc run [rootfs on tmpfs]" {
 	setup_busybox_tmpfs
 
-	runc run -d --console-socket $CONSOLE_SOCKET test_bind_mount
+	runc run -d --console-socket $CONSOLE_SOCKET syscont
 	[ "$status" -eq 0 ]
 
-	runc kill test_bind_mount
+	runc kill syscont
 	[ "$status" -eq 0 ]
 
-	cleanup_busybox_tmpfs test_bind_mount
+	cleanup_busybox_tmpfs syscont
 }
 
 @test "runc run [bind mount on tmpfs]" {
@@ -138,7 +138,7 @@ function teardown() {
 
 	update_config ' .mounts |= . + [{"source": "/tmp/busyboxtest/test-dir", "destination": "/tmp/bind", "options": ["bind"]}] | .process.args = ["ls", "/tmp/bind"]'
 
-	runc run test_bind_mount
+	runc run syscont
 	[ "$status" -eq 0 ]
 	[[ "${lines[0]}" =~ 'test-file' ]]
 
@@ -146,4 +146,38 @@ function teardown() {
 	[ "$status" -eq 0 ]
 
 	rm -rf /tmp/busyboxtest
+}
+
+# verify sys container has a mount for /lib/modules/<kernel>
+@test "kernel lib-module mount" {
+  kernel_rel=$(uname -r)
+
+  runc run -d --console-socket $CONSOLE_SOCKET syscont
+  [ "$status" -eq 0 ]
+
+  runc exec syscont sh -c "mount | grep \"/lib/modules/${kernel_rel}\""
+  [ "$status" -eq 0 ]
+
+  if [ -n "$SHIFT_UIDS" ]; then
+    [[ "$output" == "/lib/modules/${kernel_rel} on /lib/modules/${kernel_rel} type shiftfs (ro,relatime)" ]]
+  else
+    [[ "$output" =~ "on /lib/modules/${kernel_rel}".+"(ro,relatime)" ]]
+  fi
+}
+
+# verify sys container has a mount for /usr/src/linux-headers-<kernel>
+@test "kernel headers mounts" {
+  kernel_rel=$(uname -r)
+
+  runc run -d --console-socket $CONSOLE_SOCKET syscont
+  [ "$status" -eq 0 ]
+
+  runc exec syscont sh -c "mount | grep \"/usr/src/linux-headers-${kernel_rel}\""
+  [ "$status" -eq 0 ]
+
+  if [ -n "$SHIFT_UIDS" ]; then
+    [[ "${lines[0]}" == "/usr/src/linux-headers-${kernel_rel} on /usr/src/linux-headers-${kernel_rel} type shiftfs (ro,relatime)" ]]
+  else
+    [[ "${lines[0]}" =~ "on /usr/src/linux-headers-${kernel_rel}".+"(ro,relatime)" ]]
+  fi
 }

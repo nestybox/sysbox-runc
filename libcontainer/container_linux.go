@@ -2429,14 +2429,14 @@ func (c *linuxContainer) setupShiftfsMarks() error {
 		// To avoid shiftfs-on-shiftfs, if we see paths such as /x/y and /x/y/z, mount
 		// shiftfs on /x/y only (i.e., the base path)
 		sort.Slice(mounts, func(i, j int) bool {
-			return !filepath.HasPrefix(mounts[i].Source, mounts[j].Source)
+			return !strings.HasPrefix(mounts[i].Source, mounts[j].Source)
 		})
 
 		baseMounts = append(baseMounts, mounts[0])
 		for i := 1; i < len(mounts); i++ {
 			found := false
 			for _, b := range baseMounts {
-				if strings.Contains(mounts[i].Source, b.Source) {
+				if mounts[i].Source == b.Source || strings.HasPrefix(mounts[i].Source, b.Source+"/") {
 					found = true
 				}
 			}
