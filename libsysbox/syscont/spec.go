@@ -39,6 +39,12 @@ var sysboxFsMounts = []specs.Mount{
 		Options:     []string{"rbind", "rprivate"},
 	},
 	specs.Mount{
+		Destination: "/proc/swaps",
+		Source:      filepath.Join(SysboxFsDir, "proc/swaps"),
+		Type:        "bind",
+		Options:     []string{"rbind", "rprivate"},
+	},
+	specs.Mount{
 		Destination: "/proc/uptime",
 		Source:      filepath.Join(SysboxFsDir, "proc/uptime"),
 		Type:        "bind",
@@ -99,12 +105,6 @@ var sysboxFsMounts = []specs.Mount{
 	// specs.Mount{
 	// 	Destination: "/proc/stat",
 	// 	Source:      filepath.Join(SysboxFsDir, "proc/stat"),
-	// 	Type:        "bind",
-	// 	Options:     []string{"rbind", "rprivate"},
-	// },
-	// specs.Mount{
-	// 	Destination: "/proc/swaps",
-	// 	Source:      filepath.Join(SysboxFsDir, "proc/swaps"),
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
