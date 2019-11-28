@@ -803,6 +803,7 @@ void nsexec(void)
 					bail("unexpected sync value: %u", s);
 				}
 			}
+
 			exit(0);
 		}
 
@@ -979,6 +980,13 @@ void nsexec(void)
 
 			/* For debugging. */
 			prctl(PR_SET_NAME, (unsigned long)"runc:[2:INIT]", 0, 0, 0);
+
+			// sysbox-runc: we initially set oom_adj_score_min to "-999" for
+			// container's init-pid. Let's now increase it to the default (zero)
+			// value. Goal here is to allow child processes to decrease their
+			// oom_score down to "-999", while preventing this capability from
+			// being explicitly displayed.
+			update_oom_score_adj("0", 1);
 
 			if (read(syncfd, &s, sizeof(s)) != sizeof(s))
 				bail("failed to sync with parent: read(SYNC_GRANDCHILD)");
