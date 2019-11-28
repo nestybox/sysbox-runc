@@ -27,6 +27,11 @@ const (
 	defaultGid uint32 = 231072
 )
 
+const (
+	OOM_SCORE_MIN int = -1000
+	OOM_SCORE_MAX int = 1000
+)
+
 var SysboxFsDir = "/var/lib/sysboxfs"
 
 // sysboxFsMounts is a list of system container mounts backed by sysbox-fs
@@ -765,6 +770,11 @@ func ConvertProcessSpec(p *specs.Process) error {
 	if err := cfgAppArmor(p); err != nil {
 		return fmt.Errorf("failed to configure AppArmor profile: %v", err)
 	}
+
+	// Set oom_score to the lowest possible value to provide child processes
+	// with greater flexibility to define their own oom-killing likelihood.
+	minOomScore := OOM_SCORE_MIN + 1
+	p.OOMScoreAdj = &minOomScore
 
 	return nil
 }
