@@ -577,7 +577,15 @@ void nsexec(void)
 	 * oom_score_adj value on fork(2) so this will always be propagated
 	 * properly.
 	 */
-	update_oom_score_adj(config.oom_score_adj, config.oom_score_adj_len);
+
+   /* sysbox-runc: initially set oom_score_adj to "-999" for the
+    * container's init process. It will later be increased to the
+    * configured value. The goal here is to allow child processes to
+    * decrease their oom_score down to "-999", yet have the init
+    * process start with it's configured oom score adjustment. See
+    * sysbox issue #381.
+    */
+   update_oom_score_adj("-999", 4);
 
 	/*
 	 * Make the process non-dumpable, to avoid various race conditions that
@@ -981,12 +989,8 @@ void nsexec(void)
 			/* For debugging. */
 			prctl(PR_SET_NAME, (unsigned long)"runc:[2:INIT]", 0, 0, 0);
 
-			// sysbox-runc: we initially set oom_adj_score_min to "-999" for
-			// container's init-pid. Let's now increase it to the default (zero)
-			// value. Goal here is to allow child processes to decrease their
-			// oom_score down to "-999", while preventing this capability from
-			// being explicitly displayed.
-			update_oom_score_adj("0", 1);
+         // sysbox-runc: set the oom score adjustment to the configured value.
+         update_oom_score_adj(config.oom_score_adj, config.oom_score_adj_len);
 
 			if (read(syncfd, &s, sizeof(s)) != sizeof(s))
 				bail("failed to sync with parent: read(SYNC_GRANDCHILD)");

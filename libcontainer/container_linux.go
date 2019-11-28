@@ -2069,11 +2069,30 @@ func (c *linuxContainer) bootstrapData(cloneFlags uintptr, nsMaps map[configs.Na
 	}
 
 	if c.config.OomScoreAdj != nil {
-		// write oom_score_adj
+		// write the configured oom_score_adj
 		r.AddData(&Bytemsg{
 			Type:  OomScoreAdjAttr,
 			Value: []byte(fmt.Sprintf("%d", *c.config.OomScoreAdj)),
 		})
+	} else {
+		// Pass sysbox's oom_score_adj explicitly to nsenter; this is needed because nsenter
+		// initially sets the oom_score_adj to -999 and later reverts it to the given value
+		// (so as to allow child processes to set -999 if desired).  By passing it here, we
+		// honor the OCI spec: "If oomScoreAdj is not set, the runtime MUST NOT change the
+		// value of oom_score_adj."
+		f, err := os.Open("/proc/self/oom_score_adj")
+		if err != nil {
+			return nil, err
+		}
+		buf := make([]byte, 8)
+		if _, err := f.Read(buf); err != nil {
+			return nil, err
+		}
+		r.AddData(&Bytemsg{
+			Type:  OomScoreAdjAttr,
+			Value: buf,
+		})
+		f.Close()
 	}
 
 	// write rootless
