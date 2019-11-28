@@ -27,11 +27,6 @@ const (
 	defaultGid uint32 = 231072
 )
 
-const (
-	OOM_SCORE_MIN int = -1000
-	OOM_SCORE_MAX int = 1000
-)
-
 var SysboxFsDir = "/var/lib/sysboxfs"
 
 // sysboxFsMounts is a list of system container mounts backed by sysbox-fs
@@ -604,18 +599,6 @@ func cfgAppArmor(p *specs.Process) error {
 	return nil
 }
 
-// cfgOomScore sets the desired oom-score for a container init-pid.
-func cfgOomScore(p *specs.Process, score int) error {
-
-	if score < OOM_SCORE_MIN || score > OOM_SCORE_MAX {
-		return fmt.Errorf("invalid OOM score value %v", score)
-	}
-
-	p.OOMScoreAdj = &score
-
-	return nil
-}
-
 // cfgLibModMount configures the sys container spec with a read-only mount of the host's
 // kernel modules directory (/lib/modules/<kernel-release>). This allows system container
 // processes to verify the presence of modules via modprobe. System apps such as Docker
@@ -781,12 +764,6 @@ func ConvertProcessSpec(p *specs.Process) error {
 
 	if err := cfgAppArmor(p); err != nil {
 		return fmt.Errorf("failed to configure AppArmor profile: %v", err)
-	}
-
-	// Set oom_score to the lowest possible value to provide child processes
-	// with greater flexibility to define their own oom-killing likelihood.
-	if err := cfgOomScore(p, OOM_SCORE_MIN + 1); err != nil {
-		return fmt.Errorf("failed to configure OomScore value: %v", err)
 	}
 
 	return nil
