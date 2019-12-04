@@ -119,19 +119,19 @@ var sysboxSystemdMounts = []specs.Mount{
 		Destination: "/run",
 		Source:      "tmpfs",
 		Type:        "tmpfs",
-		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "tmpcopyup", "size=65536k"},
+		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "tmpcopyup", "size=64m"},
 	},
 	specs.Mount{
 		Destination: "/run/lock",
 		Source:      "tmpfs",
 		Type:        "tmpfs",
-		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "tmpcopyup", "size=65536k"},
+		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "tmpcopyup", "size=4m"},
 	},
 	specs.Mount{
 		Destination: "/tmp",
 		Source:      "tmpfs",
 		Type:        "tmpfs",
-		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "tmpcopyup", "size=65536k"},
+		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "tmpcopyup", "size=64m"},
 	},
 }
 
@@ -146,26 +146,26 @@ var sysboxSystemdEnvVars = []string{
 
 // sysbox's generic mount requirements
 var sysboxMounts = []specs.Mount{
-	// we don't yet support /dev/kmsg; create a dummy one.
+	// we don't yet support /dev/kmsg; create a dummy one
 	specs.Mount{
 		Destination: "/dev/kmsg",
-		Source:      "tmpfs",
-		Type:        "tmpfs",
-		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "size=65536k", "mode=644"},
+		Source:      "/dev/null",
+		Type:        "bind",
+		Options:     []string{"rbind", "rprivate"},
 	},
 	// we don't yet support configfs; create a dummy one.
 	specs.Mount{
 		Destination: "/sys/kernel/config",
 		Source:      "tmpfs",
 		Type:        "tmpfs",
-		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "size=65536k"},
+		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "size=1m"},
 	},
 	// we don't support debugfs; create a dummy one.
 	specs.Mount{
 		Destination: "/sys/kernel/debug",
 		Source:      "tmpfs",
 		Type:        "tmpfs",
-		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "size=65536k"},
+		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "size=1m"},
 	},
 }
 
@@ -738,9 +738,6 @@ func setupMounts(mgr *sysbox.Mgr, spec *specs.Spec, shiftUids bool) error {
 	specialMount := map[string]bool{
 		"/var/lib/docker":  true,
 		"/var/lib/kubelet": true,
-
-		// TODO: uncomment this once kmsg support is ready
-		//"/dev/kmsg":        true,
 	}
 
 	uid := spec.Linux.UIDMappings[0].HostID
