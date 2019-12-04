@@ -167,9 +167,9 @@ function setup() {
   [ "$status" -eq 0 ]
 
   if [ -n "$SHIFT_UIDS" ]; then
-    [[ "$output" == "/lib/modules/${kernel_rel} on /lib/modules/${kernel_rel} type shiftfs (ro,relatime)" ]]
+    [[ "$output" =~ "/lib/modules/${kernel_rel} on /lib/modules/${kernel_rel} type shiftfs".+"ro,relatime" ]]
   else
-    [[ "$output" =~ "on /lib/modules/5.0.0-36-generic".+"(ro,relatime)" ]]
+    [[ "$output" =~ "on /lib/modules/${kernel_rel}".+"ro,relatime" ]]
   fi
 }
 
@@ -184,8 +184,8 @@ function setup() {
   [ "$status" -eq 0 ]
 
   if [ -n "$SHIFT_UIDS" ]; then
-    [[ "${lines[0]}" == "/usr/src/linux-headers-${kernel_rel} on /usr/src/linux-headers-${kernel_rel} type shiftfs (ro,relatime)" ]]
+    [[ "${lines[0]}" =~ "/usr/src/linux-headers-${kernel_rel} on /usr/src/linux-headers-${kernel_rel} type shiftfs".+"ro,relatime" ]]
   else
-    [[ "${lines[0]}" =~ "on /usr/src/linux-headers-${kernel_rel}".+"(ro,relatime)" ]]
+    [[ "${lines[0]}" =~ "on /usr/src/linux-headers-${kernel_rel}".+"ro,relatime" ]]
   fi
 }
