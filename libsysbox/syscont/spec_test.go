@@ -381,19 +381,19 @@ func TestCfgSystemd(t *testing.T) {
 			Destination: "/run",
 			Source:      "tmpfs",
 			Type:        "tmpfs",
-			Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "tmpcopyup", "size=65536k"},
+			Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "tmpcopyup", "size=64m"},
 		},
 		specs.Mount{
 			Destination: "/run/lock",
 			Source:      "tmpfs",
 			Type:        "tmpfs",
-			Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "tmpcopyup", "size=65536k"},
+			Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "tmpcopyup", "size=4m"},
 		},
 		specs.Mount{
 			Destination: "/tmp",
 			Source:      "tmpfs",
 			Type:        "tmpfs",
-			Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "tmpcopyup", "size=65536k"},
+			Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "tmpcopyup", "size=64m"},
 		},
 	}
 
