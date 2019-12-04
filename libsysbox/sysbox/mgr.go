@@ -10,6 +10,7 @@ import (
 	"fmt"
 
 	"github.com/nestybox/sysbox-ipc/sysboxMgrGrpc"
+	ipcLib "github.com/nestybox/sysbox-ipc/sysboxMgrLib"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
@@ -52,27 +53,19 @@ func (mgr *Mgr) ReqSubid(size uint32) (uint32, uint32, error) {
 	return uid, gid, nil
 }
 
-func (mgr *Mgr) ReqDockerStoreMount(rootfs string, uid, gid uint32, shiftUids bool) (specs.Mount, error) {
-	m, err := sysboxMgrGrpc.ReqDockerStoreMount(mgr.Id, rootfs, uid, gid, shiftUids)
-	if err != nil {
-		return specs.Mount{}, fmt.Errorf("failed to request docker-store mount from sysbox-mgr: %v", err)
-	}
-
-	specMount := specs.Mount{
-		Source:      m.GetSource(),
-		Destination: m.GetDest(),
-		Type:        m.GetType(),
-		Options:     m.GetOpt(),
-	}
-
-	return specMount, nil
-}
-
-func (mgr *Mgr) PrepDockerStoreMount(path string, uid, gid uint32, shiftUids bool) error {
-	if err := sysboxMgrGrpc.PrepDockerStoreMount(mgr.Id, path, uid, gid, shiftUids); err != nil {
-		return fmt.Errorf("failed to request docker-store prep from sysbox-mgr: %v", err)
+func (mgr *Mgr) PrepMounts(uid, gid uint32, shiftUids bool, prepList []ipcLib.MountPrepInfo) error {
+	if err := sysboxMgrGrpc.PrepMounts(mgr.Id, uid, gid, shiftUids, prepList); err != nil {
+		return fmt.Errorf("failed to request mount source preps from sysbox-mgr: %v", err)
 	}
 	return nil
+}
+
+func (mgr *Mgr) ReqMounts(rootfs string, uid, gid uint32, shiftUids bool, reqList []ipcLib.MountReqInfo) ([]specs.Mount, error) {
+	mounts, err := sysboxMgrGrpc.ReqMounts(mgr.Id, rootfs, uid, gid, shiftUids, reqList)
+	if err != nil {
+		return nil, fmt.Errorf("failed to request mounts from sysbox-mgr: %v", err)
+	}
+	return mounts, nil
 }
 
 func (mgr *Mgr) ReqShiftfsMark(rootfs string, mounts []configs.ShiftfsMount) error {
