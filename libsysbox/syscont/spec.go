@@ -14,6 +14,7 @@ import (
 	"syscall"
 
 	mapset "github.com/deckarep/golang-set"
+	ipcLib "github.com/nestybox/sysbox-ipc/sysboxMgrLib"
 	"github.com/opencontainers/runc/libsysbox/sysbox"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
@@ -729,31 +730,56 @@ func needUidShiftOnRootfs(spec *specs.Spec) (bool, error) {
 	return false, nil
 }
 
-// prepMounts requests the sysbox-mgr to prepare Sysbox-specific mounts for the container
-func prepMounts(mgr *sysbox.Mgr, spec *specs.Spec, shiftUids bool) error {
+// setupMounts requests the sysbox-mgr to prepare sysbox-specific mounts for the container
+func setupMounts(mgr *sysbox.Mgr, spec *specs.Spec, shiftUids bool) error {
+
+	specialMount := map[string]bool{
+		"/var/lib/docker":  true,
+		"/var/lib/kubelet": true,
+
+		// TODO: uncomment this once kmsg support is ready
+		//"/dev/kmsg":        true,
+	}
+
 	uid := spec.Linux.UIDMappings[0].HostID
 	gid := spec.Linux.GIDMappings[0].HostID
 
-	// If the spec has a bind-mount over the sys container's "/var/lib/docker", tell the
-	// sysbox-mgr about it. In case the spec has multiple mounts over "/var/lib/docker"
-	// (unlikely corner case), we only act on the last one.
+	// if the spec has a bind-mount over one of the special mounts, prepare the mount source
+	prepList := []ipcLib.MountPrepInfo{}
 	for i := len(spec.Mounts) - 1; i >= 0; i-- {
 		m := spec.Mounts[i]
-		if m.Destination == "/var/lib/docker" && m.Type == "bind" {
-			if err := mgr.PrepDockerStoreMount(m.Source, uid, gid, shiftUids); err != nil {
-				return fmt.Errorf("preparing docker-store mount at %s failed: %v", m.Source, err)
+		if m.Type == "bind" && specialMount[m.Destination] {
+			info := ipcLib.MountPrepInfo{
+				Source:    m.Source,
+				Exclusive: true,
 			}
-			return nil
+			prepList = append(prepList, info)
+			delete(specialMount, m.Destination)
 		}
 	}
 
-	// Request the sysbox-mgr to setup a host directory to back the sys container's
-	// "/var/lib/docker".
-	m, err := mgr.ReqDockerStoreMount(spec.Root.Path, uid, gid, shiftUids)
-	if err != nil {
-		return fmt.Errorf("request for docker-store mount failed: %v", err)
+	if len(prepList) > 0 {
+		if err := mgr.PrepMounts(uid, gid, shiftUids, prepList); err != nil {
+			return err
+		}
 	}
-	spec.Mounts = append(spec.Mounts, m)
+
+	// otherwise, create the special mount
+	reqList := []ipcLib.MountReqInfo{}
+	for m := range specialMount {
+		info := ipcLib.MountReqInfo{
+			Dest: m,
+		}
+		reqList = append(reqList, info)
+	}
+
+	if len(reqList) > 0 {
+		m, err := mgr.ReqMounts(spec.Root.Path, uid, gid, shiftUids, reqList)
+		if err != nil {
+			return err
+		}
+		spec.Mounts = append(spec.Mounts, m...)
+	}
 
 	return nil
 }
@@ -816,7 +842,7 @@ func ConvertSpec(context *cli.Context, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs, spe
 	}
 
 	if sysMgr.Enabled() {
-		if err := prepMounts(sysMgr, spec, shiftUids); err != nil {
+		if err := setupMounts(sysMgr, spec, shiftUids); err != nil {
 			return false, fmt.Errorf("failed to prepare sysbox mount points: %v", err)
 		}
 	}
