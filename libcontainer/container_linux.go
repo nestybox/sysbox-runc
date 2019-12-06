@@ -2323,7 +2323,6 @@ func (c *linuxContainer) setupShiftfsMarks() error {
 			}
 
 			if err := skipShiftfsBindSource(dir); err != nil {
-				logrus.Infof(err.Error())
 				continue
 			}
 

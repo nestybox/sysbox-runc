@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -110,22 +111,6 @@ func mountSliceRemoveMatch(s []specs.Mount, match func(specs.Mount) bool) []spec
 	var r []specs.Mount
 	for i := 0; i < len(s); i++ {
 		if !match(s[i]) {
-			r = append(r, s[i])
-		}
-	}
-	return r
-}
-
-// mountSliceRemoveStrMatch removes from slice 's' any elements matching the
-// string 'str'.
-func mountSliceRemoveStrMatch(
-	s []specs.Mount,
-	str string,
-	match func(specs.Mount, string) bool) []specs.Mount {
-
-	var r []specs.Mount
-	for i := 0; i < len(s); i++ {
-		if !match(s[i], str) {
 			r = append(r, s[i])
 		}
 	}
@@ -274,4 +259,56 @@ func createMountSpec(source, dest, mountType string, mountOpt []string, followSy
 	}
 
 	return mounts, nil
+}
+
+// sortMounts sorts the sys container mounts in the given spec.
+func sortMounts(spec *specs.Spec) {
+
+	// The OCI spec requires the runtime to honor the ordering on mounts in the
+	// spec. However, we deviate a bit and always do mounts in the orderList in the given;
+	// other mounts are left in the order given by the spec.
+
+	orderList := map[string]int{
+		"/sys":  1,
+		"/proc": 2,
+		"/dev":  3,
+	}
+
+	sort.SliceStable(spec.Mounts, func(i, j int) bool {
+
+		// for mounts in the sort list, sort them by destination path
+		d1 := spec.Mounts[i].Destination
+		d2 := spec.Mounts[j].Destination
+
+		d1Prefix := ""
+		for prefix := range orderList {
+			if strings.HasPrefix(d1, prefix) {
+				d1Prefix = prefix
+				break
+			}
+		}
+
+		d2Prefix := ""
+		for prefix := range orderList {
+			if strings.HasPrefix(d2, prefix) {
+				d2Prefix = prefix
+				break
+			}
+		}
+
+		if d1Prefix != "" && d2Prefix != "" {
+			if d1Prefix != d2Prefix {
+				return orderList[d1Prefix] < orderList[d2Prefix]
+			} else {
+				return d1 < d2
+			}
+		} else if d1Prefix != "" && d2Prefix == "" {
+			return true
+		} else if d1Prefix == "" && d2Prefix != "" {
+			return false
+		}
+
+		// for mounts not in the sort list, leave their ordering untouched
+		return false
+	})
 }
