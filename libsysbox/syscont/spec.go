@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"syscall"
 
 	mapset "github.com/deckarep/golang-set"
@@ -21,17 +20,68 @@ import (
 	"github.com/urfave/cli"
 )
 
-// UID & GID Mapping Constants
+// Exported
 const (
-	IdRangeMin uint32 = 65536
+	SysboxFsDir string = "/var/lib/sysboxfs"
+	IdRangeMin  uint32 = 65536
+)
+
+// Internal
+const (
 	defaultUid uint32 = 231072
 	defaultGid uint32 = 231072
 )
 
-var SysboxFsDir = "/var/lib/sysboxfs"
+// System container "must-have" mounts
+var sysboxMounts = []specs.Mount{
+	specs.Mount{
+		Destination: "/sys",
+		Source:      "sysfs",
+		Type:        "sysfs",
+		Options:     []string{"noexec", "nosuid", "nodev"},
+	},
+	specs.Mount{
+		Destination: "/sys/fs/cgroup",
+		Source:      "cgroup",
+		Type:        "cgroup",
+		Options:     []string{"noexec", "nosuid", "nodev"},
+	},
+	// we don't yet virtualize configfs; create a dummy one.
+	specs.Mount{
+		Destination: "/sys/kernel/config",
+		Source:      "tmpfs",
+		Type:        "tmpfs",
+		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "size=1m"},
+	},
+	// we don't virtualize debugfs; create a dummy one.
+	specs.Mount{
+		Destination: "/sys/kernel/debug",
+		Source:      "tmpfs",
+		Type:        "tmpfs",
+		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "size=1m"},
+	},
+	specs.Mount{
+		Destination: "/proc",
+		Source:      "proc",
+		Type:        "proc",
+		Options:     []string{"noexec", "nosuid", "nodev"},
+	},
+	specs.Mount{
+		Destination: "/dev",
+		Source:      "tmpfs",
+		Type:        "tmpfs",
+		Options:     []string{"nosuid", "strictatime", "mode=755", "size=65536k"},
+	},
+	//we don't yet support /dev/kmsg; create a dummy one
+	specs.Mount{
+		Destination: "/dev/kmsg",
+		Source:      "/dev/null",
+		Type:        "bind",
+		Options:     []string{"rbind", "rprivate"},
+	},
+}
 
-// sysboxFsMounts is a list of system container mounts backed by sysbox-fs
-// (please keep in alphabetical order)
+// system container mounts virtualized by sysbox-fs
 var sysboxFsMounts = []specs.Mount{
 	specs.Mount{
 		Destination: "/proc/sys",
@@ -52,7 +102,7 @@ var sysboxFsMounts = []specs.Mount{
 		Options:     []string{"rbind", "rprivate"},
 	},
 
-	// XXX: In the future sysbox-fs will also handle the following
+	// XXX: In the future sysbox-fs will also virtualize the following
 
 	// specs.Mount{
 	// 	Destination: "/proc/cpuinfo",
@@ -140,31 +190,6 @@ var sysboxSystemdEnvVars = []string{
 	// with user-namespace). See 'ConditionVirtualization' attribute here:
 	// https://www.freedesktop.org/software/systemd/man/systemd.unit.html
 	"container=private-users",
-}
-
-// sysbox's generic mount requirements
-var sysboxMounts = []specs.Mount{
-	// we don't yet support /dev/kmsg; create a dummy one
-	specs.Mount{
-		Destination: "/dev/kmsg",
-		Source:      "/dev/null",
-		Type:        "bind",
-		Options:     []string{"rbind", "rprivate"},
-	},
-	// we don't yet support configfs; create a dummy one.
-	specs.Mount{
-		Destination: "/sys/kernel/config",
-		Source:      "tmpfs",
-		Type:        "tmpfs",
-		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "size=1m"},
-	},
-	// we don't support debugfs; create a dummy one.
-	specs.Mount{
-		Destination: "/sys/kernel/debug",
-		Source:      "tmpfs",
-		Type:        "tmpfs",
-		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "size=1m"},
-	},
 }
 
 // sysboxRwPaths list the paths within the sys container's rootfs
@@ -360,7 +385,7 @@ func cfgCapabilities(p *specs.Process) {
 	caps := p.Capabilities
 	uid := p.User.UID
 
-	// In a sys container, the root process has all capabilities
+	// In a sys container, init procesees owned by root have all capabilities
 	if uid == 0 {
 		caps.Bounding = linuxCaps
 		caps.Effective = linuxCaps
@@ -374,117 +399,206 @@ func cfgCapabilities(p *specs.Process) {
 // cfgMaskedPaths removes from the container's config any masked paths for which
 // sysbox-fs will handle accesses.
 func cfgMaskedPaths(spec *specs.Spec) {
-	maskedPaths := stringSliceRemove(spec.Linux.MaskedPaths, sysboxExposedPaths)
-	spec.Linux.MaskedPaths = maskedPaths
+	if systemdInit(spec.Process) {
+		spec.Linux.MaskedPaths = stringSliceRemove(spec.Linux.MaskedPaths, sysboxSystemdExposedPaths)
+	}
+	spec.Linux.MaskedPaths = stringSliceRemove(spec.Linux.MaskedPaths, sysboxExposedPaths)
 }
 
 // cfgReadonlyPaths removes from the container's config any read-only paths
 // that must be read-write in the system container
 func cfgReadonlyPaths(spec *specs.Spec) {
-	roPaths := stringSliceRemove(spec.Linux.ReadonlyPaths, sysboxRwPaths)
-	spec.Linux.ReadonlyPaths = roPaths
+	if systemdInit(spec.Process) {
+		spec.Linux.ReadonlyPaths = stringSliceRemove(spec.Linux.ReadonlyPaths, sysboxSystemdRwPaths)
+	}
+	spec.Linux.ReadonlyPaths = stringSliceRemove(spec.Linux.ReadonlyPaths, sysboxRwPaths)
 }
 
-// cfgSysboxMounts adds sysbox generic mounts to the containers config.
-func cfgSysboxMounts(spec *specs.Spec) {
+// cfgMounts configures the system container mounts
+func cfgMounts(spec *specs.Spec, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs, shiftUids bool) error {
 
-	// Disallow all spec mounts over /proc/* or /sys/* (except for /sys/fs/cgroup); only sysbox mounts are allowed there.
-	spec.Mounts = mountSliceRemoveMatch(spec.Mounts, func(m specs.Mount) bool {
-		return strings.HasPrefix(m.Destination, "/proc/") ||
-			(strings.HasPrefix(m.Destination, "/sys/") && (m.Destination != "/sys/fs/cgroup"))
-	})
+	cfgSysboxMounts(spec)
 
-	// Add sysbox generic mounts to the spec.
-	for _, mount := range sysboxMounts {
-
-		// Eliminate any overlapping mount present in original spec.
-		spec.Mounts = mountSliceRemoveStrMatch(
-			spec.Mounts,
-			mount.Destination,
-			func(m specs.Mount, str string) bool {
-				return m.Source == str || m.Destination == str
-			},
-		)
-
-		spec.Mounts = append(spec.Mounts, mount)
-		logrus.Debugf("added sysbox mount %v to spec", mount.Destination)
+	if err := cfgLinuxHeadersMount(spec); err != nil {
+		return err
 	}
+
+	if err := cfgLibModMount(spec); err != nil {
+		return err
+	}
+
+	if sysFs.Enabled() {
+		cfgSysboxFsMounts(spec)
+	}
+
+	if sysMgr.Enabled() {
+		if err := sysMgrSetupMounts(sysMgr, spec, shiftUids); err != nil {
+			return err
+		}
+	}
+
+	if systemdInit(spec.Process) {
+		cfgSystemdMounts(spec)
+	}
+
+	sortMounts(spec)
+	return nil
+}
+
+// cfgSysboxMounts adds sysbox generic mounts to the sys container's spec.
+func cfgSysboxMounts(spec *specs.Spec) {
+	spec.Mounts = mountSliceRemove(spec.Mounts, sysboxMounts, func(m1, m2 specs.Mount) bool {
+		return m1.Destination == m2.Destination
+	})
+	spec.Mounts = append(spec.Mounts, sysboxMounts...)
 }
 
 // cfgSysboxFsMounts adds the sysbox-fs mounts to the containers config.
 func cfgSysboxFsMounts(spec *specs.Spec) {
-
-	// add sysbox-fs mounts to the config
-	for _, mount := range sysboxFsMounts {
-		spec.Mounts = append(spec.Mounts, mount)
-		logrus.Debugf("added sysbox-fs mount %s to spec", mount.Destination)
-	}
-}
-
-// cfgSystemd adds the mounts and env-vars required to run systemd inside a sys container.
-func cfgSystemd(spec *specs.Spec) {
-
-	// Spec will be only adjusted if systemd is the sys container's init process
-	if spec.Process.Args[0] != "/sbin/init" {
-		return
-	}
-
-	// Add systemd mounts to the spec.
-	// TODO: replace mounts in-place (to keep the mount order)
-	for _, mount := range sysboxSystemdMounts {
-
-		// Eliminate any overlapping mount present in original spec.
-		spec.Mounts = mountSliceRemoveStrMatch(
-			spec.Mounts,
-			mount.Destination,
-			func(m specs.Mount, str string) bool {
-				return m.Source == str || m.Destination == str
-			},
-		)
-
-		spec.Mounts = append(spec.Mounts, mount)
-		logrus.Debugf("added sysbox's systemd mount %v to spec", mount.Destination)
-	}
-
-	// Remove any conflicting masked paths
-	spec.Linux.MaskedPaths = stringSliceRemove(spec.Linux.MaskedPaths, sysboxSystemdExposedPaths)
-
-	// Remove any conflicting read-only paths
-	spec.Linux.ReadonlyPaths = stringSliceRemove(spec.Linux.ReadonlyPaths, sysboxSystemdRwPaths)
-
-	// Add env-vars required for proper operation.
-	spec.Process.Env = stringSliceRemoveMatch(spec.Process.Env, func(specEnvVar string) bool {
-		name, _, err := getEnvVarInfo(specEnvVar)
-		if err != nil {
-			return false
-		}
-		for _, sysboxSysdEnvVar := range sysboxSystemdEnvVars {
-			sname, _, err := getEnvVarInfo(sysboxSysdEnvVar)
-			if err == nil && name == sname {
-				return true
-			}
-		}
-		return false
+	spec.Mounts = mountSliceRemove(spec.Mounts, sysboxFsMounts, func(m1, m2 specs.Mount) bool {
+		return m1.Destination == m2.Destination
 	})
-	spec.Process.Env = append(spec.Process.Env, sysboxSystemdEnvVars...)
+	spec.Mounts = append(spec.Mounts, sysboxFsMounts...)
 }
 
-// cfgCgroups configures the system container's cgroup settings.
-func cfgCgroups(spec *specs.Spec) error {
+// cfgSystemdMounts adds systemd related mounts to the spec
+func cfgSystemdMounts(spec *specs.Spec) {
+	spec.Mounts = mountSliceRemove(spec.Mounts, sysboxSystemdMounts, func(m1, m2 specs.Mount) bool {
+		return m1.Destination == m2.Destination
+	})
+	spec.Mounts = append(spec.Mounts, sysboxSystemdMounts...)
+}
 
-	// remove the read-only attribute from the cgroup mount; this is fine because the sys
-	// container's cgroup root will be a child of the cgroup that controls the
-	// sys container's resources; thus, root processes inside the sys container will be
-	// able to allocate cgroup resources yet not modify the resources allocated to the sys
-	// container itself.
+// cfgLibModMount configures the sys container spec with a read-only mount of the host's
+// kernel modules directory (/lib/modules/<kernel-release>). This allows system container
+// processes to verify the presence of modules via modprobe. System apps such as Docker
+// and K8s do this. Note that this does not imply module loading/unloading is supported in
+// a system container (it's not). It merely lets processes check if a module is loaded.
+func cfgLibModMount(spec *specs.Spec) error {
 
-	for i, mount := range spec.Mounts {
-		if mount.Type == "cgroup" {
-			mount.Options = stringSliceRemoveMatch(mount.Options, func(opt string) bool {
-				return opt == "ro"
-			})
+	kernelRel, err := sysbox.GetKernelRelease()
+	if err != nil {
+		return err
+	}
+
+	path := filepath.Join("/lib/modules/", kernelRel)
+	if _, err := os.Stat(path); err != nil {
+		return err
+	}
+
+	mounts := []specs.Mount{}
+
+	// don't follow symlinks as they normally point to the linux headers which we mount in cfgLinuxHeadersMount
+	mounts, err = createMountSpec(path, path, "bind", []string{"ro", "rbind", "rprivate"}, true, []string{"/usr/src"})
+	if err != nil {
+		return fmt.Errorf("failed to create mount spec for linux modules at %s: %v", path, err)
+	}
+
+	// if the mounts conflict with any in the spec (i.e., same dest), prioritize the spec ones
+	mounts = mountSliceRemove(mounts, spec.Mounts, func(m1, m2 specs.Mount) bool {
+		return m1.Destination == m2.Destination
+	})
+
+	spec.Mounts = append(spec.Mounts, mounts...)
+	return nil
+}
+
+// cfgLinuxHeadersMount configures the sys container spec with a read-only mount of the
+// host's linux kernel headers. This is needed to build or run apps that interact with the
+// Linux kernel directly within a sys container.
+func cfgLinuxHeadersMount(spec *specs.Spec) error {
+
+	kernelRel, err := sysbox.GetKernelRelease()
+	if err != nil {
+		return err
+	}
+
+	kernelHdr := "linux-headers-" + kernelRel
+
+	path := filepath.Join("/usr/src/", kernelHdr)
+	if _, err := os.Stat(path); err != nil {
+		return err
+	}
+
+	mounts := []specs.Mount{}
+
+	// follow symlinks as some distros (e.g., Ubuntu) heavily symlink the linux header directory
+	mounts, err = createMountSpec(path, path, "bind", []string{"ro", "rbind", "rprivate"}, true, []string{"/usr/src"})
+	if err != nil {
+		return fmt.Errorf("failed to create mount spec for linux headers at %s: %v", path, err)
+	}
+
+	// if the mounts conflict with any in the spec (i.e., same dest), prioritize the spec ones
+	mounts = mountSliceRemove(mounts, spec.Mounts, func(m1, m2 specs.Mount) bool {
+		return m1.Destination == m2.Destination
+	})
+
+	spec.Mounts = append(spec.Mounts, mounts...)
+	return nil
+}
+
+// sysMgrSetupMounts requests the sysbox-mgr to setup special sys container mounts
+func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, shiftUids bool) error {
+
+	// This directories in the sys container are backed by mounts handled by sysbox-mgr
+	specialDir := map[string]bool{
+		"/var/lib/docker":  true,
+		"/var/lib/kubelet": true,
+	}
+
+	uid := spec.Linux.UIDMappings[0].HostID
+	gid := spec.Linux.GIDMappings[0].HostID
+
+	// if the spec has a bind-mount over one of the special dirs, ask the sysbox-mgr to
+	// prepare the mount source
+	prepList := []ipcLib.MountPrepInfo{}
+	for i := len(spec.Mounts) - 1; i >= 0; i-- {
+		m := spec.Mounts[i]
+		if m.Type == "bind" && specialDir[m.Destination] {
+			info := ipcLib.MountPrepInfo{
+				Source:    m.Source,
+				Exclusive: true,
+			}
+			prepList = append(prepList, info)
+			delete(specialDir, m.Destination)
 		}
-		spec.Mounts[i].Options = mount.Options
+	}
+
+	if len(prepList) > 0 {
+		if err := mgr.PrepMounts(uid, gid, shiftUids, prepList); err != nil {
+			return err
+		}
+	}
+
+	// otherwise, request sysbox-mgr to create a bind-mount to back the special dir
+	reqList := []ipcLib.MountReqInfo{}
+	for m := range specialDir {
+		info := ipcLib.MountReqInfo{
+			Dest: m,
+		}
+		reqList = append(reqList, info)
+	}
+
+	if len(reqList) > 0 {
+		m, err := mgr.ReqMounts(spec.Root.Path, uid, gid, shiftUids, reqList)
+		if err != nil {
+			return err
+		}
+		spec.Mounts = append(spec.Mounts, m...)
+	}
+
+	return nil
+}
+
+// checkSpec performs some basic checks on the system container's spec
+func checkSpec(spec *specs.Spec) error {
+
+	if spec.Root == nil || spec.Linux == nil {
+		return fmt.Errorf("not a linux container spec")
+	}
+
+	if spec.Root.Readonly {
+		return fmt.Errorf("root path must be read-write but it's set to read-only")
 	}
 
 	return nil
@@ -600,90 +714,7 @@ func cfgAppArmor(p *specs.Process) error {
 	return nil
 }
 
-// cfgLibModMount configures the sys container spec with a read-only mount of the host's
-// kernel modules directory (/lib/modules/<kernel-release>). This allows system container
-// processes to verify the presence of modules via modprobe. System apps such as Docker
-// and K8s do this. Note that this does not imply module loading/unloading is supported in
-// a system container (it's not). It merely lets processes check if a module is loaded.
-func cfgLibModMount(spec *specs.Spec) error {
-
-	kernelRel, err := sysbox.GetKernelRelease()
-	if err != nil {
-		return err
-	}
-
-	path := filepath.Join("/lib/modules/", kernelRel)
-	if _, err := os.Stat(path); err != nil {
-		return err
-	}
-
-	mounts := []specs.Mount{}
-
-	// don't follow symlinks as they normally point to the linux headers which we mount in cfgLinuxHeadersMount
-	mounts, err = createMountSpec(path, path, "bind", []string{"ro", "rbind", "rprivate"}, true, []string{"/usr/src"})
-	if err != nil {
-		return fmt.Errorf("failed to create mount spec for linux modules at %s: %v", path, err)
-	}
-
-	// if the mounts conflict with any in the spec (i.e., same dest), prioritize the spec ones
-	mounts = mountSliceRemove(mounts, spec.Mounts, func(m1, m2 specs.Mount) bool {
-		return m1.Destination == m2.Destination
-	})
-
-	spec.Mounts = append(spec.Mounts, mounts...)
-	return nil
-}
-
-// cfgLinuxHeadersMount configures the sys container spec with a read-only mount of the
-// host's linux kernel headers. This is needed to build or run apps that interact with the
-// Linux kernel directly within a sys container.
-func cfgLinuxHeadersMount(spec *specs.Spec) error {
-
-	kernelRel, err := sysbox.GetKernelRelease()
-	if err != nil {
-		return err
-	}
-
-	kernelHdr := "linux-headers-" + kernelRel
-
-	path := filepath.Join("/usr/src/", kernelHdr)
-	if _, err := os.Stat(path); err != nil {
-		return err
-	}
-
-	mounts := []specs.Mount{}
-
-	// follow symlinks as some distros (e.g., Ubuntu) heavily symlink the linux header directory
-	mounts, err = createMountSpec(path, path, "bind", []string{"ro", "rbind", "rprivate"}, true, []string{"/usr/src"})
-	if err != nil {
-		return fmt.Errorf("failed to create mount spec for linux headers at %s: %v", path, err)
-	}
-
-	// if the mounts conflict with any in the spec (i.e., same dest), prioritize the spec ones
-	mounts = mountSliceRemove(mounts, spec.Mounts, func(m1, m2 specs.Mount) bool {
-		return m1.Destination == m2.Destination
-	})
-
-	spec.Mounts = append(spec.Mounts, mounts...)
-	return nil
-}
-
-// checkSpec performs some basic checks on the system container's spec
-func checkSpec(spec *specs.Spec) error {
-
-	if spec.Root == nil || spec.Linux == nil {
-		return fmt.Errorf("not a linux container spec")
-	}
-
-	if spec.Root.Readonly {
-		return fmt.Errorf("root path must be read-write but it's set to read-only")
-	}
-
-	return nil
-}
-
-// needUidShiftOnRootfs checks if uid/gid shifting on the container's rootfs is required to
-// run the system container.
+// needUidShiftOnRootfs checks if uid/gid shifting is required to run the system container.
 func needUidShiftOnRootfs(spec *specs.Spec) (bool, error) {
 	var hostUidMap, hostGidMap uint32
 
@@ -730,63 +761,42 @@ func needUidShiftOnRootfs(spec *specs.Spec) (bool, error) {
 	return false, nil
 }
 
-// setupMounts requests the sysbox-mgr to prepare sysbox-specific mounts for the container
-func setupMounts(mgr *sysbox.Mgr, spec *specs.Spec, shiftUids bool) error {
+// Configure environment variables required for systemd
+func cfgSystemdEnv(p *specs.Process) {
 
-	specialMount := map[string]bool{
-		"/var/lib/docker":  true,
-		"/var/lib/kubelet": true,
-	}
-
-	uid := spec.Linux.UIDMappings[0].HostID
-	gid := spec.Linux.GIDMappings[0].HostID
-
-	// if the spec has a bind-mount over one of the special mounts, prepare the mount source
-	prepList := []ipcLib.MountPrepInfo{}
-	for i := len(spec.Mounts) - 1; i >= 0; i-- {
-		m := spec.Mounts[i]
-		if m.Type == "bind" && specialMount[m.Destination] {
-			info := ipcLib.MountPrepInfo{
-				Source:    m.Source,
-				Exclusive: true,
-			}
-			prepList = append(prepList, info)
-			delete(specialMount, m.Destination)
-		}
-	}
-
-	if len(prepList) > 0 {
-		if err := mgr.PrepMounts(uid, gid, shiftUids, prepList); err != nil {
-			return err
-		}
-	}
-
-	// otherwise, create the special mount
-	reqList := []ipcLib.MountReqInfo{}
-	for m := range specialMount {
-		info := ipcLib.MountReqInfo{
-			Dest: m,
-		}
-		reqList = append(reqList, info)
-	}
-
-	if len(reqList) > 0 {
-		m, err := mgr.ReqMounts(spec.Root.Path, uid, gid, shiftUids, reqList)
+	p.Env = stringSliceRemoveMatch(p.Env, func(specEnvVar string) bool {
+		name, _, err := getEnvVarInfo(specEnvVar)
 		if err != nil {
-			return err
+			return false
 		}
-		spec.Mounts = append(spec.Mounts, m...)
-	}
+		for _, sysboxSysdEnvVar := range sysboxSystemdEnvVars {
+			sname, _, err := getEnvVarInfo(sysboxSysdEnvVar)
+			if err == nil && name == sname {
+				return true
+			}
+		}
+		return false
+	})
 
-	return nil
+	p.Env = append(p.Env, sysboxSystemdEnvVars...)
+}
+
+// systemdInit returns true if the sys container is running systemd
+func systemdInit(p *specs.Process) bool {
+	return p.Args[0] == "/sbin/init"
 }
 
 // Configure the container's process spec for system containers
 func ConvertProcessSpec(p *specs.Process) error {
+
 	cfgCapabilities(p)
 
 	if err := cfgAppArmor(p); err != nil {
 		return fmt.Errorf("failed to configure AppArmor profile: %v", err)
+	}
+
+	if systemdInit(p) {
+		cfgSystemdEnv(p)
 	}
 
 	return nil
@@ -807,49 +817,26 @@ func ConvertSpec(context *cli.Context, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs, spe
 		return false, fmt.Errorf("invalid user/group ID config: %v", err)
 	}
 
-	if err := cfgCgroups(spec); err != nil {
-		return false, fmt.Errorf("failed to configure cgroup mounts: %v", err)
-	}
-
-	if err := cfgLinuxHeadersMount(spec); err != nil {
-		return false, fmt.Errorf("failed to setup kernel headers mount: %v", err)
-	}
-
-	if err := cfgLibModMount(spec); err != nil {
-		return false, fmt.Errorf("failed to setup kernel module mount: %v", err)
-	}
-
-	if sysFs.Enabled() {
-		cfgMaskedPaths(spec)
-		cfgReadonlyPaths(spec)
-		cfgSysboxMounts(spec)
-		cfgSysboxFsMounts(spec)
-	}
-
-	cfgSystemd(spec)
-
-	if err := cfgSeccomp(spec.Linux.Seccomp); err != nil {
-		return false, fmt.Errorf("failed to configure seccomp: %v", err)
-	}
-
 	// Must be done after cfgIDMappings()
 	shiftUids, err := needUidShiftOnRootfs(spec)
 	if err != nil {
 		return false, fmt.Errorf("error while checking for uid-shifting need: %v", err)
 	}
 
-	if sysMgr.Enabled() {
-		if err := setupMounts(sysMgr, spec, shiftUids); err != nil {
-			return false, fmt.Errorf("failed to prepare sysbox mount points: %v", err)
-		}
+	if err := cfgMounts(spec, sysMgr, sysFs, shiftUids); err != nil {
+		return false, fmt.Errorf("invalid mount config: %v", err)
+	}
+
+	cfgMaskedPaths(spec)
+	cfgReadonlyPaths(spec)
+
+	if err := cfgSeccomp(spec.Linux.Seccomp); err != nil {
+		return false, fmt.Errorf("failed to configure seccomp: %v", err)
 	}
 
 	if err := ConvertProcessSpec(spec.Process); err != nil {
 		return false, fmt.Errorf("failed to configure process spec: %v", err)
 	}
-
-	// TODO: ensure /proc and /sys are mounted (if not present in the container spec)
-	// TODO: ensure /dev is mounted
 
 	return shiftUids, nil
 }

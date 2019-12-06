@@ -172,6 +172,8 @@ func TestCfgMaskedPaths(t *testing.T) {
 	spec := new(specs.Spec)
 	spec.Linux = new(specs.Linux)
 	spec.Linux.MaskedPaths = []string{"/proc", "/some/path", "/proc/sys", "/other/path"}
+	spec.Process = new(specs.Process)
+	spec.Process.Args = []string{"/bin/bash"}
 
 	cfgMaskedPaths(spec)
 
@@ -193,6 +195,8 @@ func TestCfgReadonlyPaths(t *testing.T) {
 	spec := new(specs.Spec)
 	spec.Linux = new(specs.Linux)
 	spec.Linux.ReadonlyPaths = []string{"/proc", "/some/path", "/proc/sys", "/other/path"}
+	spec.Process = new(specs.Process)
+	spec.Process.Args = []string{"/bin/bash"}
 
 	cfgReadonlyPaths(spec)
 
@@ -210,93 +214,27 @@ func TestCfgReadonlyPaths(t *testing.T) {
 	}
 }
 
-func TestCfgSysboxFsMounts(t *testing.T) {
+func TestSortMounts(t *testing.T) {
 
 	spec := new(specs.Spec)
-	spec.Mounts = []specs.Mount{
-		{
-			Destination: "/proc",
-			Type:        "bind",
-			Source:      "/some/source",
-			Options:     []string{"ro"},
-		},
-		{
-			Destination: "/proc/cpuinfo",
-			Type:        "bind",
-			Source:      "/some/source",
-			Options:     []string{"ro"},
-		},
-		{
-			Destination: "/var/lib",
-			Type:        "bind",
-			Source:      "/some/source",
-			Options:     []string{"rw"},
-		},
-		{
-			Destination: "/sys/bus",
-			Type:        "bind",
-			Source:      "/some/source",
-			Options:     []string{"rw"},
-		},
-		{
-			Destination: "/sys/fs/cgroup",
-			Type:        "bind",
-			Source:      "/some/source",
-			Options:     []string{"ro"},
-		},
+
+	orig := []string{"/dev", "/proc/swaps", "/proc", "/var/lib", "/tmp/run", "/sys/fs/cgroup", "/sys", "/tmp/run2"}
+	want := []string{"/sys", "/sys/fs/cgroup", "/proc", "/proc/swaps", "/dev", "/var/lib", "/tmp/run", "/tmp/run2"}
+
+	spec.Mounts = []specs.Mount{}
+	for _, s := range orig {
+		spec.Mounts = append(spec.Mounts, specs.Mount{Destination: s})
 	}
 
-	want := append(spec.Mounts, sysboxFsMounts...)
-
-	cfgSysboxFsMounts(spec)
-
-	if len(spec.Mounts) != len(want) {
-		t.Errorf("cfgSysboxFsMounts: got %v, want %v", spec.Mounts, want)
+	wantMounts := []specs.Mount{}
+	for _, s := range want {
+		wantMounts = append(wantMounts, specs.Mount{Destination: s})
 	}
 
-	for i := 0; i < len(spec.Mounts); i++ {
-		if spec.Mounts[i].Destination != want[i].Destination {
-			t.Errorf("cfgSysboxFsMounts: got %v, want %v", spec.Mounts, want)
-		}
-	}
-}
+	sortMounts(spec)
 
-func testCfgCgroups(t *testing.T) {
-	spec := new(specs.Spec)
-	spec.Mounts = []specs.Mount{
-		{
-			Destination: "/proc",
-			Type:        "bind",
-			Source:      "/some/source",
-			Options:     []string{"ro"},
-		},
-		{
-			Destination: "/sys/bus",
-			Type:        "bind",
-			Source:      "/some/source",
-			Options:     []string{"rw"},
-		},
-		{
-			Destination: "/sys/fs/cgroup",
-			Type:        "cgroup",
-			Source:      "/some/source",
-			Options:     []string{"ro", "rbind"},
-		},
-	}
-
-	want := spec.Mounts
-	want[2].Options = []string{"rbind"}
-
-	cfgCgroups(spec)
-
-	if len(spec.Mounts) != len(want) {
-		t.Errorf("cfgCfgCgroups: got %v, want %v", spec.Mounts, want)
-	}
-
-	for i := 0; i < len(spec.Mounts); i++ {
-		if !stringSliceEqual(spec.Mounts[i].Options, want[i].Options) {
-			t.Errorf("cfgCfgCgroups: got %v, want %v", spec.Mounts[i].Options, want[i].Options)
-		}
+	if !mountSliceEqual(spec.Mounts, wantMounts) {
+		t.Errorf("sortMounts() failed: got %v, want %v", spec.Mounts, wantMounts)
 	}
 }
 
@@ -328,9 +266,7 @@ func TestCfgSystemd(t *testing.T) {
 	spec.Linux = new(specs.Linux)
 
 	// Create a spec that has intentional conflicts with systemd resources
-
 	spec.Process.Args = []string{"/sbin/init"}
-	spec.Process.Env = []string{"container=docker", "a=b"}
 
 	spec.Mounts = []specs.Mount{
 		specs.Mount{
@@ -359,16 +295,8 @@ func TestCfgSystemd(t *testing.T) {
 		},
 	}
 
-	spec.Linux.MaskedPaths = []string{"/sys/kernel/debug", "/some/other/path", "/sys/kernel/config"}
-	spec.Linux.ReadonlyPaths = []string{"/tmp", "/run/lock", "/yet/another/path", "/sys/kernel/debug"}
-
 	// This call should remove the conflicting info above
-	cfgSystemd(spec)
-
-	wantEnv := []string{"a=b", "container=private-users"}
-	if !stringSliceEqual(spec.Process.Env, wantEnv) {
-		t.Errorf("cfgSystemd() failed: spec.Process.Env: want %v, got %v", wantEnv, spec.Process.Env)
-	}
+	cfgSystemdMounts(spec)
 
 	wantMounts := []specs.Mount{
 		specs.Mount{
@@ -399,16 +327,6 @@ func TestCfgSystemd(t *testing.T) {
 
 	if !mountSliceEqual(spec.Mounts, wantMounts) {
 		t.Errorf("cfgSystemd() failed: spec.Mounts: want %v, got %v", wantMounts, spec.Mounts)
-	}
-
-	wantMasked := []string{"/some/other/path"}
-	if !stringSliceEqual(spec.Linux.MaskedPaths, wantMasked) {
-		t.Errorf("cfgSystemd() failed: spec.Linux.MaskedPaths: want %v, got %v", wantMasked, spec.Linux.MaskedPaths)
-	}
-
-	wantRo := []string{"/yet/another/path"}
-	if !stringSliceEqual(spec.Linux.ReadonlyPaths, wantRo) {
-		t.Errorf("cfgSystemd() failed: spec.Linux.MaskedPaths: want %v, got %v", wantRo, spec.Linux.ReadonlyPaths)
 	}
 
 }
