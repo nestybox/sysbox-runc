@@ -44,6 +44,7 @@ const (
 	Trap
 	Allow
 	Trace
+	Notify
 )
 
 // Operator is a comparison operator to be used when matching syscall arguments in Seccomp
@@ -174,6 +175,9 @@ type Config struct {
 	// A number of rules are given, each having an action to be taken if a syscall matches it.
 	// A default action to be taken if no rules match is also given.
 	Seccomp *Seccomp `json:"seccomp"`
+
+	// sysbox-runc: Seccomp notification actions for syscall trapping inside the sys container.
+	SeccompNotif *Seccomp `json:"seccomp_notif"`
 
 	// NoNewPrivileges controls whether processes in the container can gain additional privileges.
 	NoNewPrivileges bool `json:"no_new_privileges,omitempty"`

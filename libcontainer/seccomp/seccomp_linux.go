@@ -15,11 +15,12 @@ import (
 )
 
 var (
-	actAllow = libseccomp.ActAllow
-	actTrap  = libseccomp.ActTrap
-	actKill  = libseccomp.ActKill
-	actTrace = libseccomp.ActTrace.SetReturnCode(int16(unix.EPERM))
-	actErrno = libseccomp.ActErrno.SetReturnCode(int16(unix.EPERM))
+	actAllow  = libseccomp.ActAllow
+	actTrap   = libseccomp.ActTrap
+	actKill   = libseccomp.ActKill
+	actTrace  = libseccomp.ActTrace.SetReturnCode(int16(unix.EPERM))
+	actErrno  = libseccomp.ActErrno.SetReturnCode(int16(unix.EPERM))
+	actNotify = libseccomp.ActNotify
 )
 
 const (
@@ -27,58 +28,76 @@ const (
 	syscallMaxArguments int = 6
 )
 
-// Filters given syscalls in a container, preventing them from being used
-// Started in the container init process, and carried over to all child processes
-// Setns calls, however, require a separate invocation, as they are not children
-// of the init until they join the namespace
-func InitSeccomp(config *configs.Seccomp) error {
+// Loads a seccomp filter with the given seccomp config. If the given config contains a
+// seccomp notify action, returns a file descriptor that can be used by a tracer process
+// to retrieve such notifications from the kernel.
+func LoadSeccomp(config *configs.Seccomp) (int32, error) {
+	var notifyFd libseccomp.ScmpFd
+
 	if config == nil {
-		return fmt.Errorf("cannot initialize Seccomp - nil config passed")
+		return -1, fmt.Errorf("cannot initialize Seccomp - nil config passed")
 	}
 
 	defaultAction, err := getAction(config.DefaultAction)
 	if err != nil {
-		return fmt.Errorf("error initializing seccomp - invalid default action")
+		return -1, fmt.Errorf("error initializing seccomp - invalid default action")
 	}
 
 	filter, err := libseccomp.NewFilter(defaultAction)
 	if err != nil {
-		return fmt.Errorf("error creating filter: %s", err)
+		return -1, fmt.Errorf("error creating filter: %s", err)
 	}
 
 	// Add extra architectures
 	for _, arch := range config.Architectures {
 		scmpArch, err := libseccomp.GetArchFromString(arch)
 		if err != nil {
-			return fmt.Errorf("error validating Seccomp architecture: %s", err)
+			return -1, fmt.Errorf("error validating Seccomp architecture: %s", err)
 		}
 
 		if err := filter.AddArch(scmpArch); err != nil {
-			return fmt.Errorf("error adding architecture to seccomp filter: %s", err)
+			return -1, fmt.Errorf("error adding architecture to seccomp filter: %s", err)
 		}
 	}
 
-	// Unset no new privs bit
+	// Unset no new privs bit (i.e., libseccomp won't touch it when loading the filter)
 	if err := filter.SetNoNewPrivsBit(false); err != nil {
-		return fmt.Errorf("error setting no new privileges: %s", err)
+		return -1, fmt.Errorf("error setting no new privileges: %s", err)
 	}
 
 	// Add a rule for each syscall
+	notify := false
 	for _, call := range config.Syscalls {
 		if call == nil {
-			return fmt.Errorf("encountered nil syscall while initializing Seccomp")
+			return -1, fmt.Errorf("encountered nil syscall while initializing Seccomp")
+		}
+
+		if call.Action == configs.Notify && notify == false {
+			if err := prepNotify(filter); err != nil {
+				return -1, fmt.Errorf("error preparing seccomp notifications: %s", err)
+			}
+			notify = true
 		}
 
 		if err = matchCall(filter, call); err != nil {
-			return err
+			return -1, err
 		}
 	}
 
 	if err = filter.Load(); err != nil {
-		return fmt.Errorf("error loading seccomp filter into kernel: %s", err)
+		return -1, fmt.Errorf("error loading seccomp filter into kernel: %s", err)
 	}
 
-	return nil
+	// If the filter contains a notify action, get the notification file-descriptor
+	if notify {
+		fd, err := filter.GetNotifFd()
+		if err != nil {
+			return -1, fmt.Errorf("error getting filter notification fd: %s", err)
+		}
+		notifyFd = fd
+	}
+
+	return int32(notifyFd), nil
 }
 
 // IsEnabled returns if the kernel has been configured to support seccomp.
@@ -112,6 +131,8 @@ func getAction(act configs.Action) (libseccomp.ScmpAction, error) {
 		return actAllow, nil
 	case configs.Trace:
 		return actTrace, nil
+	case configs.Notify:
+		return actNotify, nil
 	default:
 		return libseccomp.ActInvalid, fmt.Errorf("invalid action, cannot use in rule")
 	}
@@ -184,8 +205,8 @@ func matchCall(filter *libseccomp.ScmpFilter, call *configs.Syscall) error {
 			return fmt.Errorf("error adding seccomp filter rule for syscall %s: %s", call.Name, err)
 		}
 	} else {
-		// If two or more arguments have the same condition,
-		// Revert to old behavior, adding each condition as a separate rule
+		// If two or more arguments have the same condition, revert to old behavior, adding
+		// each condition as a separate rule
 		argCounts := make([]uint, syscallMaxArguments)
 		conditions := []libseccomp.ScmpCondition{}
 
@@ -255,4 +276,26 @@ func parseStatusFile(path string) (map[string]string, error) {
 	}
 
 	return status, nil
+}
+
+// prepNotify prepares seccomp for syscall notification actions
+func prepNotify(filter *libseccomp.ScmpFilter) error {
+
+	// seccomp notification requires API level >= 5
+	api, err := libseccomp.GetApi()
+	if err != nil {
+		return fmt.Errorf("error getting seccomp API level: %s", err)
+	} else if api < 5 {
+		err = libseccomp.SetApi(5)
+		if err != nil {
+			return fmt.Errorf("error setting seccomp API level to 5: %s", err)
+		}
+	}
+
+	// seccomp notification is not compatible with thread-sync
+	if err := filter.SetTsync(false); err != nil {
+		return fmt.Errorf("Error clearing tsync on filter: %s", err)
+	}
+
+	return nil
 }

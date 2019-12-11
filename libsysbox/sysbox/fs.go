@@ -8,9 +8,13 @@ package sysbox
 
 import (
 	"fmt"
+	"net"
+	"os"
 	"time"
 
 	"github.com/nestybox/sysbox-ipc/sysboxFsGrpc"
+
+	fdlib "github.com/ftrvxmtrx/fd"
 )
 
 // FsRegInfo contains info about a container registered with sysbox-fs
@@ -75,6 +79,13 @@ func (fs *Fs) SendCreationTime(t time.Time) error {
 	return nil
 }
 
+func (fs *Fs) SendSeccompFd(id string, seccompFd int32) error {
+
+	// TODO: complete this function; send fd to sysbox-fs and wait for its ack.
+
+	return sendFdToTracer(seccompFd)
+}
+
 // Unregisters the container with with sysbox-fs
 func (fs *Fs) Unregister() error {
 	if fs.Reg {
@@ -86,5 +97,43 @@ func (fs *Fs) Unregister() error {
 		}
 		fs.Reg = false
 	}
+	return nil
+}
+
+// XXX: DEBUG
+
+const (
+	tracerSock = "/tmp/seccomp-tracer"
+)
+
+// Send the given seccomp notifFd to the tracer program (assumed to be running already)
+func sendFdToTracer(notifFd int32) error {
+
+	addr, err := net.ResolveUnixAddr("unix", tracerSock)
+	if err != nil {
+		return fmt.Errorf("Failed to resolve %s: %v\n", tracerSock, err)
+	}
+
+	conn, err := net.DialUnix("unix", nil, addr)
+	if err != nil {
+		return fmt.Errorf("Failed to dial: %v\n", err)
+	}
+	defer conn.Close()
+
+	file := os.NewFile(uintptr(notifFd), "notifFd")
+	if err := fdlib.Put(conn, file); err != nil {
+		return fmt.Errorf("failed to send file descriptor: %v\n", err)
+	}
+
+	buf := make([]byte, 3)
+	_, err = conn.Read(buf)
+	if err != nil {
+		return fmt.Errorf("failed to read from connection: %v\n", err)
+	}
+
+	if string(buf) != "ack" {
+		return fmt.Errorf("invalid ack: %v", buf)
+	}
+
 	return nil
 }

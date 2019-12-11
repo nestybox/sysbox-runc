@@ -6,6 +6,12 @@
 
 package syscont
 
+import (
+	"fmt"
+
+	"github.com/opencontainers/runc/libcontainer/configs"
+)
+
 // List of syscalls allowed inside a system container
 var syscontSyscallWhitelist = []string{
 
@@ -338,4 +344,35 @@ var syscontSyscallWhitelist = []string{
 	// allow namespace creation inside the system container (for nested containers)
 	"setns",
 	"unshare",
+}
+
+// List of syscalls trapped & emulated inside a system container
+var syscontSyscallTrapList = []string{
+	"mount",
+}
+
+// AddSyscallTraps modifies the given libcontainer config to add seccomp notification
+// actions for syscall trapping
+func AddSyscallTraps(config *configs.Config) error {
+
+	if config.SeccompNotif != nil {
+		return fmt.Errorf("conflicting seccomp notification config found.")
+	}
+
+	list := []*configs.Syscall{}
+	for _, call := range syscontSyscallTrapList {
+		s := &configs.Syscall{
+			Name:   call,
+			Action: configs.Notify,
+		}
+		list = append(list, s)
+	}
+
+	config.SeccompNotif = &configs.Seccomp{
+		DefaultAction: configs.Allow,
+		Architectures: config.Seccomp.Architectures,
+		Syscalls:      list,
+	}
+
+	return nil
 }

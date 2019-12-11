@@ -18,6 +18,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/specconv"
 	"github.com/opencontainers/runc/libcontainer/utils"
 	"github.com/opencontainers/runc/libsysbox/sysbox"
+	"github.com/opencontainers/runc/libsysbox/syscont"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -262,6 +263,11 @@ func createContainer(context *cli.Context, id string, spec *specs.Spec, shiftUid
 		return nil, err
 	}
 
+	// sysbox-runc: setup sys container syscall trapping
+	if err := syscont.AddSyscallTraps(config); err != nil {
+		return nil, err
+	}
+
 	factory, err := loadFactory(context, sysMgr, sysFs)
 	if err != nil {
 		return nil, err
@@ -428,9 +434,9 @@ func startContainer(context *cli.Context, spec *specs.Spec, action CtAct, criuOp
 
 	if shiftUids {
 		if err := sysbox.KernelModSupported("shiftfs"); err != nil {
-                        return -1, fmt.Errorf("container requires user-ID shifting but error was found: %v." +
-                                " Update your kernel to include shiftfs module or enable Docker with userns-remap." +
-                                " Refer to the Sysbox troubleshooting guide for more info", err)
+			return -1, fmt.Errorf("container requires user-ID shifting but error was found: %v."+
+				" Update your kernel to include shiftfs module or enable Docker with userns-remap."+
+				" Refer to the Sysbox troubleshooting guide for more info", err)
 		}
 	}
 

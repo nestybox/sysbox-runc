@@ -35,14 +35,16 @@ type opReqType int
 const (
 	bind = iota
 	mapUid
+	seccompFd
 )
 
 type opReq struct {
-	Op     opReqType     `json:"type"`   // op request type
-	Rootfs string        `json:"rootfs"` // container's rootfs path
-	Mount  configs.Mount `json:"mount"`  // bind mount info
-	Label  string        `json:"label"`  // bind mount label
-	Pid    int           `json:"pid"`    // pid of container's init process
+	Op        opReqType     `json:"type"`       // op request type
+	Rootfs    string        `json:"rootfs"`     // container's rootfs path
+	Mount     configs.Mount `json:"mount"`      // bind mount info
+	Label     string        `json:"label"`      // bind mount label
+	Pid       int           `json:"pid"`        // pid of container's init process
+	SeccompFd int32         `json:"seccomp_fd"` // seccomp notification file-descriptor
 }
 
 func (l *linuxStandardInit) getSessionRingParams() (string, uint32, uint32) {
@@ -158,32 +160,34 @@ func (l *linuxStandardInit) Init() error {
 			return errors.Wrap(err, "set nonewprivileges")
 		}
 	}
+
+	// XXX: See if we can move this sync *after* the seccomp sync below; it would look nicer.
+
 	// Tell our parent that we're ready to Execv. This must be done before the
 	// Seccomp rules have been applied, because we need to be able to read and
 	// write to a socket.
 	if err := syncParentReady(l.pipe); err != nil {
 		return errors.Wrap(err, "sync ready")
 	}
+
 	if err := label.SetProcessLabel(l.config.ProcessLabel); err != nil {
 		return errors.Wrap(err, "set process label")
 	}
 	defer label.SetProcessLabel("")
-	// Without NoNewPrivileges seccomp is a privileged operation, so we need to
-	// do this before dropping capabilities; otherwise do it as late as possible
-	// just before execve so as few syscalls take place after it as possible.
-	if l.config.Config.Seccomp != nil && !l.config.NoNewPrivileges {
-		if err := seccomp.InitSeccomp(l.config.Config.Seccomp); err != nil {
-			return err
-		}
-	}
+
+	// finalizeNamespace drops the caps, sets the correct user and working dir, and marks
+	// any leaked file descriptors for closing before executing the command inside the
+	// namespace
 	if err := finalizeNamespace(l.config); err != nil {
 		return err
 	}
+
 	// finalizeNamespace can change user/group which clears the parent death
 	// signal, so we restore it here.
 	if err := pdeath.Restore(); err != nil {
 		return errors.Wrap(err, "restore pdeath signal")
 	}
+
 	// Compare the parent from the initial start of the init process and make
 	// sure that it did not change.  if the parent changes that means it died
 	// and we were reparented to something else so we should just kill ourself
@@ -191,14 +195,22 @@ func (l *linuxStandardInit) Init() error {
 	if unix.Getppid() != l.parentPid {
 		return unix.Kill(unix.Getpid(), unix.SIGKILL)
 	}
+
 	// Check for the arg before waiting to make sure it exists and it is
 	// returned as a create time error.
 	name, err := exec.LookPath(l.config.Args[0])
 	if err != nil {
 		return err
 	}
+
+	// sysbox-runc: setup syscall trapping
+	if err := setupSyscallTraps(l.config, l.pipe); err != nil {
+		return err
+	}
+
 	// Close the pipe to signal that we have completed our init.
 	l.pipe.Close()
+
 	// Wait for the FIFO to be opened on the other side before exec-ing the
 	// user process. We open it through /proc/self/fd/$fd, because the fd that
 	// was given to us was an O_PATH fd to the fifo itself. Linux allows us to
@@ -210,6 +222,7 @@ func (l *linuxStandardInit) Init() error {
 	if _, err := unix.Write(fd, []byte("0")); err != nil {
 		return newSystemErrorWithCause(err, "write 0 exec fifo")
 	}
+
 	// Close the O_PATH fifofd fd before exec because the kernel resets
 	// dumpable in the wrong order. This has been fixed in newer kernels, but
 	// we keep this to ensure CVE-2016-9962 doesn't re-emerge on older kernels.
@@ -217,12 +230,13 @@ func (l *linuxStandardInit) Init() error {
 	// since been resolved.
 	// https://github.com/torvalds/linux/blob/v4.9/fs/exec.c#L1290-L1318
 	unix.Close(l.fifoFd)
-	// Set seccomp as close to execve as possible, so as few syscalls take
-	// place afterward (reducing the amount of syscalls that users need to
+
+	// Load the seccomp syscall whitelist as close to execve as possible, so as few
+	// syscalls take place afterward (reducing the amount of syscalls that users need to
 	// enable in their seccomp profiles).
 	if l.config.Config.Seccomp != nil && l.config.NoNewPrivileges {
-		if err := seccomp.InitSeccomp(l.config.Config.Seccomp); err != nil {
-			return newSystemErrorWithCause(err, "init seccomp")
+		if _, err := seccomp.LoadSeccomp(l.config.Config.Seccomp); err != nil {
+			return newSystemErrorWithCause(err, "loading seccomp filtering rules")
 		}
 	}
 

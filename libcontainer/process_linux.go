@@ -61,6 +61,7 @@ type setnsProcess struct {
 	fds             []string
 	process         *Process
 	bootstrapData   io.Reader
+	container       *linuxContainer
 }
 
 func (p *setnsProcess) startTime() (uint64, error) {
@@ -119,15 +120,34 @@ func (p *setnsProcess) start() (err error) {
 		case procReady:
 			// This shouldn't happen.
 			panic("unexpected procReady in setns")
+
 		case procHooks:
 			// This shouldn't happen.
 			panic("unexpected procHooks in setns")
+
 		case reqOp:
 			// This shouldn't happen.
 			panic("unexpected reqOp in setns")
+
+		case procFd:
+			if err := writeSync(p.parentPipe, sendFd); err != nil {
+				return newSystemErrorWithCause(err, "writing syncT 'sendFd'")
+			}
+			fd, err := recvSeccompFd(p.parentPipe)
+			if err != nil {
+				return newSystemErrorWithCause(err, "receiving seccomp fd")
+			}
+			if err := p.container.procSeccompFd(fd); err != nil {
+				return newSystemErrorWithCausef(err, "processing seccomp fd")
+			}
+			if err := writeSync(p.parentPipe, procFdDone); err != nil {
+				return newSystemErrorWithCause(err, "writing syncT 'procFdDone'")
+			}
+
 		default:
 			return newSystemError(fmt.Errorf("invalid JSON payload from child"))
 		}
+		return nil
 	})
 
 	if err := unix.Shutdown(int(p.parentPipe.Fd()), unix.SHUT_WR); err != nil {
@@ -456,11 +476,26 @@ func (p *initProcess) start() error {
 			if err := json.NewDecoder(p.parentPipe).Decode(&req); err != nil {
 				return newSystemErrorWithCause(err, "receiving / decoding mountInfo'")
 			}
-			if err := p.container.initHelper(childPid, &req); err != nil {
-				return newSystemErrorWithCausef(err, "initHelper")
+			if err := p.container.handleReqOp(childPid, &req); err != nil {
+				return newSystemErrorWithCausef(err, "handleReqOp")
 			}
 			if err := writeSync(p.parentPipe, opDone); err != nil {
 				return newSystemErrorWithCause(err, "writing syncT 'opDone'")
+			}
+
+		case procFd:
+			if err := writeSync(p.parentPipe, sendFd); err != nil {
+				return newSystemErrorWithCause(err, "writing syncT 'sendFd'")
+			}
+			fd, err := recvSeccompFd(p.parentPipe)
+			if err != nil {
+				return newSystemErrorWithCause(err, "receiving seccomp fd")
+			}
+			if err := p.container.procSeccompFd(fd); err != nil {
+				return newSystemErrorWithCausef(err, "processing seccomp fd")
+			}
+			if err := writeSync(p.parentPipe, procFdDone); err != nil {
+				return newSystemErrorWithCause(err, "writing syncT 'procFdDone'")
 			}
 
 		default:
@@ -617,4 +652,28 @@ func (p *Process) InitializeIO(rootuid, rootgid int) (i *IO, err error) {
 		}
 	}
 	return i, nil
+}
+
+// Receives a seccomp file descriptor from the given pipe using cmsg(3)
+func recvSeccompFd(pipe *os.File) (int32, error) {
+	var msgs []syscall.SocketControlMessage
+
+	socket := int(pipe.Fd())
+
+	buf := make([]byte, syscall.CmsgSpace(4))
+	if _, _, _, _, err := syscall.Recvmsg(socket, nil, buf, 0); err != nil {
+		return -1, fmt.Errorf("recvmsg() failed: %s", err)
+	}
+
+	msgs, err := syscall.ParseSocketControlMessage(buf)
+	if err != nil || len(msgs) != 1 {
+		return -1, fmt.Errorf("parsing socket control msg failed: %s", err)
+	}
+
+	fd, err := syscall.ParseUnixRights(&msgs[0])
+	if err != nil {
+		return -1, fmt.Errorf("parsing unix rights msg failed: %s", err)
+	}
+
+	return int32(fd[0]), nil
 }
