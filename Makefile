@@ -26,6 +26,9 @@ SYSMGR_GRPC_SRC := $(shell find $(SYSMGR_GRPC_DIR) 2>&1 | grep -E '.*\.(c|h|go|p
 SYSFS_GRPC_DIR := ../sysbox-ipc/sysboxFsGrpc
 SYSFS_GRPC_SRC := $(shell find $(SYSFS_GRPC_DIR) 2>&1 | grep -E '.*\.(c|h|go|proto)$$')
 
+LIBSECCOMP_DIR := ../lib/seccomp-golang
+LIBSECCOMP_SRC := $(shell find $(LIBSECCOMP_DIR) 2>&1 | grep -E '.*\.(go)')
+
 MAN_DIR := $(CURDIR)/man/man8
 MAN_PAGES = $(shell ls $(MAN_DIR)/*.8)
 MAN_PAGES_BASE = $(notdir $(MAN_PAGES))
@@ -56,7 +59,7 @@ RUN_TEST_CONT := docker run ${DOCKER_RUN_PROXY} -t --privileged --rm \
 
 .DEFAULT: $(RUNC_TARGET)
 
-$(RUNC_TARGET): $(SOURCES) $(SYSMGR_GRPC_SRC) $(SYSFS_GRPC_SRC) contrib/cmd/recvtty/recvtty
+$(RUNC_TARGET): $(SOURCES) $(SYSMGR_GRPC_SRC) $(SYSFS_GRPC_SRC) $(LIBSECCOMP_SRC) contrib/cmd/recvtty/recvtty
 	$(GO) build -buildmode=pie $(EXTRA_FLAGS) -ldflags ${LDFLAGS} -tags "$(BUILDTAGS)" \
 		-o $(RUNC_TARGET) .
 
