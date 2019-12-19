@@ -21,10 +21,8 @@ COMMIT_NO := $(shell git rev-parse HEAD 2> /dev/null || true)
 COMMIT := $(if $(shell git status --porcelain --untracked-files=no),"${COMMIT_NO}-dirty","${COMMIT_NO}")
 
 SYSIPC := github.com/nestybox/sysbox/sysbox-ipc
-SYSMGR_GRPC_DIR := ../sysbox-ipc/sysboxMgrGrpc
-SYSMGR_GRPC_SRC := $(shell find $(SYSMGR_GRPC_DIR) 2>&1 | grep -E '.*\.(c|h|go|proto)$$')
-SYSFS_GRPC_DIR := ../sysbox-ipc/sysboxFsGrpc
-SYSFS_GRPC_SRC := $(shell find $(SYSFS_GRPC_DIR) 2>&1 | grep -E '.*\.(c|h|go|proto)$$')
+SYSIPC_DIR := ../sysbox-ipc
+SYSIPC_SRC := $(shell find $(SYSIPC_DIR) 2>&1 | grep -E '.*\.(c|h|go|proto)$$')
 
 LIBSECCOMP_DIR := ../lib/seccomp-golang
 LIBSECCOMP_SRC := $(shell find $(LIBSECCOMP_DIR) 2>&1 | grep -E '.*\.(go)')
@@ -60,11 +58,11 @@ RUN_TEST_CONT := docker run ${DOCKER_RUN_PROXY} -t --privileged --rm \
 
 .DEFAULT: $(RUNC_TARGET)
 
-$(RUNC_TARGET): $(SOURCES) $(SYSMGR_GRPC_SRC) $(SYSFS_GRPC_SRC) $(LIBSECCOMP_SRC) contrib/cmd/recvtty/recvtty
+$(RUNC_TARGET): $(SOURCES) $(SYSIPC_SRC) $(LIBSECCOMP_SRC) contrib/cmd/recvtty/recvtty
 	$(GO) build -buildmode=pie $(EXTRA_FLAGS) -ldflags ${LDFLAGS} -tags "$(BUILDTAGS)" \
 		-o $(RUNC_TARGET) .
 
-$(RUNC_DEBUG_TARGET): $(SOURCES) $(SYSMGR_GRPC_SRC) $(SYSFS_GRPC_SRC) contrib/cmd/recvtty/recvtty
+$(RUNC_DEBUG_TARGET): $(SOURCES) $(SYSIPC_SRC) contrib/cmd/recvtty/recvtty
 	$(GO) build -buildmode=pie $(EXTRA_FLAGS) -ldflags "-X main.gitCommit=${COMMIT} -X main.version=${VERSION} $(EXTRA_LDFLAGS)" -tags "$(BUILDTAGS)" -gcflags="all=-N -l" -o $(RUNC_TARGET) .
 
 all: $(RUNC_TARGET) recvtty
@@ -74,7 +72,7 @@ recvtty: contrib/cmd/recvtty/recvtty
 contrib/cmd/recvtty/recvtty: $(SOURCES)
 	$(GO) build -buildmode=pie $(EXTRA_FLAGS) -ldflags "-X main.gitCommit=${COMMIT} -X main.version=${VERSION} $(EXTRA_LDFLAGS)" -tags "$(BUILDTAGS)" -o contrib/cmd/recvtty/recvtty ./contrib/cmd/recvtty
 
-static: $(SOURCES) $(SYSMGR_GRPC_SRC) $(SYSFS_GRPC_SRC)
+static: $(SOURCES) $(SYSIPC_SRC)
 	CGO_ENABLED=1 $(GO) build $(EXTRA_FLAGS) -tags "$(BUILDTAGS) netgo osusergo static_build" -installsuffix netgo -ldflags "-w -extldflags -static -X main.gitCommit=${COMMIT} -X main.version=${VERSION} $(EXTRA_LDFLAGS)" -o $(RUNC_TARGET) .
 	CGO_ENABLED=1 $(GO) build $(EXTRA_FLAGS) -tags "$(BUILDTAGS) netgo osusergo static_build" -installsuffix netgo -ldflags "-w -extldflags -static -X main.gitCommit=${COMMIT} -X main.version=${VERSION} $(EXTRA_LDFLAGS)" -o contrib/cmd/recvtty/recvtty ./contrib/cmd/recvtty
 
