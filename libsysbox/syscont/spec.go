@@ -392,7 +392,6 @@ func cfgCapabilities(p *specs.Process) {
 		caps.Inheritable = linuxCaps
 		caps.Permitted = linuxCaps
 		caps.Ambient = linuxCaps
-		logrus.Debugf("enabled all capabilities in the process spec")
 	}
 }
 
@@ -607,8 +606,6 @@ func checkSpec(spec *specs.Spec) error {
 // cfgSeccomp configures the system container's seccomp settings.
 func cfgSeccomp(seccomp *specs.LinuxSeccomp) error {
 
-	// XXX: TODO: disallow / remove seccomp notification actions; those are controlled only by sysbox.
-
 	if seccomp == nil {
 		return nil
 	}
@@ -623,7 +620,7 @@ func cfgSeccomp(seccomp *specs.LinuxSeccomp) error {
 		return nil
 	}
 
-	// we don't yet support specs with default trap & trace actions
+	// we don't yet support specs with default trap, trace, or log actions
 	if seccomp.DefaultAction != specs.ActAllow &&
 		seccomp.DefaultAction != specs.ActErrno &&
 		seccomp.DefaultAction != specs.ActKill {

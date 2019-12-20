@@ -11,6 +11,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/keys"
 	"github.com/opencontainers/runc/libcontainer/seccomp"
 	"github.com/opencontainers/runc/libcontainer/system"
+	"github.com/opencontainers/runc/libcontainer/utils"
 	"github.com/opencontainers/selinux/go-selinux/label"
 	"github.com/pkg/errors"
 
@@ -63,6 +64,34 @@ func (l *linuxSetnsInit) Init() error {
 	}
 	defer label.SetProcessLabel("")
 
+	// Normally we enable seccomp just before exec'ing into the sys container's so as few
+	// syscalls take place after enabling seccomp. However, if the process does not have
+	// CAP_SYS_ADMIN (e.g., the process is non-root) and NoNewPrivileges is cleared, then
+	// we must enable seccomp here (before we drop the process caps in finalizeNamespace()
+	// below). Otherwise we get a permission denied error.
+
+	seccompNotifDone := false
+	seccompFiltDone := false
+
+	if !l.config.NoNewPrivileges &&
+		(l.config.Capabilities != nil && !utils.StringSliceContains(l.config.Capabilities.Effective, "CAP_SYS_ADMIN")) ||
+		!utils.StringSliceContains(l.config.Config.Capabilities.Effective, "CAP_SYS_ADMIN") {
+
+		if l.config.Config.SeccompNotif != nil {
+			if err := setupSyscallTraps(l.config, l.pipe); err != nil {
+				return newSystemErrorWithCause(err, "loading seccomp notification rules")
+			}
+			seccompNotifDone = true
+		}
+
+		if l.config.Config.Seccomp != nil {
+			if _, err := seccomp.LoadSeccomp(l.config.Config.Seccomp); err != nil {
+				return newSystemErrorWithCause(err, "loading seccomp filtering rules")
+			}
+			seccompFiltDone = true
+		}
+	}
+
 	if err := finalizeNamespace(l.config); err != nil {
 		return err
 	}
@@ -73,17 +102,16 @@ func (l *linuxSetnsInit) Init() error {
 	// Set seccomp as close to execve as possible, so as few syscalls take
 	// place afterward (reducing the amount of syscalls that users need to
 	// enable in their seccomp profiles).
-
-	// sysbox-runc: setup syscall trapping
-	if err := setupSyscallTraps(l.config, l.pipe); err != nil {
-		return err
-	}
-
-	// setup syscall filtering
-	if l.config.Config.Seccomp != nil && l.config.NoNewPrivileges {
-		if _, err := seccomp.LoadSeccomp(l.config.Config.Seccomp); err != nil {
-			return newSystemErrorWithCause(err, "load seccomp filters")
+	if l.config.Config.SeccompNotif != nil && !seccompNotifDone {
+		if err := setupSyscallTraps(l.config, l.pipe); err != nil {
+			return newSystemErrorWithCause(err, "loading seccomp notification rules")
 		}
 	}
+	if l.config.Config.Seccomp != nil && !seccompFiltDone {
+		if _, err := seccomp.LoadSeccomp(l.config.Config.Seccomp); err != nil {
+			return newSystemErrorWithCause(err, "loading seccomp filtering rules")
+		}
+	}
+
 	return system.Execv(l.config.Args[0], l.config.Args[0:], os.Environ())
 }
