@@ -14,6 +14,16 @@ import (
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
+// stringSliceContains returns true if x is in a
+func stringSliceContains(a []string, x string) bool {
+	for _, n := range a {
+		if x == n {
+			return true
+		}
+	}
+	return false
+}
+
 // stringSliceEqual compares two slices and returns true if they match
 func stringSliceEqual(a, b []string) bool {
 	if len(a) != len(b) {

@@ -110,3 +110,12 @@ func Annotations(labels []string) (bundle string, userAnnotations map[string]str
 func GetIntSize() int {
 	return int(unsafe.Sizeof(1))
 }
+
+func StringSliceContains(s []string, val string) bool {
+	for _, n := range s {
+		if val == n {
+			return true
+		}
+	}
+	return false
+}

@@ -13,6 +13,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/keys"
 	"github.com/opencontainers/runc/libcontainer/seccomp"
 	"github.com/opencontainers/runc/libcontainer/system"
+	"github.com/opencontainers/runc/libcontainer/utils"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/opencontainers/selinux/go-selinux"
 	"github.com/pkg/errors"
@@ -165,8 +166,6 @@ func (l *linuxStandardInit) Init() error {
 		}
 	}
 
-	// XXX: See if we can move this sync *after* the seccomp sync below; it would look nicer.
-
 	// Tell our parent that we're ready to Execv. This must be done before the
 	// Seccomp rules have been applied, because we need to be able to read and
 	// write to a socket.
@@ -178,6 +177,34 @@ func (l *linuxStandardInit) Init() error {
 		return errors.Wrap(err, "set process label")
 	}
 	defer selinux.SetExecLabel("")
+
+	// Normally we enable seccomp just before exec'ing into the sys container's so as few
+	// syscalls take place after enabling seccomp. However, if the process does not have
+	// CAP_SYS_ADMIN (e.g., the process is non-root) and NoNewPrivileges is cleared, then
+	// we must enable seccomp here (before we drop the process caps in finalizeNamespace()
+	// below). Otherwise we get a permission denied error.
+
+	seccompNotifDone := false
+	seccompFiltDone := false
+
+	if !l.config.NoNewPrivileges &&
+		(l.config.Capabilities != nil && !utils.StringSliceContains(l.config.Capabilities.Effective, "CAP_SYS_ADMIN")) ||
+		!utils.StringSliceContains(l.config.Config.Capabilities.Effective, "CAP_SYS_ADMIN") {
+
+		if l.config.Config.SeccompNotif != nil {
+			if err := setupSyscallTraps(l.config, l.pipe); err != nil {
+				return err
+			}
+			seccompNotifDone = true
+		}
+
+		if l.config.Config.Seccomp != nil {
+			if _, err := seccomp.LoadSeccomp(l.config.Config.Seccomp); err != nil {
+				return newSystemErrorWithCause(err, "loading seccomp filtering rules")
+			}
+			seccompFiltDone = true
+		}
+	}
 
 	// finalizeNamespace drops the caps, sets the correct user and working dir, and marks
 	// any leaked file descriptors for closing before executing the command inside the
@@ -207,9 +234,11 @@ func (l *linuxStandardInit) Init() error {
 		return err
 	}
 
-	// sysbox-runc: setup syscall trapping
-	if err := setupSyscallTraps(l.config, l.pipe); err != nil {
-		return err
+	// sysbox-runc: setup syscall trapping (must do this before closing the pipe)
+	if l.config.Config.SeccompNotif != nil && !seccompNotifDone {
+		if err := setupSyscallTraps(l.config, l.pipe); err != nil {
+			return err
+		}
 	}
 
 	// Close the pipe to signal that we have completed our init.
@@ -238,7 +267,7 @@ func (l *linuxStandardInit) Init() error {
 	// Load the seccomp syscall whitelist as close to execve as possible, so as few
 	// syscalls take place afterward (reducing the amount of syscalls that users need to
 	// enable in their seccomp profiles).
-	if l.config.Config.Seccomp != nil && l.config.NoNewPrivileges {
+	if l.config.Config.Seccomp != nil && !seccompFiltDone {
 		if _, err := seccomp.LoadSeccomp(l.config.Config.Seccomp); err != nil {
 			return newSystemErrorWithCause(err, "loading seccomp filtering rules")
 		}

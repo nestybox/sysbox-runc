@@ -601,7 +601,7 @@ func signalAllProcesses(m cgroups.Manager, s os.Signal) error {
 func setupSyscallTraps(config *initConfig, pipe *os.File) error {
 
 	// Load the seccomp notification filter here (for syscall trapping inside the container)
-	if len(config.Config.SeccompNotif.Syscalls) > 0 {
+	if config.Config.SeccompNotif != nil && len(config.Config.SeccompNotif.Syscalls) > 0 {
 
 		fd, err := seccomp.LoadSeccomp(config.Config.SeccompNotif)
 		if err != nil {

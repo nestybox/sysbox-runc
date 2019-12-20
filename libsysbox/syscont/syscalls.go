@@ -347,6 +347,9 @@ var syscontSyscallWhitelist = []string{
 }
 
 // List of syscalls trapped & emulated inside a system container
+//
+// NOTE: all of these must also be in the syscontSyscallWhitelist, as otherwise seccomp
+// will block them.
 var syscontSyscallTrapList = []string{
 	"mount",
 }
@@ -359,19 +362,21 @@ func AddSyscallTraps(config *configs.Config) error {
 		return fmt.Errorf("conflicting seccomp notification config found.")
 	}
 
-	list := []*configs.Syscall{}
-	for _, call := range syscontSyscallTrapList {
-		s := &configs.Syscall{
-			Name:   call,
-			Action: configs.Notify,
+	if len(syscontSyscallTrapList) > 0 {
+		list := []*configs.Syscall{}
+		for _, call := range syscontSyscallTrapList {
+			s := &configs.Syscall{
+				Name:   call,
+				Action: configs.Notify,
+			}
+			list = append(list, s)
 		}
-		list = append(list, s)
-	}
 
-	config.SeccompNotif = &configs.Seccomp{
-		DefaultAction: configs.Allow,
-		Architectures: config.Seccomp.Architectures,
-		Syscalls:      list,
+		config.SeccompNotif = &configs.Seccomp{
+			DefaultAction: configs.Allow,
+			Architectures: config.Seccomp.Architectures,
+			Syscalls:      list,
+		}
 	}
 
 	return nil
