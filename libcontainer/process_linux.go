@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall" // only for Signal
 
 	"github.com/opencontainers/runc/libcontainer/cgroups"
@@ -370,12 +371,29 @@ func (p *initProcess) start() error {
 	sysFs := p.container.sysFs
 	if sysFs.Enabled() {
 		c := p.container
+
+		procRoPaths := []string{}
+		for _, p := range c.config.ReadonlyPaths {
+			if strings.HasPrefix(p, "/proc") {
+				procRoPaths = append(procRoPaths, p)
+			}
+		}
+
+		procMaskPaths := []string{}
+		for _, p := range c.config.MaskPaths {
+			if strings.HasPrefix(p, "/proc") {
+				procMaskPaths = append(procMaskPaths, p)
+			}
+		}
+
 		info := &sysbox.FsRegInfo{
-			Hostname: c.config.Hostname,
-			Pid:      childPid,
-			Uid:      c.config.UidMappings[0].HostID,
-			Gid:      c.config.GidMappings[0].HostID,
-			IdSize:   c.config.UidMappings[0].Size,
+			Hostname:      c.config.Hostname,
+			Pid:           childPid,
+			Uid:           c.config.UidMappings[0].HostID,
+			Gid:           c.config.GidMappings[0].HostID,
+			IdSize:        c.config.UidMappings[0].Size,
+			ProcRoPaths:   procRoPaths,
+			ProcMaskPaths: procMaskPaths,
 		}
 		if err := sysFs.Register(info); err != nil {
 			return newSystemErrorWithCause(err, "registering with sysbox-fs")

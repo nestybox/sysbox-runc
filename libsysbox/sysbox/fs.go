@@ -17,19 +17,21 @@ import (
 	fdlib "github.com/ftrvxmtrx/fd"
 )
 
-// FsRegInfo contains info about a container registered with sysbox-fs
+// FsRegInfo contains info about a sys container registered with sysbox-fs
 type FsRegInfo struct {
-	Hostname string
-	Pid      int
-	Uid      int
-	Gid      int
-	IdSize   int
+	Hostname      string
+	Pid           int
+	Uid           int
+	Gid           int
+	IdSize        int
+	ProcRoPaths   []string
+	ProcMaskPaths []string
 }
 
 type Fs struct {
 	Active bool
 	Id     string // container-id
-	Reg    bool   // indicates if container was registered with sysbox-mgr
+	Reg    bool   // indicates if sys container was registered with sysbox-fs
 }
 
 func NewFs(id string, enable bool) *Fs {
@@ -49,13 +51,15 @@ func (fs *Fs) Register(info *FsRegInfo) error {
 		return fmt.Errorf("container %v already registered", fs.Id)
 	}
 	data := &sysboxFsGrpc.ContainerData{
-		Id:       fs.Id,
-		InitPid:  int32(info.Pid),
-		Hostname: info.Hostname,
-		UidFirst: int32(info.Uid),
-		UidSize:  int32(info.IdSize),
-		GidFirst: int32(info.Gid),
-		GidSize:  int32(info.IdSize),
+		Id:            fs.Id,
+		InitPid:       int32(info.Pid),
+		Hostname:      info.Hostname,
+		UidFirst:      int32(info.Uid),
+		UidSize:       int32(info.IdSize),
+		GidFirst:      int32(info.Gid),
+		GidSize:       int32(info.IdSize),
+		ProcRoPaths:   info.ProcRoPaths,
+		ProcMaskPaths: info.ProcMaskPaths,
 	}
 	if err := sysboxFsGrpc.SendContainerRegistration(data); err != nil {
 		return fmt.Errorf("failed to register with sysbox-fs: %v", err)
