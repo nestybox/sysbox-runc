@@ -51,10 +51,11 @@ HEADERS_BASE := $(shell find /usr/src/$(HEADERS) -maxdepth 1 -type l -exec readl
 RUN_TEST_CONT := docker run ${DOCKER_RUN_PROXY} -t --privileged --rm \
 		-v $(CURDIR):$(RUNC)                                 \
 		-v $(CURDIR)/../sysbox-ipc:$(NBOX)/sysbox-ipc        \
+		-v $(CURDIR)/../lib:$(NBOX)/lib                      \
 		-v /lib/modules/$(KERNEL_REL):/lib/modules/$(KERNEL_REL):ro \
-		-v /usr/src/$(HEADERS):/usr/src/$(HEADERS):ro \
-		-v /usr/src/$(HEADERS_BASE):/usr/src/$(HEADERS_BASE):ro \
-		-v $(GOPATH)/pkg/mod:/go/pkg/mod                     \
+		-v /usr/src/$(HEADERS):/usr/src/$(HEADERS):ro               \
+		-v /usr/src/$(HEADERS_BASE):/usr/src/$(HEADERS_BASE):ro     \
+		-v $(GOPATH)/pkg/mod:/go/pkg/mod                            \
 		$(RUNC_IMAGE)
 
 .DEFAULT: $(RUNC_TARGET)
@@ -127,11 +128,12 @@ localrootlessintegration: all
 shell: runcimage
 	docker run ${DOCKER_RUN_PROXY} -ti --privileged --rm \
 	   -v $(CURDIR):$(RUNC)                              \
-	   -v $(CURDIR)/../sysbox-ipc:$(NBOX)/sysbox-ipc \
+	   -v $(CURDIR)/../sysbox-ipc:$(NBOX)/sysbox-ipc     \
+	   -v $(CURDIR)/../lib:$(NBOX)/lib                   \
 	   -v /lib/modules/$(KERNEL_REL):/lib/modules/$(KERNEL_REL):ro \
-	   -v /usr/src/$(HEADERS):/usr/src/$(HEADERS):ro \
-	   -v /usr/src/$(HEADERS_BASE):/usr/src/$(HEADERS_BASE):ro \
-	   -v $(GOPATH)/pkg/mod:/go/pkg/mod                  \
+	   -v /usr/src/$(HEADERS):/usr/src/$(HEADERS):ro               \
+	   -v /usr/src/$(HEADERS_BASE):/usr/src/$(HEADERS_BASE):ro     \
+	   -v $(GOPATH)/pkg/mod:/go/pkg/mod                            \
 	   $(RUNC_IMAGE) bash
 
 install:

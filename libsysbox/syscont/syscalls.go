@@ -374,7 +374,7 @@ func AddSyscallTraps(config *configs.Config) error {
 
 		config.SeccompNotif = &configs.Seccomp{
 			DefaultAction: configs.Allow,
-			Architectures: config.Seccomp.Architectures,
+			Architectures: []string{"amd64"},
 			Syscalls:      list,
 		}
 	}

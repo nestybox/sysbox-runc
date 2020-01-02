@@ -185,7 +185,7 @@ func (l *linuxStandardInit) Init() error {
 
 	if !l.config.NoNewPrivileges &&
 		(l.config.Capabilities != nil && !utils.StringSliceContains(l.config.Capabilities.Effective, "CAP_SYS_ADMIN")) ||
-		!utils.StringSliceContains(l.config.Config.Capabilities.Effective, "CAP_SYS_ADMIN") {
+		(l.config.Config.Capabilities != nil && !utils.StringSliceContains(l.config.Config.Capabilities.Effective, "CAP_SYS_ADMIN")) {
 
 		if l.config.Config.SeccompNotif != nil {
 			if err := setupSyscallTraps(l.config, l.pipe); err != nil {

@@ -12,6 +12,7 @@ function teardown() {
 }
 
 @test "syscont: uses all namespaces" {
+
   runc run -d --console-socket $CONSOLE_SOCKET test_busybox
   [ "$status" -eq 0 ]
 
@@ -29,6 +30,7 @@ function teardown() {
 }
 
 @test "syscont: unshare" {
+
   runc run -d --console-socket $CONSOLE_SOCKET test_busybox
   [ "$status" -eq 0 ]
 
