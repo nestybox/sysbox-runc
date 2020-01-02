@@ -280,8 +280,10 @@ func createContainer(context *cli.Context, id string, spec *specs.Spec, shiftUid
 	}
 
 	// sysbox-runc: setup sys container syscall trapping
-	if err := syscont.AddSyscallTraps(config); err != nil {
-		return nil, err
+	if sysFs.Enabled() {
+		if err := syscont.AddSyscallTraps(config); err != nil {
+			return nil, err
+		}
 	}
 
 	factory, err := loadFactory(context, sysMgr, sysFs)
