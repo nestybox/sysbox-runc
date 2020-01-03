@@ -1,5 +1,7 @@
 package mount
 
+import "fmt"
+
 // GetMounts retrieves a list of mounts for the current running process.
 func GetMounts() ([]*Info, error) {
 	return parseMountTable()
@@ -37,4 +39,19 @@ func MountedWithFs(mountpoint string, fs string) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+// GetMountAt returns information about the given mountpoint.
+func GetMountAt(mountpoint string) (*Info, error) {
+	entries, err := parseMountTable()
+	if err != nil {
+		return nil, err
+	}
+	// Search the table for the given mountpoint
+	for _, e := range entries {
+		if e.Mountpoint == mountpoint {
+			return e, nil
+		}
+	}
+	return nil, fmt.Errorf("%s is not a mountpoint", mountpoint)
 }
