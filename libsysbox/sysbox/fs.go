@@ -15,7 +15,7 @@ import (
 
 // FsRegInfo contains info about a sys container registered with sysbox-fs
 type FsRegInfo struct {
-	Hostname      string
+	Rootfs        string
 	Pid           int
 	Uid           int
 	Gid           int
@@ -49,7 +49,7 @@ func (fs *Fs) Register(info *FsRegInfo) error {
 	data := &sysboxFsGrpc.ContainerData{
 		Id:            fs.Id,
 		InitPid:       int32(info.Pid),
-		Hostname:      info.Hostname,
+		Rootfs:        info.Rootfs,
 		UidFirst:      int32(info.Uid),
 		UidSize:       int32(info.IdSize),
 		GidFirst:      int32(info.Gid),
