@@ -387,7 +387,7 @@ func (p *initProcess) start() error {
 		}
 
 		info := &sysbox.FsRegInfo{
-			Hostname:      c.config.Hostname,
+			Rootfs:        c.config.Rootfs,
 			Pid:           childPid,
 			Uid:           c.config.UidMappings[0].HostID,
 			Gid:           c.config.GidMappings[0].HostID,
