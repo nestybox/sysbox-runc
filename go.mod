@@ -9,6 +9,7 @@ require (
 	github.com/containerd/console v1.0.1
 	github.com/coreos/go-systemd/v22 v22.1.0
 	github.com/cyphar/filepath-securejoin v0.2.2
+	github.com/davecgh/go-spew v1.1.1
 	github.com/deckarep/golang-set v1.7.1
 	github.com/docker/go-units v0.4.0
 	github.com/ftrvxmtrx/fd v0.0.0-20150925145434-c6d800382fff
