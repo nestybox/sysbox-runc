@@ -445,7 +445,7 @@ func (p *initProcess) start() (retErr error) {
 		}
 
 		info := &sysbox.FsRegInfo{
-			Rootfs:        c.config.Rootfs,
+			Hostname:      c.config.Hostname,
 			Pid:           childPid,
 			Uid:           c.config.UidMappings[0].HostID,
 			Gid:           c.config.GidMappings[0].HostID,
