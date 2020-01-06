@@ -9,19 +9,15 @@ require (
 	github.com/coreos/go-systemd v0.0.0-20190321100706-95778dfbb74e
 	github.com/coreos/pkg v0.0.0-20180928190104-399ea9e2e55f // indirect
 	github.com/cyphar/filepath-securejoin v0.2.2
-	github.com/davecgh/go-spew v1.1.1
 	github.com/deckarep/golang-set v1.7.1
 	github.com/docker/go-units v0.4.0
-	github.com/ftrvxmtrx/fd v0.0.0-20150925145434-c6d800382fff
 	github.com/godbus/dbus v5.0.0+incompatible
 	github.com/golang/protobuf v1.3.1
 	github.com/mrunalp/fileutils v0.0.0-20171103030105-7d4729fb3618
-	github.com/nestybox/sysbox-ipc v0.1.3
-	github.com/opencontainers/runc v0.0.0
+	github.com/opencontainers/runc v0.0.0-00010101000000-000000000000
 	github.com/opencontainers/runtime-spec v1.0.2-0.20191218002532-bab266ed033b
 	github.com/opencontainers/selinux v1.2.2
 	github.com/pkg/errors v0.8.1
-	github.com/seccomp/libseccomp-golang v0.9.1
 	github.com/sirupsen/logrus v1.4.2
 	github.com/syndtr/gocapability v0.0.0-20180916011248-d98352740cb2
 	github.com/urfave/cli v1.20.0
