@@ -83,6 +83,9 @@ var sysboxMounts = []specs.Mount{
 
 // system container mounts virtualized by sysbox-fs
 var sysboxFsMounts = []specs.Mount{
+	//
+	// procfs mounts
+	//
 	specs.Mount{
 		Destination: "/proc/sys",
 		Source:      filepath.Join(SysboxFsDir, "proc/sys"),
@@ -110,7 +113,6 @@ var sysboxFsMounts = []specs.Mount{
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
-
 	// specs.Mount{
 	// 	Destination: "/proc/cgroups",
 	// 	Source:      filepath.Join(SysboxFsDir, "proc/cgroups"),
@@ -159,6 +161,16 @@ var sysboxFsMounts = []specs.Mount{
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
+
+	//
+	// sysfs mounts
+	//
+	specs.Mount{
+		Destination: "/sys/module/nf_conntrack/parameters/hashsize",
+		Source:      filepath.Join(SysboxFsDir, "sys/module/nf_conntrack/parameters/hashsize"),
+		Type:        "bind",
+		Options:     []string{"rbind", "rprivate"},
+	},
 }
 
 // sysbox's systemd mount requirements
