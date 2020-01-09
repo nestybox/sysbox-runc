@@ -71,6 +71,19 @@ func (l *linuxStandardInit) Init() error {
 		return newSystemErrorWithCause(err, "validating cwd")
 	}
 
+	if err := setupNetwork(l.config); err != nil {
+		return err
+	}
+	if err := setupRoute(l.config.Config); err != nil {
+		return err
+	}
+
+	// initialises the labeling system
+	selinux.GetEnabled()
+	if err := prepareRootfs(l.pipe, l.config); err != nil {
+		return err
+	}
+
 	if !l.config.Config.NoNewKeyring {
 		if err := selinux.SetKeyLabel(l.config.ProcessLabel); err != nil {
 			return err
@@ -101,18 +114,6 @@ func (l *linuxStandardInit) Init() error {
 		}
 	}
 
-	if err := setupNetwork(l.config); err != nil {
-		return err
-	}
-	if err := setupRoute(l.config.Config); err != nil {
-		return err
-	}
-
-	// initialises the labeling system
-	selinux.GetEnabled()
-	if err := prepareRootfs(l.pipe, l.config); err != nil {
-		return err
-	}
 	// Set up the console. This has to be done *before* we finalize the rootfs,
 	// but *after* we've given the user the chance to set up all of the mounts
 	// they wanted.
