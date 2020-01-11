@@ -352,6 +352,8 @@ var syscontSyscallWhitelist = []string{
 // will block them.
 var syscontSyscallTrapList = []string{
 	"mount",
+	"umount",
+	"umount2",
 }
 
 // AddSyscallTraps modifies the given libcontainer config to add seccomp notification
