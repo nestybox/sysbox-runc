@@ -9,8 +9,8 @@ func GetMounts() ([]*Info, error) {
 	return parseMountTable()
 }
 
-// GetMountsPid retrieves a list of mounts for the 'pid' process.
-func GetMountsPid(pid uint32) ([]*Info, error) {
+// GetMounts retrieves a list of mounts for the 'pid' process.
+func GetMountsForPid(pid uint32) ([]*Info, error) {
 	return parseMountTableForPid(pid)
 }
 
@@ -63,8 +63,8 @@ func GetMountAt(mountpoint string) (*Info, error) {
 	return nil, fmt.Errorf("%s is not a mountpoint", mountpoint)
 }
 
-// GetMountAtPid returns information about the given mountpoint and pid.
-func GetMountAtPid(pid uint32, mountpoint string) (*Info, error) {
+// GetMountAtForPid returns information about the given mountpoint and pid.
+func GetMountAtForPid(pid uint32, mountpoint string) (*Info, error) {
 	entries, err := parseMountTableForPid(pid)
 	if err != nil {
 		return nil, err
