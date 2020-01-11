@@ -40,6 +40,17 @@ func parseMountTable() ([]*Info, error) {
 	return parseInfoFile(f)
 }
 
+// Same as above function but for a specific pid this time.
+func parseMountTableForPid(pid uint32) ([]*Info, error) {
+	f, err := os.Open(fmt.Sprintf("/proc/%d/mountinfo", pid))
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	return parseInfoFile(f)
+}
+
 func parseInfoFile(r io.Reader) ([]*Info, error) {
 	var (
 		s   = bufio.NewScanner(r)
