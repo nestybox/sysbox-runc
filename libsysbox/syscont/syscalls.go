@@ -352,7 +352,6 @@ var syscontSyscallWhitelist = []string{
 // will block them.
 var syscontSyscallTrapList = []string{
 	"mount",
-	"umount",
 	"umount2",
 }
 
