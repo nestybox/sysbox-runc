@@ -137,6 +137,10 @@ func finalizeNamespace(config *initConfig) error {
 	// Ensure that all unwanted fds we may have accidentally
 	// inherited are marked close-on-exec so they stay out of the
 	// container
+	//
+	// XXX: CloseExecFrom relies on the presence procfs being mounted inside the sys container.
+	// This means a setns entry into the sys container (e.g., via docker exec) would fail if
+	// /proc is not mounted in the container.
 	if err := utils.CloseExecFrom(config.PassedFilesCount + 3); err != nil {
 		return errors.Wrap(err, "close exec fds")
 	}
