@@ -1016,6 +1016,13 @@ void nsexec(void)
 			prctl(PR_SET_NAME, (unsigned long)"runc:[2:INIT]", 0, 0, 0);
 
          // sysbox-runc: set the oom score adjustment to the configured value.
+         //
+         // XXX: this operation relies on /proc being mounted; when
+         // doing a setns entry (e.g., docker exec or via sysbox-fs
+         // re-exec, /proc may not be mounted if it was unmounted in
+         // the sys container by a user). Thus, we should skip this
+         // step (or alternatively prevent users from unmounting /proc
+         // inside the sys container).
          update_oom_score_adj(config.oom_score_adj, config.oom_score_adj_len);
 
 			if (read(syncfd, &s, sizeof(s)) != sizeof(s))
