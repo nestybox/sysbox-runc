@@ -179,19 +179,19 @@ var sysboxSystemdMounts = []specs.Mount{
 		Destination: "/run",
 		Source:      "tmpfs",
 		Type:        "tmpfs",
-		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "tmpcopyup", "size=64m"},
+		Options:     []string{"rw", "rprivate", "nosuid", "nodev", "mode=755", "size=64m"},
 	},
 	specs.Mount{
 		Destination: "/run/lock",
 		Source:      "tmpfs",
 		Type:        "tmpfs",
-		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "tmpcopyup", "size=4m"},
+		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "size=4m"},
 	},
 	specs.Mount{
 		Destination: "/tmp",
 		Source:      "tmpfs",
 		Type:        "tmpfs",
-		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "tmpcopyup", "size=64m"},
+		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "size=64m"},
 	},
 }
 
