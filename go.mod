@@ -14,6 +14,7 @@ require (
 	github.com/godbus/dbus v5.0.0+incompatible
 	github.com/golang/protobuf v1.3.1
 	github.com/mrunalp/fileutils v0.0.0-20171103030105-7d4729fb3618
+	github.com/nestybox/sysbox-ipc v0.0.0-00010101000000-000000000000
 	github.com/opencontainers/runc v0.0.0-00010101000000-000000000000
 	github.com/opencontainers/runtime-spec v1.0.2-0.20191218002532-bab266ed033b
 	github.com/opencontainers/selinux v1.2.2
