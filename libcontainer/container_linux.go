@@ -2290,9 +2290,9 @@ func (c *linuxContainer) handleBindOp(childPid int, req *opReq) error {
 
 // Processes a seccomp notification file-descriptor for the sys container by passing it to
 // sysbox-fs to setup syscall trapping.
-func (c *linuxContainer) procSeccompFd(fd int32) error {
+func (c *linuxContainer) procSeccompInit(pid int, fd int32) error {
 	if c.sysFs.Enabled() {
-		if err := c.sysFs.SendSeccompFd(c.id, fd); err != nil {
+		if err := c.sysFs.SendSeccompInit(pid, c.id, fd); err != nil {
 			return newSystemErrorWithCause(err, "sending seccomp fd to sysbox-fs")
 		}
 	}

@@ -82,7 +82,7 @@ func (fs *Fs) SendCreationTime(t time.Time) error {
 
 // Sends the seccomp-notification fd to sysbox-fs (tracer) to setup syscall
 // trapping and waits for its response (ack).
-func (fs *Fs) SendSeccompFd(id string, seccompFd int32) error {
+func (fs *Fs) SendSeccompInit(pid int, id string, seccompFd int32) error {
 
 	// TODO: Think about a better location for this one.
 	const seccompTracerSockAddr = "/run/sysbox/sysfs-seccomp.sock"
@@ -93,12 +93,12 @@ func (fs *Fs) SendSeccompFd(id string, seccompFd int32) error {
 		return err
 	}
 
-	if err = unixIpc.SendSeccompNotifMsg(conn, seccompFd, id); err != nil {
+	if err = unixIpc.SendSeccompInitMsg(conn, int32(pid), id, seccompFd); err != nil {
 		fmt.Errorf("Unable to send message to seccomp-tracer: %v\n", err)
 		return err
 	}
 
-	if err = unixIpc.RecvSeccompNotifAckMsg(conn); err != nil {
+	if err = unixIpc.RecvSeccompInitAckMsg(conn); err != nil {
 		fmt.Errorf("Unable to receive expected seccomp-notif-ack message: %v\n", err)
 		return err
 	}
