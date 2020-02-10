@@ -180,7 +180,7 @@ func (p *setnsProcess) start() (retErr error) {
 			if err != nil {
 				return newSystemErrorWithCause(err, "receiving seccomp fd")
 			}
-			if err := p.container.procSeccompFd(fd); err != nil {
+			if err := p.container.procSeccompInit(p.pid(), fd); err != nil {
 				return newSystemErrorWithCausef(err, "processing seccomp fd")
 			}
 			if err := writeSync(p.messageSockPair.parent, procFdDone); err != nil {
@@ -592,7 +592,8 @@ func (p *initProcess) start() (retErr error) {
 			if err != nil {
 				return newSystemErrorWithCause(err, "receiving seccomp fd")
 			}
-			if err := p.container.procSeccompFd(fd); err != nil {
+			if err := p.container.procSeccompInit(
+				p.container.initProcess.pid(), fd); err != nil {
 				return newSystemErrorWithCausef(err, "processing seccomp fd")
 			}
 			if err := writeSync(p.messageSockPair.parent, procFdDone); err != nil {

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/nestybox/sysbox-ipc/sysboxFsGrpc"
+	unixIpc "github.com/nestybox/sysbox-ipc/unix"
 )
 
 // FsRegInfo contains info about a sys container registered with sysbox-fs
@@ -81,8 +82,27 @@ func (fs *Fs) SendCreationTime(t time.Time) error {
 
 // Sends the seccomp-notification fd to sysbox-fs (tracer) to setup syscall
 // trapping and waits for its response (ack).
-func (fs *Fs) SendSeccompFd(id string, seccompFd int32) error {
-	// TODO: implement this function
+func (fs *Fs) SendSeccompInit(pid int, id string, seccompFd int32) error {
+
+	// TODO: Think about a better location for this one.
+	const seccompTracerSockAddr = "/run/sysbox/sysfs-seccomp.sock"
+
+	conn, err := unixIpc.Connect(seccompTracerSockAddr)
+	if err != nil {
+		fmt.Errorf("Unable to establish connection with seccomp-tracer: %v\n", err)
+		return err
+	}
+
+	if err = unixIpc.SendSeccompInitMsg(conn, int32(pid), id, seccompFd); err != nil {
+		fmt.Errorf("Unable to send message to seccomp-tracer: %v\n", err)
+		return err
+	}
+
+	if err = unixIpc.RecvSeccompInitAckMsg(conn); err != nil {
+		fmt.Errorf("Unable to receive expected seccomp-notif-ack message: %v\n", err)
+		return err
+	}
+
 	return nil
 }
 
