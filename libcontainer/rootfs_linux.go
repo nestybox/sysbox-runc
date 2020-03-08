@@ -1058,7 +1058,7 @@ func allowShiftfsBindSource(source, rootfs string) error {
 // critical excutables for the host and mounting shiftfs on them will implicitly make
 // them non-executable in the host's mount namespace, rendering the host unusable.
 var shiftfsBlackList = []string{
-	"/", "/bin", "/sbin", "/usr/bin", "/usr/sbin", "/usr/local/bin", "/usr/local/sbin", "/dev",
+	"/", "/bin", "/sbin", "/usr/bin", "/usr/sbin", "/usr/local/bin", "/usr/local/sbin", "/dev", "/run", "/var/run",
 }
 
 // sysbox-runc: skipShiftfsBindSource indicates if shiftfs mounts should be skipped on the
