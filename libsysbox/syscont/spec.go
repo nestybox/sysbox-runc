@@ -551,7 +551,7 @@ func cfgLinuxHeadersMount(spec *specs.Spec) error {
 // sysMgrSetupMounts requests the sysbox-mgr to setup special sys container mounts
 func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, shiftUids bool) error {
 
-	// This directories in the sys container are backed by mounts handled by sysbox-mgr
+	// These directories in the sys container are backed by mounts handled by sysbox-mgr
 	specialDir := map[string]bool{
 		"/var/lib/docker":  true,
 		"/var/lib/kubelet": true,
