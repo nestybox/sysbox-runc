@@ -29,7 +29,7 @@ func Mount(path string) error {
 }
 
 func Unmount(path string) error {
-	if err := unix.Unmount(path, 0); err != nil {
+	if err := unix.Unmount(path, unix.MNT_DETACH); err != nil {
 		return fmt.Errorf("failed to unmount %s: %v", path, err)
 	}
 	return nil
