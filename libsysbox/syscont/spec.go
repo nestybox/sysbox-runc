@@ -397,13 +397,23 @@ func cfgCapabilities(p *specs.Process) {
 	caps := p.Capabilities
 	uid := p.User.UID
 
-	// In a sys container, init procesees owned by root have all capabilities
+	noCaps := []string{}
+
 	if uid == 0 {
+		// init processes owned by root have all capabilities
 		caps.Bounding = linuxCaps
 		caps.Effective = linuxCaps
 		caps.Inheritable = linuxCaps
 		caps.Permitted = linuxCaps
 		caps.Ambient = linuxCaps
+	} else {
+		// init processes owned by others have all caps disabled and the bounding caps all
+		// set (just as in a regular host)
+		caps.Bounding = linuxCaps
+		caps.Effective = noCaps
+		caps.Inheritable = noCaps
+		caps.Permitted = noCaps
+		caps.Ambient = noCaps
 	}
 }
 
