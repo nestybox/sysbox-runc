@@ -56,11 +56,8 @@ function teardown() {
   done
 }
 
-# A sys container non-root init process caps are set per the container's spec
-@test "syscont: exec non-root process caps" {
-
-  sed -i "/\"CAP_SYS_ADMIN\",/d"  ${BUSYBOX_BUNDLE}/config.json
-  sed -i "/\"CAP_NET_ADMIN\",/d"  ${BUSYBOX_BUNDLE}/config.json
+# A sys container non-root init process caps are all cleared, except CapBnd
+@test "syscont: non-root process caps" {
 
   sed -i "s/\"uid\": 0/\"uid\": 1000/" ${BUSYBOX_BUNDLE}/config.json
   sed -i "s/\"gid\": 0/\"gid\": 1000/" ${BUSYBOX_BUNDLE}/config.json
@@ -68,39 +65,42 @@ function teardown() {
   runc run -d --console-socket $CONSOLE_SOCKET test_busybox
   [ "$status" -eq 0 ]
 
-  for capType in CapInh CapPrm CapEff CapBnd CapAmb
+  runc exec test_busybox grep CapBnd /proc/1/status
+  [ "$status" -eq 0 ]
+  [[ "${output}" == *"0000003fffffffff"* ]]
+
+  for capType in CapInh CapPrm CapEff CapAmb
   do
     runc exec test_busybox grep "$capType" /proc/1/status
     [ "$status" -eq 0 ]
-    [[ "${output}" == *"0000003fffdfefff"* ]]
+    [[ "${output}" == *"0000000000000000"* ]]
   done
 }
 
-# A sys container non-root process caps are set per the container's spec when entered via exec
+# A sys container non-root init process caps are all cleared when entered via exec (except CapBnd)
 @test "syscont: exec non-root process caps" {
-
-  sed -i "/\"CAP_SYS_ADMIN\",/d"  ${BUSYBOX_BUNDLE}/config.json
-  sed -i "/\"CAP_NET_ADMIN\",/d"  ${BUSYBOX_BUNDLE}/config.json
 
   runc run -d --console-socket $CONSOLE_SOCKET test_busybox
   [ "$status" -eq 0 ]
 
-  for capType in CapInh CapPrm CapEff CapBnd CapAmb
+  for capType in CapInh CapPrm CapEff CapAmb
   do
     runc exec --user 1000:1000 test_busybox grep "$capType" /proc/self/status
     [ "$status" -eq 0 ]
-    [[ "${output}" == *"0000003fffdfefff"* ]]
+    [[ "${output}" == *"0000000000000000"* ]]
   done
+
+  runc exec --user 1000:1000 test_busybox grep CapBnd /proc/self/status
+  [ "$status" -eq 0 ]
+  [[ "${output}" == *"0000003fffffffff"* ]]
 }
 
 
 # TODO: Verify sysbox-runc exec caps are set correctly when giving exec a process.json
 
-
 # TODO: Verify that sysbox-runc exec cap override works
 # - create spec without any caps and run sys container
 # - exec into sys container as user 0 with --cap=CAP_SYS_ADMIN; verify root has all caps
 # - exec into sys container as user 1000 with --cap=CAP_SYS_ADMIN; verify root has CAP_SYS_ADMIN only
-
 
 # TODO: Verify specs without capabilities object are handled correctly
