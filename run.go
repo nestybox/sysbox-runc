@@ -96,6 +96,18 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 			}()
 		}
 
+		// pre-register with sysFs
+		if sysFs.Enabled() {
+			if err = sysFs.PreRegister(); err != nil {
+				return err
+			}
+			defer func() {
+				if err != nil {
+					sysFs.Unregister()
+				}
+			}()
+		}
+
 		spec, shiftUids, err = setupSpec(context, sysMgr, sysFs)
 		if err != nil {
 			return err
@@ -112,7 +124,6 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 			os.Exit(status)
 		}
 
-		sysFs.Unregister()
 		return err
 	},
 }

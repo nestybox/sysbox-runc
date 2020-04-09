@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	mapset "github.com/deckarep/golang-set"
@@ -354,29 +355,35 @@ func allocIDMappings(sysMgr *sysbox.Mgr, spec *specs.Spec) error {
 	return nil
 }
 
-// validateIDMappings checks if the spec's user namespace uid and gid mappings meet sysbox-runc requirements
+// validateIDMappings checks if the spec's user namespace uid and gid mappings meet
+// sysbox-runc requirements
 func validateIDMappings(spec *specs.Spec) error {
 
 	if len(spec.Linux.UIDMappings) != 1 {
-		return fmt.Errorf("sysbox-runc requires user namespace uid mapping array have one element; found %v", spec.Linux.UIDMappings)
+		return fmt.Errorf("sysbox-runc requires user namespace uid mapping array have one element; found %v",
+			spec.Linux.UIDMappings)
 	}
 
 	if len(spec.Linux.GIDMappings) != 1 {
-		return fmt.Errorf("sysbox-runc requires user namespace gid mapping array have one element; found %v", spec.Linux.GIDMappings)
+		return fmt.Errorf("sysbox-runc requires user namespace gid mapping array have one element; found %v",
+			spec.Linux.GIDMappings)
 	}
 
 	uidMap := spec.Linux.UIDMappings[0]
 	if uidMap.ContainerID != 0 || uidMap.Size < IdRangeMin {
-		return fmt.Errorf("sysbox-runc requires uid mapping specify a container with at least %d uids starting at uid 0; found %v", IdRangeMin, uidMap)
+		return fmt.Errorf("sysbox-runc requires uid mapping specify a container with at least %d uids starting at uid 0; found %v",
+			IdRangeMin, uidMap)
 	}
 
 	gidMap := spec.Linux.GIDMappings[0]
 	if gidMap.ContainerID != 0 || gidMap.Size < IdRangeMin {
-		return fmt.Errorf("sysbox-runc requires gid mapping specify a container with at least %d gids starting at gid 0; found %v", IdRangeMin, gidMap)
+		return fmt.Errorf("sysbox-runc requires gid mapping specify a container with at least %d gids starting at gid 0; found %v",
+			IdRangeMin, gidMap)
 	}
 
 	if uidMap.HostID != gidMap.HostID {
-		return fmt.Errorf("sysbox-runc requires matching uid & gid mappings; found uid = %v, gid = %d", uidMap, gidMap)
+		return fmt.Errorf("sysbox-runc requires matching uid & gid mappings; found uid = %v, gid = %d",
+			uidMap, gidMap)
 	}
 
 	return nil
@@ -449,7 +456,7 @@ func cfgMounts(spec *specs.Spec, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs, shiftUids
 	}
 
 	if sysFs.Enabled() {
-		cfgSysboxFsMounts(spec)
+		cfgSysboxFsMounts(spec, sysFs)
 	}
 
 	if sysMgr.Enabled() {
@@ -475,10 +482,24 @@ func cfgSysboxMounts(spec *specs.Spec) {
 }
 
 // cfgSysboxFsMounts adds the sysbox-fs mounts to the containers config.
-func cfgSysboxFsMounts(spec *specs.Spec) {
+func cfgSysboxFsMounts(spec *specs.Spec, sysFs *sysbox.Fs) {
 	spec.Mounts = mountSliceRemove(spec.Mounts, sysboxFsMounts, func(m1, m2 specs.Mount) bool {
 		return m1.Destination == m2.Destination
 	})
+
+	// Adjust sysboxFsMounts path attending to container-id value.
+	cntrMountpoint := filepath.Join(SysboxFsDir, sysFs.Id)
+
+	for i := range sysboxFsMounts {
+		sysboxFsMounts[i].Source =
+			strings.Replace(
+				sysboxFsMounts[i].Source,
+				SysboxFsDir,
+				cntrMountpoint,
+				1,
+			)
+	}
+
 	spec.Mounts = append(spec.Mounts, sysboxFsMounts...)
 }
 
@@ -509,13 +530,21 @@ func cfgLibModMount(spec *specs.Spec) error {
 
 	mounts := []specs.Mount{}
 
-	// don't follow symlinks as they normally point to the linux headers which we mount in cfgLinuxHeadersMount
-	mounts, err = createMountSpec(path, path, "bind", []string{"ro", "rbind", "rprivate"}, true, []string{"/usr/src"})
+	// don't follow symlinks as they normally point to the linux headers which we
+	// mount in cfgLinuxHeadersMount
+	mounts, err = createMountSpec(
+		path,
+		path,
+		"bind",
+		[]string{"ro", "rbind", "rprivate"}, true, []string{"/usr/src"},
+	)
 	if err != nil {
-		return fmt.Errorf("failed to create mount spec for linux modules at %s: %v", path, err)
+		return fmt.Errorf("failed to create mount spec for linux modules at %s: %v",
+			path, err)
 	}
 
-	// if the mounts conflict with any in the spec (i.e., same dest), prioritize the spec ones
+	// if the mounts conflict with any in the spec (i.e., same dest), prioritize
+	// the spec ones
 	mounts = mountSliceRemove(mounts, spec.Mounts, func(m1, m2 specs.Mount) bool {
 		return m1.Destination == m2.Destination
 	})
@@ -524,9 +553,9 @@ func cfgLibModMount(spec *specs.Spec) error {
 	return nil
 }
 
-// cfgLinuxHeadersMount configures the sys container spec with a read-only mount of the
-// host's linux kernel headers. This is needed to build or run apps that interact with the
-// Linux kernel directly within a sys container.
+// cfgLinuxHeadersMount configures the sys container spec with a read-only mount
+// of the host's linux kernel headers. This is needed to build or run apps that
+// interact with the Linux kernel directly within a sys container.
 func cfgLinuxHeadersMount(spec *specs.Spec) error {
 
 	kernelRel, err := sysbox.GetKernelRelease()
@@ -543,13 +572,21 @@ func cfgLinuxHeadersMount(spec *specs.Spec) error {
 
 	mounts := []specs.Mount{}
 
-	// follow symlinks as some distros (e.g., Ubuntu) heavily symlink the linux header directory
-	mounts, err = createMountSpec(path, path, "bind", []string{"ro", "rbind", "rprivate"}, true, []string{"/usr/src"})
+	// follow symlinks as some distros (e.g., Ubuntu) heavily symlink the linux
+	// header directory
+	mounts, err = createMountSpec(
+		path,
+		path,
+		"bind",
+		[]string{"ro", "rbind", "rprivate"}, true, []string{"/usr/src"},
+	)
 	if err != nil {
-		return fmt.Errorf("failed to create mount spec for linux headers at %s: %v", path, err)
+		return fmt.Errorf("failed to create mount spec for linux headers at %s: %v",
+			path, err)
 	}
 
-	// if the mounts conflict with any in the spec (i.e., same dest), prioritize the spec ones
+	// if the mounts conflict with any in the spec (i.e., same dest), prioritize
+	// the spec ones
 	mounts = mountSliceRemove(mounts, spec.Mounts, func(m1, m2 specs.Mount) bool {
 		return m1.Destination == m2.Destination
 	})
