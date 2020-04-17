@@ -217,6 +217,14 @@ var sysboxRwPaths = []string{
 var sysboxExposedPaths = []string{
 	"/proc",
 	"/proc/sys",
+
+	// Some apps need these to be exposed (or more accurately need them to not be masked
+	// via a bind-mount from /dev/null, as described in sysbox issue #511). It's not a
+	// security concern to expose these in sys containers, as they are either not accesible
+	// or don't provide meaningful info (due to the sys container's user-ns).
+	"/proc/kcore",
+	"/proc/kallsyms",
+	"/proc/kmsg",
 }
 
 // sysboxSystemdExposedPaths list the paths within the sys container's rootfs
