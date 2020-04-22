@@ -8,8 +8,8 @@ import (
 	"os"
 	"strings"
 
+	libseccomp "github.com/nestybox/libseccomp-golang"
 	"github.com/opencontainers/runc/libcontainer/configs"
-	libseccomp "github.com/seccomp/libseccomp-golang"
 
 	"golang.org/x/sys/unix"
 )
