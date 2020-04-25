@@ -608,9 +608,9 @@ func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, shiftUids bool) error 
 
 	// These directories in the sys container are backed by mounts handled by sysbox-mgr
 	specialDir := map[string]bool{
-		"/var/lib/docker":     true,
-		"/var/lib/kubelet":    true,
-		"/var/lib/containerd": true,
+		"/var/lib/docker":  true,
+		"/var/lib/kubelet": true,
+		"/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs": true,
 	}
 
 	uid := spec.Linux.UIDMappings[0].HostID
