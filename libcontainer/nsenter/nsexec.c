@@ -21,6 +21,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/mount.h>
 
 #include <linux/limits.h>
 #include <linux/netlink.h>
@@ -93,13 +94,25 @@ struct nlconfig_t {
 	size_t uidmappath_len;
 	char *gidmappath;
 	size_t gidmappath_len;
+
+	/* sysbox-runc: rootfs prep */
+	uint8_t prep_rootfs; /* boolean */
+	uint8_t use_shiftfs; /* boolean */
+	uint8_t make_parent_priv; /* boolean */
+	uint32_t rootfs_prop;
+	char *rootfs;
+	size_t rootfs_len;
+	char *parent_mount;
+	size_t parent_mount_len;
+	char *shiftfs_mounts;
+	size_t shiftfs_mounts_len;
 };
 
 /*
  * List of netlink message types sent to us as part of bootstrapping the init.
  * These constants are defined in libcontainer/message_linux.go.
  */
-#define INIT_MSG			62000
+#define INIT_MSG		   	62000
 #define CLONE_FLAGS_ATTR	27281
 #define NS_PATHS_ATTR		27282
 #define UIDMAP_ATTR			27283
@@ -107,8 +120,15 @@ struct nlconfig_t {
 #define SETGROUP_ATTR		27285
 #define OOM_SCORE_ADJ_ATTR	27286
 #define ROOTLESS_EUID_ATTR	27287
-#define UIDMAPPATH_ATTR	    27288
-#define GIDMAPPATH_ATTR	    27289
+#define UIDMAPPATH_ATTR	   27288
+#define GIDMAPPATH_ATTR	   27289
+#define PREP_ROOTFS_ATTR   27290
+#define USE_SHIFTFS_ATTR   27291
+#define MAKE_PARENT_PRIV_ATTR 27292
+#define ROOTFS_PROP_ATTR   27293
+#define ROOTFS_ATTR        27294
+#define PARENT_MOUNT_ATTR  27295
+#define SHIFTFS_MOUNTS_ATTR 27296
 
 /*
  * Use the raw syscall for versions of glibc which don't include a function for
@@ -219,97 +239,97 @@ static void update_setgroups(int pid, enum policy_t setgroup)
  * performs the container's rootfs setup.
  */
 
-/* static int try_mapping_tool(const char *app, int pid, char *map, size_t map_len) */
-/* { */
-/* 	int child; */
+static int try_mapping_tool(const char *app, int pid, char *map, size_t map_len)
+{
+	int child;
 
-/* 	/\* */
-/* 	 * If @app is NULL, execve will segfault. Just check it here and bail (if */
-/* 	 * we're in this path, the caller is already getting desperate and there */
-/* 	 * isn't a backup to this failing). This usually would be a configuration */
-/* 	 * or programming issue. */
-/* 	 *\/ */
-/* 	if (!app) */
-/* 		bail("mapping tool not present"); */
+	/*
+	 * If @app is NULL, execve will segfault. Just check it here and bail (if
+	 * we're in this path, the caller is already getting desperate and there
+	 * isn't a backup to this failing). This usually would be a configuration
+	 * or programming issue.
+	 */
+	if (!app)
+		bail("mapping tool not present");
 
-/* 	child = fork(); */
-/* 	if (child < 0) */
-/* 		bail("failed to fork"); */
+	child = fork();
+	if (child < 0)
+		bail("failed to fork");
 
-/* 	if (!child) { */
-/* #define MAX_ARGV 20 */
-/* 		char *argv[MAX_ARGV]; */
-/* 		char *envp[] = { NULL }; */
-/* 		char pid_fmt[16]; */
-/* 		int argc = 0; */
-/* 		char *next; */
+	if (!child) {
+#define MAX_ARGV 20
+		char *argv[MAX_ARGV];
+		char *envp[] = { NULL };
+		char pid_fmt[16];
+		int argc = 0;
+		char *next;
 
-/* 		snprintf(pid_fmt, 16, "%d", pid); */
+		snprintf(pid_fmt, 16, "%d", pid);
 
-/* 		argv[argc++] = (char *)app; */
-/* 		argv[argc++] = pid_fmt; */
-/* 		/\* */
-/* 		 * Convert the map string into a list of argument that */
-/* 		 * newuidmap/newgidmap can understand. */
-/* 		 *\/ */
+		argv[argc++] = (char *)app;
+		argv[argc++] = pid_fmt;
+		/*
+		 * Convert the map string into a list of argument that
+		 * newuidmap/newgidmap can understand.
+		 */
 
-/* 		while (argc < MAX_ARGV) { */
-/* 			if (*map == '\0') { */
-/* 				argv[argc++] = NULL; */
-/* 				break; */
-/* 			} */
-/* 			argv[argc++] = map; */
-/* 			next = strpbrk(map, "\n "); */
-/* 			if (next == NULL) */
-/* 				break; */
-/* 			*next++ = '\0'; */
-/* 			map = next + strspn(next, "\n "); */
-/* 		} */
+		while (argc < MAX_ARGV) {
+			if (*map == '\0') {
+				argv[argc++] = NULL;
+				break;
+			}
+			argv[argc++] = map;
+			next = strpbrk(map, "\n ");
+			if (next == NULL)
+				break;
+			*next++ = '\0';
+			map = next + strspn(next, "\n ");
+		}
 
-/* 		execve(app, argv, envp); */
-/* 		bail("failed to execv"); */
-/* 	} else { */
-/* 		int status; */
+		execve(app, argv, envp);
+		bail("failed to execv");
+	} else {
+		int status;
 
-/* 		while (true) { */
-/* 			if (waitpid(child, &status, 0) < 0) { */
-/* 				if (errno == EINTR) */
-/* 					continue; */
-/* 				bail("failed to waitpid"); */
-/* 			} */
-/* 			if (WIFEXITED(status) || WIFSIGNALED(status)) */
-/* 				return WEXITSTATUS(status); */
-/* 		} */
-/* 	} */
+		while (true) {
+			if (waitpid(child, &status, 0) < 0) {
+				if (errno == EINTR)
+					continue;
+				bail("failed to waitpid");
+			}
+			if (WIFEXITED(status) || WIFSIGNALED(status))
+				return WEXITSTATUS(status);
+		}
+	}
 
-/* 	return -1; */
-/* } */
+	return -1;
+}
 
-/* static void update_uidmap(const char *path, int pid, char *map, size_t map_len) */
-/* { */
-/* 	if (map == NULL || map_len <= 0) */
-/* 		return; */
+static void update_uidmap(const char *path, int pid, char *map, size_t map_len)
+{
+	if (map == NULL || map_len <= 0)
+		return;
 
-/* 	if (write_file(map, map_len, "/proc/%d/uid_map", pid) < 0) { */
-/* 		if (errno != EPERM) */
-/* 			bail("failed to update /proc/%d/uid_map", pid); */
-/* 		if (try_mapping_tool(path, pid, map, map_len)) */
-/* 			bail("failed to use newuid map on %d", pid); */
-/* 	} */
-/* } */
+	if (write_file(map, map_len, "/proc/%d/uid_map", pid) < 0) {
+		if (errno != EPERM)
+			bail("failed to update /proc/%d/uid_map", pid);
+		if (try_mapping_tool(path, pid, map, map_len))
+			bail("failed to use newuid map on %d", pid);
+	}
+}
 
-/* static void update_gidmap(const char *path, int pid, char *map, size_t map_len) */
-/* { */
-/* 	if (map == NULL || map_len <= 0) */
-/* 		return; */
+static void update_gidmap(const char *path, int pid, char *map, size_t map_len)
+{
+	if (map == NULL || map_len <= 0)
+		return;
 
-/* 	if (write_file(map, map_len, "/proc/%d/gid_map", pid) < 0) { */
-/* 		if (errno != EPERM) */
-/* 			bail("failed to update /proc/%d/gid_map", pid); */
-/* 		if (try_mapping_tool(path, pid, map, map_len)) */
-/* 			bail("failed to use newgid map on %d", pid); */
-/* 	} */
-/* } */
+	if (write_file(map, map_len, "/proc/%d/gid_map", pid) < 0) {
+		if (errno != EPERM)
+			bail("failed to update /proc/%d/gid_map", pid);
+		if (try_mapping_tool(path, pid, map, map_len))
+			bail("failed to use newgid map on %d", pid);
+	}
+}
 
 static void update_oom_score_adj(char *data, size_t len)
 {
@@ -463,6 +483,33 @@ static void nl_parse(int fd, struct nlconfig_t *config)
 		case SETGROUP_ATTR:
 			config->is_setgroup = readint8(current);
 			break;
+
+		/* sysbox-runc */
+	   case PREP_ROOTFS_ATTR:
+			config->prep_rootfs = readint8(current);
+			break;
+	   case USE_SHIFTFS_ATTR:
+			config->use_shiftfs = readint8(current);
+			break;
+	   case MAKE_PARENT_PRIV_ATTR:
+			config->make_parent_priv = readint8(current);
+			break;
+		case ROOTFS_PROP_ATTR:
+			config->rootfs_prop = readint32(current);
+			break;
+		case ROOTFS_ATTR:
+			config->rootfs = current;
+			config->rootfs_len = payload_len;
+			break;
+		case PARENT_MOUNT_ATTR:
+			config->parent_mount = current;
+			config->parent_mount_len = payload_len;
+			break;
+		case SHIFTFS_MOUNTS_ATTR:
+			config->shiftfs_mounts = current;
+			config->shiftfs_mounts_len = payload_len;
+			break;
+
 		default:
 			bail("unknown netlink message type %d", nlattr->nla_type);
 		}
@@ -542,6 +589,43 @@ void join_namespaces(char *nslist)
 	free(namespaces);
 }
 
+/* sysbox-runc */
+void mountShiftfsOnBindSources(char *mntlist) {
+	char *saveptr = NULL;
+	char *mntpath = strtok_r(mntlist, ",", &saveptr);
+
+	if (!mntpath || !strlen(mntpath) || !strlen(mntlist))
+		bail("mount paths are empty");
+
+	do {
+		if (mount(mntpath, mntpath, "shiftfs", 0, "") < 0) {
+			bail("failed to mount shiftfs on %s", mntpath);
+		}
+	} while ((mntpath = strtok_r(NULL, ",", &saveptr)) != NULL);
+}
+
+/* sysbox-runc */
+void prepRootfs(struct nlconfig_t *config) {
+
+	if (mount("", "/", "", (unsigned long)(config->rootfs_prop), "") < 0)
+		bail("failed to set rootfs mount propagation");
+
+	if (config->make_parent_priv) {
+		if (mount("", config->parent_mount, "", MS_PRIVATE, "") < 0)
+			bail("failed to set rootfs parent mount propagation to private");
+	}
+
+	if (mount(config->rootfs, config->rootfs, "bind", MS_BIND|MS_REC, "") < 0)
+		bail("failed to create bind-to-self mount on rootfs.");
+
+	if (config->use_shiftfs) {
+		if (mount(config->rootfs, config->rootfs, "shiftfs", 0, "") < 0)
+			bail("failed to mount shiftfs on rootfs.");
+
+		mountShiftfsOnBindSources(config->shiftfs_mounts);
+	}
+}
+
 /* Defined in cloned_binary.c. */
 extern int ensure_cloned_binary(void);
 
@@ -578,14 +662,14 @@ void nsexec(void)
 	 * properly.
 	 */
 
-   /* sysbox-runc: initially set oom_score_adj to "-999" for the
-    * container's init process. It will later be increased to the
-    * configured value. The goal here is to allow child processes to
-    * decrease their oom_score down to "-999", yet have the init
-    * process start with it's configured oom score adjustment. See
-    * sysbox issue #381.
-    */
-   update_oom_score_adj("-999", 4);
+	/* sysbox-runc: initially set oom_score_adj to "-999" for the
+	 * container's init process. It will later be increased to the
+	 * configured value. The goal here is to allow child processes to
+	 * decrease their oom_score down to "-999", yet have the init
+	 * process start with it's configured oom score adjustment. See
+	 * sysbox issue #381.
+	 */
+	update_oom_score_adj("-999", 4);
 
 	/*
 	 * Make the process non-dumpable, to avoid various race conditions that
@@ -722,17 +806,8 @@ void nsexec(void)
 					if (config.is_rootless_euid && !config.is_setgroup)
 						update_setgroups(child, SETGROUPS_DENY);
 
-               /*
-                * sysbox-runc: do not set up the userns mappings here
-                * as this will prevent the sys container's init
-                * process from mapping shiftfs on sources for whom the
-                * sys container's uid(gid) has no permission to
-                * access. This mapping will be done later in the
-                * sysbox-runc Go runtime, after shiftfs mounts are
-                * done.
-                */
-					//update_uidmap(config.uidmappath, child, config.uidmap, config.uidmap_len);
-					//update_gidmap(config.gidmappath, child, config.gidmap, config.gidmap_len);
+					update_uidmap(config.uidmappath, child, config.uidmap, config.uidmap_len);
+					update_gidmap(config.gidmappath, child, config.gidmap, config.gidmap_len);
 
 					s = SYNC_USERMAP_ACK;
 					if (write(syncfd, &s, sizeof(s)) != sizeof(s)) {
@@ -827,7 +902,7 @@ void nsexec(void)
 	case JUMP_CHILD:{
 			pid_t child;
 			enum sync_t s;
-         bool revert_newuser = false;
+         bool new_userns = false;
 
 			/* We're in a child and thus need to tell the parent if we die. */
 			syncfd = sync_child_pipe[0];
@@ -869,58 +944,91 @@ void nsexec(void)
 					bail("failed to unshare user namespace");
 
             config.cloneflags &= ~CLONE_NEWUSER;
-            revert_newuser = true;
-
-				/*
-				 * We don't have the privileges to do any mapping here (see the
-				 * clone_parent rant). So signal our parent to hook us up.
-				 */
-
-				/* Switching is only necessary if we joined namespaces. */
-				if (config.namespaces) {
-					if (prctl(PR_SET_DUMPABLE, 1, 0, 0, 0) < 0)
-						bail("failed to set process as dumpable");
-				}
-				s = SYNC_USERMAP_PLS;
-				if (write(syncfd, &s, sizeof(s)) != sizeof(s))
-					bail("failed to sync with parent: write(SYNC_USERMAP_PLS)");
-
-				/* ... wait for mapping ... */
-
-				if (read(syncfd, &s, sizeof(s)) != sizeof(s))
-					bail("failed to sync with parent: read(SYNC_USERMAP_ACK)");
-				if (s != SYNC_USERMAP_ACK)
-					bail("failed to sync with parent: SYNC_USERMAP_ACK: got %u", s);
-
-				/* Switching is only necessary if we joined namespaces. */
-				if (config.namespaces) {
-					if (prctl(PR_SET_DUMPABLE, 0, 0, 0, 0) < 0)
-						bail("failed to set process as dumpable");
-				}
-
-            /* sysbox-runc: since user-ns mappings are not yet set, we skip this. */
-            /* if (setresuid(0, 0, 0) < 0) */
-            /*    bail("failed to become root in user namespace"); */
+            new_userns = true;
 			}
+
 			/*
-			 * Unshare all of the namespaces. Now, it should be noted that this
-			 * ordering might break in the future (especially with rootless
-			 * containers). But for now, it's not possible to split this into
-			 * CLONE_NEWUSER + [the rest] because of some RHEL SELinux issues.
+			 * Unshare the mount ns before preparing the rootfs (next
+			 * step).
+			 */
+			if (config.cloneflags & CLONE_NEWNS) {
+				if (unshare(CLONE_NEWNS) < 0)
+					bail("failed to unshare mount namespace");
+
+				config.cloneflags &= ~CLONE_NEWNS;
+			}
+
+			// sysbox-runc: prepare the container's rootfs prep and setup
+			// shiftfs mounts if asked to do so.
+			//
+			// Note: in the OCI runc this is all done in rootfs_linux.go,
+			// but for sysbox-runc we need to do it here because when
+			// using shiftfs it must be done *before* uid(gid) mappings
+			// for the container's user-ns are set, as otherwise we may
+			// loose permission to perform the mounts (i.e., the bind
+			// mount sources may not longer be accessible once the
+			// user-ns mappings are configured).
+			if (config.prep_rootfs && config.use_shiftfs) {
+				prepRootfs(&config);
+			}
+
+			/*
+			 * If we are in a new user-ns, map our uid and gid.  We don't
+			 * have the privileges to do any mapping here (see the
+			 * clone_parent rant). So signal our parent to hook us up.
+			 */
+			if (new_userns) {
+
+			  /* Switching is only necessary if we joined namespaces. */
+			  if (config.namespaces) {
+				 if (prctl(PR_SET_DUMPABLE, 1, 0, 0, 0) < 0)
+					bail("failed to set process as dumpable");
+			  }
+
+			  s = SYNC_USERMAP_PLS;
+			  if (write(syncfd, &s, sizeof(s)) != sizeof(s))
+				 bail("failed to sync with parent: write(SYNC_USERMAP_PLS)");
+
+			  /* ... wait for mapping ... */
+
+			  if (read(syncfd, &s, sizeof(s)) != sizeof(s))
+				 bail("failed to sync with parent: read(SYNC_USERMAP_ACK)");
+			  if (s != SYNC_USERMAP_ACK)
+				 bail("failed to sync with parent: SYNC_USERMAP_ACK: got %u", s);
+
+			  /* Switching is only necessary if we joined namespaces. */
+			  if (config.namespaces) {
+				 if (prctl(PR_SET_DUMPABLE, 0, 0, 0, 0) < 0)
+					bail("failed to set process as dumpable");
+			  }
+
+			  if (setresuid(0, 0, 0) < 0)
+				 bail("failed to become root in user namespace");
+			}
+
+			/* sysbox-runc:
+			 *
+			 * If we are not using uid-shifting, the rootfs prep must
+			 * occur *after* uid-mappings are set. Otherwise we get
+			 * permission denied when doing the mounts.
+			 */
+			if (config.prep_rootfs && !config.use_shiftfs) {
+				prepRootfs(&config);
+			}
+
+			/*
+			 * Unshare the remaining namespaces (except the cgroup ns
+			 * which we join later). This must be done *after* the user-ns uid mappings
+			 * are set (assuming we joined a user-ns) because those other namespaces
+			 * use the mappings implicitly (e.g., the net namespaces uses the mappings
+			 * to display the correct uid:gid ownership for files under /proc/pid/net).
 			 *
 			 * Note that we don't merge this with clone() because there were
 			 * some old kernel versions where clone(CLONE_PARENT | CLONE_NEWPID)
 			 * was broken, so we'll just do it the long way anyway.
 			 */
 			if (unshare(config.cloneflags & ~CLONE_NEWCGROUP) < 0)
-				bail("failed to unshare namespaces");
-
-         /*
-          * Now that we're done unsharing, if we cleared the CLONE_NEWUSER
-          * flag earlier revert it so our child can see it's true value.
-          */
-         if (revert_newuser)
-            config.cloneflags |= CLONE_NEWUSER;
+			  bail("failed to unshare namespaces");
 
 			/*
 			 * TODO: What about non-namespace clone flags that we're dropping here?
@@ -989,39 +1097,45 @@ void nsexec(void)
 			/* For debugging. */
 			prctl(PR_SET_NAME, (unsigned long)"runc:[2:INIT]", 0, 0, 0);
 
-         // sysbox-runc: set the oom score adjustment to the configured value.
-         //
-         // XXX: this operation relies on /proc being mounted; when
-         // doing a setns entry (e.g., docker exec or via sysbox-fs
-         // re-exec, /proc may not be mounted if it was unmounted in
-         // the sys container by a user). Thus, we should skip this
-         // step (or alternatively prevent users from unmounting /proc
-         // inside the sys container).
-         update_oom_score_adj(config.oom_score_adj, config.oom_score_adj_len);
+			/*
+			 * sysbox-runc: set the oom score adjustment to the
+			 * configured value.  Note that this operation relies on
+			 * /proc being mounted (which should be the case both when
+			 * creating a new container and when joining one).  Also, we
+			 * have to temporarily set dumpable because it may have been
+			 * reset to 0 when we created the user-ns and its uid(gid)s
+			 * were mapped (which in turn removes permissions to access
+			 * /proc when creating a new container as described in
+			 * procfs(5)).
+			 */
+			if (prctl(PR_SET_DUMPABLE, 1, 0, 0, 0) < 0)
+				bail("failed to set process as dumpable");
 
+			update_oom_score_adj(config.oom_score_adj, config.oom_score_adj_len);
+
+			if (prctl(PR_SET_DUMPABLE, 0, 0, 0, 0) < 0)
+				bail("failed to set process as dumpable");
+
+			/* Perform the sync with our grandparent */
 			if (read(syncfd, &s, sizeof(s)) != sizeof(s))
 				bail("failed to sync with parent: read(SYNC_GRANDCHILD)");
+
 			if (s != SYNC_GRANDCHILD)
 				bail("failed to sync with parent: SYNC_GRANDCHILD: got %u", s);
 
 			if (setsid() < 0)
 				bail("setsid failed");
 
-         // sysbox-runc: if we created a new user namespace, we
-         // haven't set the ID mappings yet, so we can't yet call
-         // setuid(), setgid(), or setgroups().
-			if (! (config.cloneflags & CLONE_NEWUSER)) {
-            if (setuid(0) < 0)
-               bail("setuid failed");
+			if (setuid(0) < 0)
+				bail("setuid failed");
 
-            if (setgid(0) < 0)
-               bail("setgid failed");
+			if (setgid(0) < 0)
+				bail("setgid failed");
 
-            if (!config.is_rootless_euid && config.is_setgroup) {
-               if (setgroups(0, NULL) < 0)
-                  bail("setgroups failed");
-            }
-         }
+			if (!config.is_rootless_euid && config.is_setgroup) {
+				if (setgroups(0, NULL) < 0)
+					bail("setgroups failed");
+			}
 
 			/* ... wait until our topmost parent has finished cgroup setup in p.manager.Apply() ... */
 			if (config.cloneflags & CLONE_NEWCGROUP) {

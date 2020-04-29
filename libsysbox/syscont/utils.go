@@ -274,9 +274,10 @@ func createMountSpec(source, dest, mountType string, mountOpt []string, followSy
 // sortMounts sorts the sys container mounts in the given spec.
 func sortMounts(spec *specs.Spec) {
 
-	// The OCI spec requires the runtime to honor the ordering on mounts in the
-	// spec. However, we deviate a bit and always do mounts in the orderList in the given;
-	// other mounts are left in the order given by the spec.
+	// The OCI spec requires the runtime to honor the ordering on
+	// mounts in the spec. However, we deviate a bit and always order
+	// the mounts in the orderList below. Other mounts are left in the
+	// order given by the spec.
 
 	orderList := map[string]int{
 		"/sys":  1,

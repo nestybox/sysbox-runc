@@ -1560,7 +1560,7 @@ func TestInitJoinPID(t *testing.T) {
 	//
 	// sysbox-runc: since sys containers always have user-ns, we must also join it (we
 	// can't just joint the pid-ns and not the user-ns as the kernel balks with "operation
-	// not permitted")
+	// not permitted" when mounting proc)
 
 	config2 := newTemplateConfig(rootfs)
 	config2.Namespaces.Add(configs.NEWPID, pidns1)

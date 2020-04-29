@@ -2023,7 +2023,7 @@ func (c *linuxContainer) bootstrapData(cloneFlags uintptr, nsMaps map[configs.Na
 		})
 	}
 
-	// write namespace paths only when we are not joining an existing user ns
+	// write uid & gid mappings only when we create a new user-ns
 	_, joinExistingUser := nsMaps[configs.NEWUSER]
 	if !joinExistingUser {
 		// write uid mappings
@@ -2085,15 +2085,17 @@ func (c *linuxContainer) bootstrapData(cloneFlags uintptr, nsMaps map[configs.Na
 		if err != nil {
 			return nil, err
 		}
+		defer f.Close()
+
 		buf := make([]byte, 8)
 		if _, err := f.Read(buf); err != nil {
 			return nil, err
 		}
+
 		r.AddData(&Bytemsg{
 			Type:  OomScoreAdjAttr,
 			Value: buf,
 		})
-		f.Close()
 	}
 
 	// write rootless
@@ -2101,6 +2103,62 @@ func (c *linuxContainer) bootstrapData(cloneFlags uintptr, nsMaps map[configs.Na
 		Type:  RootlessEUIDAttr,
 		Value: c.config.RootlessEUID,
 	})
+
+	// sysbox-runc: request prep of the rootfs when we create a new mnt-ns
+	_, joinExistingMnt := nsMaps[configs.NEWNS]
+	if !joinExistingMnt {
+
+		r.AddData(&Boolmsg{
+			Type:  PrepRootfsAttr,
+			Value: true,
+		})
+
+		r.AddData(&Boolmsg{
+			Type:  UseShiftfsAttr,
+			Value: c.config.ShiftUids,
+		})
+
+		makeParentPriv, parentMount, err := rootfsParentMountIsShared(c.config.Rootfs)
+		if err != nil {
+			return nil, err
+		}
+
+		r.AddData(&Boolmsg{
+			Type:  MakeParentPrivAttr,
+			Value: makeParentPriv,
+		})
+
+		r.AddData(&Bytemsg{
+			Type:  ParentMountAttr,
+			Value: []byte(parentMount),
+		})
+
+		propFlag := unix.MS_SLAVE | unix.MS_REC
+		if c.config.RootPropagation != 0 {
+			propFlag = c.config.RootPropagation
+		}
+
+		r.AddData(&Int32msg{
+			Type:  RootfsPropAttr,
+			Value: uint32(propFlag),
+		})
+
+		r.AddData(&Bytemsg{
+			Type:  RootfsAttr,
+			Value: []byte(c.config.Rootfs),
+		})
+
+		shiftfsMounts := []string{}
+		for _, m := range c.config.ShiftfsMounts {
+			shiftfsMounts = append(shiftfsMounts, m.Source)
+		}
+
+		r.AddData(&Bytemsg{
+			Type:  ShiftfsMountsAttr,
+			Value: []byte(strings.Join(shiftfsMounts, ",")),
+		})
+
+	}
 
 	return bytes.NewReader(r.Serialize()), nil
 }
@@ -2136,50 +2194,18 @@ func formatIDMappings(idMap []configs.IDMap) []byte {
 	return data
 }
 
-// writeIDMappings writes the user namespace User ID or Group ID mappings to the specified path.
-// Adapted from https://golang.org/src/syscall/exec_linux.go  (BSD-license)
-func writeIDMappings(path string, idMap []configs.IDMap) error {
-	fd, err := os.OpenFile(path, os.O_RDWR, 0)
-	if err != nil {
-		return err
-	}
-
-	if _, err := fd.Write(formatIDMappings(idMap)); err != nil {
-		fd.Close()
-		return err
-	}
-
-	if err := fd.Close(); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // sysbox-runc: handleReqOp handles requests from the container's init process for actions
 // that can't be done by it (e.g., due to lack of permissions, etc.). Actions include
 // setting up uid(gid) mappings for the container's user-ns, performing bind mounts in
 // cases where the container's init process has no permission to access to the source of
 // the mount, and others. See opReq for the list of actions.
 func (c *linuxContainer) handleReqOp(childPid int, req *opReq) error {
-
 	switch req.Op {
-	case mapUid:
-		uidf := "/proc/" + strconv.Itoa(childPid) + "/uid_map"
-		if err := writeIDMappings(uidf, c.config.UidMappings); err != nil {
-			return newSystemErrorWithCause(err, "setting uid-mapping")
-		}
-		gidf := "/proc/" + strconv.Itoa(childPid) + "/gid_map"
-		if err := writeIDMappings(gidf, c.config.GidMappings); err != nil {
-			return newSystemErrorWithCause(err, "setting gid-mapping")
-		}
 	case bind:
 		return c.handleBindOp(childPid, req)
 	default:
 		return newSystemError(fmt.Errorf("invalid opReq type %d", int(req.Op)))
 	}
-
-	return nil
 }
 
 // sysbox-runc: handleBindOp performs a bind mount on the system container's rootfs. It

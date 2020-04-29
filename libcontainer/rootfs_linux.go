@@ -47,27 +47,12 @@ func needsSetupDev(config *configs.Config) bool {
 func prepareRootfs(pipe io.ReadWriter, iConfig *initConfig) (err error) {
 	config := iConfig.Config
 
-	if err := prepareRoot(config); err != nil {
-		return newSystemErrorWithCause(err, "preparing rootfs")
+	if err := validateCwd(config.Rootfs); err != nil {
+		return newSystemErrorWithCause(err, "validating cwd")
 	}
 
-	if config.ShiftUids {
-		if err := mountShiftfsOnRootfs(config.Rootfs, pipe); err != nil {
-			return newSystemErrorWithCause(err, "mounting shiftfs on rootfs")
-		}
-		if err := mountShiftfsOnBindSources(config, pipe); err != nil {
-			return newSystemErrorWithCause(err, "mounting shiftfs on bind sources")
-		}
-	}
-
-	// Setup the sys container's user-ns ID-mappings after shiftfs mounts are done as once
-	// the mapping occurs, the container's init process may loose permission to access the
-	// shiftfs mountpoints. Do this only if a new user-ns was created for the container (not
-	// if we are joining another container's user-ns)
-	if config.Namespaces.Contains(configs.NEWUSER) && config.Namespaces.PathOf(configs.NEWUSER) == "" {
-		if err := mapUserIDs(config, pipe); err != nil {
-			return newSystemErrorWithCause(err, "setting up container user-ns uid(gid) mappings")
-		}
+	if err := effectRootfsMount(); err != nil {
+		return newSystemErrorWithCause(err, "effecting rootfs mount")
 	}
 
 	if err := doMounts(config, pipe); err != nil {
@@ -131,8 +116,7 @@ func prepareRootfs(pipe io.ReadWriter, iConfig *initConfig) (err error) {
 	return nil
 }
 
-// finalizeRootfs sets anything to ro if necessary. You must call
-// prepareRootfs first.
+// finalizeRootfs sets anything to ro if necessary.
 func finalizeRootfs(config *configs.Config) (err error) {
 	// remount dev as ro if specified
 	for _, m := range config.Mounts {
@@ -618,13 +602,13 @@ func getParentMount(rootfs string) (string, string, error) {
 	return "", "", fmt.Errorf("Could not find parent mount of %s", rootfs)
 }
 
-// Make parent mount private if it was shared
-func rootfsParentMountPrivate(rootfs string) error {
+// Indicates if our parent mount has shared propagation
+func rootfsParentMountIsShared(rootfs string) (bool, string, error) {
 	sharedMount := false
 
 	parentMount, optionalOpts, err := getParentMount(rootfs)
 	if err != nil {
-		return err
+		return false, "", err
 	}
 
 	optsSplit := strings.Split(optionalOpts, " ")
@@ -635,45 +619,7 @@ func rootfsParentMountPrivate(rootfs string) error {
 		}
 	}
 
-	// Make parent mount PRIVATE if it was shared. It is needed for two
-	// reasons. First of all pivot_root() will fail if parent mount is
-	// shared. Secondly when we bind mount rootfs it will propagate to
-	// parent namespace and we don't want that to happen.
-	if sharedMount {
-		return unix.Mount("", parentMount, "", unix.MS_PRIVATE, "")
-	}
-
-	return nil
-}
-
-func prepareRoot(config *configs.Config) error {
-	flag := unix.MS_SLAVE | unix.MS_REC
-	if config.RootPropagation != 0 {
-		flag = config.RootPropagation
-	}
-	if err := unix.Mount("", "/", "", uintptr(flag), ""); err != nil {
-		return err
-	}
-
-	// Make parent mount private to make sure following bind mount does
-	// not propagate in other namespaces. Also it will help with kernel
-	// check pass in pivot_root. (IS_SHARED(new_mnt->mnt_parent))
-	if err := rootfsParentMountPrivate(config.Rootfs); err != nil {
-		return err
-	}
-
-	if err := unix.Mount(".", ".", "bind", unix.MS_BIND|unix.MS_REC, ""); err != nil {
-		return err
-	}
-
-	// in order for the mount to take effect on this current process, we need to re-open
-	// the rootfs dir; otherwise the rootfs setup that follows fails (e.g., pivot_root()
-	// reports an invalid argument error)
-	if err := effectRootfsMount(); err != nil {
-		return newSystemErrorWithCause(err, "effecting rootfs mount")
-	}
-
-	return nil
+	return sharedMount, parentMount, nil
 }
 
 func setReadonly() error {
@@ -1070,37 +1016,4 @@ func mountShiftfsOnBindSources(config *configs.Config, pipe io.ReadWriter) error
 		}
 	}
 	return nil
-}
-
-// sysbox-runc: set up the sys container's userns uid(gid) mappings.
-// Since the mapping uses arbitrary uid(gid)s, this must be done from the parent user-ns,
-// meaning we must request the parent runc to do the mapping for us.
-func mapUserIDs(config *configs.Config, pipe io.ReadWriter) error {
-
-	// Request sysbox-runc to set up the uid(gid) mapping for the container's user-ns
-	req := &opReq{
-		Op: mapUid,
-	}
-	err := syncParentDoOp(req, pipe)
-	if err != nil {
-		return newSystemErrorWithCause(err, "syncing with parent runc to perform uid mapping")
-	}
-
-	// Now that the user-ns mappings are set, become root in the sys container's user-ns.
-	// Note that the following syscalls only apply to the current Go thread, which should
-	// be the only user-space thread since we are running under GOMAXPROCS(1) and
-	// LockOSThread() (see init.c)
-
-	if err := syscall.Setresuid(0, 0, 0); err != nil {
-		return newSystemErrorWithCause(err, "setresuid")
-	}
-	if err := syscall.Setresgid(0, 0, 0); err != nil {
-		return newSystemErrorWithCause(err, "setresgid")
-	}
-	if err := syscall.Setgroups([]int{0}); err != nil {
-		return newSystemErrorWithCause(err, "setgroups")
-	}
-
-	return nil
-
 }

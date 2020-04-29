@@ -63,7 +63,7 @@ $(RUNC_TARGET): $(SOURCES) $(SYSIPC_SRC) $(LIBSECCOMP_SRC) contrib/cmd/recvtty/r
 		-o $(RUNC_TARGET) .
 
 $(RUNC_DEBUG_TARGET): $(SOURCES) $(SYSIPC_SRC) contrib/cmd/recvtty/recvtty
-	$(GO) build -buildmode=pie $(EXTRA_FLAGS) -ldflags "-X main.gitCommit=${COMMIT} -X main.version=${VERSION} $(EXTRA_LDFLAGS)" -tags "$(BUILDTAGS)" -gcflags="all=-N -l" -o $(RUNC_TARGET) .
+	$(GO) build -buildmode=exe $(EXTRA_FLAGS) -ldflags "-X main.gitCommit=${COMMIT} -X main.version=${VERSION} $(EXTRA_LDFLAGS)" -tags "$(BUILDTAGS)" -gcflags="all=-N -l" -o $(RUNC_TARGET) .
 
 all: $(RUNC_TARGET) recvtty
 

@@ -35,7 +35,6 @@ type opReqType int
 
 const (
 	bind = iota
-	mapUid
 	seccompFd
 )
 

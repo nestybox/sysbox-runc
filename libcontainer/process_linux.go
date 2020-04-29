@@ -332,6 +332,7 @@ func (p *initProcess) start() error {
 	if _, err := io.Copy(p.parentPipe, p.bootstrapData); err != nil {
 		return newSystemErrorWithCause(err, "copying bootstrap data to pipe")
 	}
+
 	childPid, err := p.getChildPid()
 	if err != nil {
 		return newSystemErrorWithCause(err, "getting the final child's pid from pipe")

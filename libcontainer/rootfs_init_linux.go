@@ -31,11 +31,15 @@ func getDir(file string) (string, error) {
 }
 
 func doBindMount(m *configs.Mount) error {
-	// sysbox-runc: For some reason, invoking the "mount" syscall fails with "permission
-	// denied" when the bind-mount source is on shiftfs. I investigated for several hours
-	// but was never able to find the underlying cause. As a work-around, we are invoking
-	// the /bin/mount command instead of the syscall. This should be fine, as all Linux
-	// systems are required to have /bin/mount per the Linux FHS.
+
+	// sysbox-runc: For some reason, invoking the "mount" syscall fails
+	// with "permission denied" when the bind-mount source is on
+	// shiftfs. I investigated for several hours but was never able to
+	// find the underlying cause. As a work-around, we are invoking the
+	// /bin/mount command instead of the syscall, which does work. This
+	// should be fine, as all Linux systems are required to have
+	// /bin/mount per the Linux FHS.
+
 	cmd := exec.Command("/bin/mount", "--rbind", m.Source, m.Destination)
 	err := cmd.Run()
 	if err != nil {
