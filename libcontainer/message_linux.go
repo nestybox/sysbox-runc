@@ -20,6 +20,15 @@ const (
 	RootlessEUIDAttr uint16 = 27287
 	UidmapPathAttr   uint16 = 27288
 	GidmapPathAttr   uint16 = 27289
+
+	// sysbox-runc
+	PrepRootfsAttr     uint16 = 27290
+	UseShiftfsAttr     uint16 = 27291
+	MakeParentPrivAttr uint16 = 27292
+	RootfsPropAttr     uint16 = 27293
+	RootfsAttr         uint16 = 27294
+	ParentMountAttr    uint16 = 27295
+	ShiftfsMountsAttr  uint16 = 27296
 )
 
 type Int32msg struct {

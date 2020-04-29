@@ -9,4 +9,5 @@ Vagrantfile
 GPATH
 GRTAGS
 GTAGS
+.ccls-cache
 .vscode
