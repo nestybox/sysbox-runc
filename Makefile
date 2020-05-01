@@ -62,6 +62,7 @@ $(RUNC_TARGET): $(SOURCES) $(SYSIPC_SRC) $(LIBSECCOMP_SRC) contrib/cmd/recvtty/r
 	$(GO) build -buildmode=pie $(EXTRA_FLAGS) -ldflags ${LDFLAGS} -tags "$(BUILDTAGS)" \
 		-o $(RUNC_TARGET) .
 
+# -buildmode=exe required in order to debug nsenter (cgo)
 $(RUNC_DEBUG_TARGET): $(SOURCES) $(SYSIPC_SRC) contrib/cmd/recvtty/recvtty
 	$(GO) build -buildmode=exe $(EXTRA_FLAGS) -ldflags "-X main.gitCommit=${COMMIT} -X main.version=${VERSION} $(EXTRA_LDFLAGS)" -tags "$(BUILDTAGS)" -gcflags="all=-N -l" -o $(RUNC_TARGET) .
 
