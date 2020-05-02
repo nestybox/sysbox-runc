@@ -647,11 +647,12 @@ void prepRootfs(struct nlconfig_t *config) {
 			bail("failed to set rootfs parent mount propagation to private");
 	}
 
-	if (mount(config->rootfs, config->rootfs, "bind", MS_BIND|MS_REC, "") < 0)
+	// Note: by design cwd = rootfs
+	if (mount(".", ".", "bind", MS_BIND|MS_REC, "") < 0)
 		bail("failed to create bind-to-self mount on rootfs.");
 
 	if (config->use_shiftfs) {
-		if (mount(config->rootfs, config->rootfs, "shiftfs", 0, "") < 0)
+		if (mount(".", ".", "shiftfs", 0, "") < 0)
 			bail("failed to mount shiftfs on rootfs.");
 
 		mountShiftfsOnBindSources(config->shiftfs_mounts);
