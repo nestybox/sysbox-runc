@@ -21,9 +21,8 @@ import (
 	"github.com/opencontainers/runc/libcontainer/mount"
 	"github.com/opencontainers/runc/libcontainer/system"
 	libcontainerUtils "github.com/opencontainers/runc/libcontainer/utils"
-	"github.com/opencontainers/runc/libsysbox/shiftfs"
-	"github.com/opencontainers/runc/libsysbox/syscont"
 	"github.com/opencontainers/selinux/go-selinux/label"
+	"github.com/opencontainers/runc/libsysbox/syscont"
 
 	"golang.org/x/sys/unix"
 )
@@ -994,26 +993,5 @@ func effectRootfsMount() error {
 		return newSystemErrorWithCause(err, "chdir ..")
 	}
 
-	return nil
-}
-
-// sysbox-runc: mountShiftfsOnRootfs mounts shiftfs over the container's rootfs.
-func mountShiftfsOnRootfs(rootfs string, pipe io.ReadWriter) error {
-	if err := shiftfs.Mount(rootfs); err != nil {
-		return newSystemErrorWithCause(err, "mounting shiftfs on rootfs")
-	}
-	if err := effectRootfsMount(); err != nil {
-		return newSystemErrorWithCause(err, "effecting shiftfs on rootfs mount")
-	}
-	return nil
-}
-
-// sysbox-runc: mounts shiftfs over the source of bind mounts.
-func mountShiftfsOnBindSources(config *configs.Config, pipe io.ReadWriter) error {
-	for _, m := range config.ShiftfsMounts {
-		if err := shiftfs.Mount(m.Source); err != nil {
-			return err
-		}
-	}
 	return nil
 }
