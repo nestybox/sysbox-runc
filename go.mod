@@ -20,6 +20,7 @@ require (
 	github.com/opencontainers/runtime-spec v1.0.2
 	github.com/opencontainers/selinux v1.2.2
 	github.com/pkg/errors v0.8.1
+	github.com/pkg/profile v1.4.0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/syndtr/gocapability v0.0.0-20180916011248-d98352740cb2
 	github.com/urfave/cli v1.20.0

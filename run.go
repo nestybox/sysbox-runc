@@ -7,6 +7,7 @@ import (
 
 	"github.com/opencontainers/runc/libsysbox/sysbox"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
 
@@ -70,7 +71,21 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 			spec      *specs.Spec
 			shiftUids bool
 			status    int
+			profiler  interface{ Stop() }
 		)
+
+		// Enable profiler if requested to do so
+		profiler, err = runProfiler(context)
+		if err != nil {
+			return err
+		}
+
+		defer func() {
+			if profiler != nil {
+				logrus.Info("Stopping profiler ...")
+				profiler.Stop()
+			}
+		}()
 
 		if err = checkArgs(context, 1, exactArgs); err != nil {
 			return err
@@ -119,6 +134,13 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 
 		status, err = startContainer(context, spec, CT_ACT_RUN, nil, shiftUids, sysMgr, sysFs)
 		if err == nil {
+
+			// note: defer func() to stop profiler won't execute on os.Exit(); must explicitly stop it.
+			if profiler != nil {
+				logrus.Info("Stopping profiler ...")
+				profiler.Stop()
+			}
+
 			// exit with the container's exit status so any external supervisor is
 			// notified of the exit with the correct exit status.
 			os.Exit(status)

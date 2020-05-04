@@ -94,7 +94,18 @@ func main() {
 			Name:  "no-kernel-check",
 			Usage: "do not check kernel compatibility; meant for testing and debugging.",
 		},
+		cli.BoolFlag{
+			Name:   "cpu-profiling",
+			Usage:  "enable cpu-profiling data collection; profile data is stored in the cwd of the process invoking sysbox-runc.",
+			Hidden: true,
+		},
+		cli.BoolFlag{
+			Name:   "memory-profiling",
+			Usage:  "enable memory-profiling data collectionprofile data is stored in the cwd of the process invoking sysbox-runc.",
+			Hidden: true,
+		},
 	}
+
 	app.Commands = []cli.Command{
 		createCommand,
 		deleteCommand,
@@ -112,10 +123,12 @@ func main() {
 		stateCommand,
 		updateCommand,
 	}
+
 	app.Before = func(context *cli.Context) error {
 		if context.GlobalBool("debug") {
 			logrus.SetLevel(logrus.DebugLevel)
 		}
+
 		if path := context.GlobalString("log"); path != "" {
 			f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND|os.O_SYNC, 0666)
 			if err != nil {
@@ -123,6 +136,7 @@ func main() {
 			}
 			logrus.SetOutput(f)
 		}
+
 		switch context.GlobalString("log-format") {
 		case "text":
 			// retain logrus's default.
@@ -131,8 +145,10 @@ func main() {
 		default:
 			return fmt.Errorf("unknown log-format %q", context.GlobalString("log-format"))
 		}
+
 		return nil
 	}
+
 	// If the command returns an error, cli takes upon itself to print
 	// the error on cli.ErrWriter and exit.
 	// Use our own writer here to ensure the log gets sent to the right location.
