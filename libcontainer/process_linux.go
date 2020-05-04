@@ -314,6 +314,10 @@ func (p *initProcess) start() error {
 		return newSystemErrorWithCause(err, "creating container child cgroup")
 	}
 
+	if err := p.setupDevSubdir(); err != nil {
+		return newSystemErrorWithCause(err, "setup up dev subdir under rootfs")
+	}
+
 	if p.intelRdtManager != nil {
 		if err := p.intelRdtManager.Apply(p.pid()); err != nil {
 			return newSystemErrorWithCause(err, "applying Intel RDT configuration for process")
@@ -605,6 +609,40 @@ func (p *initProcess) signal(sig os.Signal) error {
 
 func (p *initProcess) setExternalDescriptors(newFds []string) {
 	p.fds = newFds
+}
+
+func (p *initProcess) setupDevSubdir() error {
+
+	// sysbox-runc: create target dir for the sys container's "dev"
+	// mount. Normally this should be done by the container's init
+	// process, but we do it here to work-around a problem in which the
+	// container's init process must have a subdir under the rootfs
+	// that it can chdir into and back to the rootfs in order to "feel"
+	// the effect of mounts that it performs on the container's rootfs
+	// (e.g., shiftfs mounts). And witout feeling the effect of those
+	// mounts it may not have permission to create the subdir itself.
+	// See function effectRootfsMount() in rootfs_linux.go.
+	//
+	// Note also that normally containers have the "dev" subdir, but in
+	// some cases (e.g., k8s "pause" container) they do not.
+	devSubdir := filepath.Join(p.config.Config.Rootfs, "dev")
+
+	// The dir mode must match the corresponding mode in libsysbox/spec/spec.go
+	if err := os.MkdirAll(devSubdir, 0755); err != nil {
+		return newSystemErrorWithCause(err, "creating dev subdir under rootfs")
+	}
+
+	// The dir owner must match the container's root user uid & gid
+	if !p.config.Config.ShiftUids {
+		uid := p.config.Config.UidMappings[0].HostID
+		gid := p.config.Config.GidMappings[0].HostID
+
+		if err := os.Chown(devSubdir, uid, gid); err != nil {
+			return newSystemErrorWithCause(err, "chown dev subdir under rootfs")
+		}
+	}
+
+	return nil
 }
 
 func getPipeFds(pid int) ([]string, error) {
