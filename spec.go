@@ -29,7 +29,7 @@ achieve desired results.
 
 ID mapping configuration:
 
-Nestybox system containers use the Linux user namespace and thus require user
+Nestybox system containers always use the Linux user namespace and thus require user
 and group ID mappings.
 
 The "--id-map" option allows configuration of these mappings for the generated spec.
@@ -77,6 +77,8 @@ that use ID 65534 as "nobody").
 		}
 
 		if idMap != "" {
+			spec.Linux.Namespaces = append(spec.Linux.Namespaces, specs.LinuxNamespace{Type: "user"})
+
 			spec.Linux.UIDMappings = []specs.LinuxIDMapping{{
 				HostID:      uid,
 				ContainerID: 0,

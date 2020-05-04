@@ -94,9 +94,6 @@ func Example() (*specs.Spec, error) {
 		Linux: &specs.Linux{
 			Namespaces: []specs.LinuxNamespace{
 				{
-					Type: "user",
-				},
-				{
 					Type: "pid",
 				},
 				{
