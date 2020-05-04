@@ -88,7 +88,18 @@ func main() {
 			Name:  "no-kernel-check",
 			Usage: "do not check kernel compatibility; meant for testing and debugging.",
 		},
+		cli.BoolFlag{
+			Name:   "cpu-profiling",
+			Usage:  "enable cpu-profiling data collection; profile data is stored in the cwd of the process invoking sysbox-runc.",
+			Hidden: true,
+		},
+		cli.BoolFlag{
+			Name:   "memory-profiling",
+			Usage:  "enable memory-profiling data collectionprofile data is stored in the cwd of the process invoking sysbox-runc.",
+			Hidden: true,
+		},
 	}
+
 	app.Commands = []cli.Command{
 		createCommand,
 		deleteCommand,
@@ -106,6 +117,7 @@ func main() {
 		stateCommand,
 		updateCommand,
 	}
+
 	app.Before = func(context *cli.Context) error {
 		if !context.IsSet("root") && xdgRuntimeDir != "" {
 			// According to the XDG specification, we need to set anything in
