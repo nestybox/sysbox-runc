@@ -1534,6 +1534,14 @@ func TestRootfsPropagationSlaveMount(t *testing.T) {
 // mount should propagate to host (/mnt1host/mnt2cont)
 
 func TestRootfsPropagationSharedMount(t *testing.T) {
+
+	// sysbox-runc: sys containers always use the user-ns; this test is
+	// not applicable as it creates a bind-mount with shared
+	// propagation, which is not possible when using user-ns (see
+	// snippet below on mount_namespaces(7)).
+
+	t.Skip("not applicable")
+
 	var dir1cont string
 	var dir2cont string
 
@@ -1560,6 +1568,7 @@ func TestRootfsPropagationSharedMount(t *testing.T) {
 	//    will not propagate to more privileged mount namespaces.
 	//
 	// Thus, we must remove the user-ns that comes in the template config.
+
 	config.Namespaces.Remove(configs.NEWUSER)
 	config.UidMappings = nil
 	config.GidMappings = nil

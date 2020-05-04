@@ -25,6 +25,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/utils"
 	libcontainerUtils "github.com/opencontainers/runc/libcontainer/utils"
 	"github.com/opencontainers/runc/libsysbox/syscont"
+
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/opencontainers/selinux/go-selinux/label"
 
@@ -1060,9 +1061,10 @@ func needUidShiftOnBindSrc(mount *configs.Mount, config *configs.Config) (bool, 
 // mount. It does this by reopening the rootfs directory.
 func effectRootfsMount() error {
 
-	// The method for reopening the rootfs directory is pretty lame, but I could not find
-	// any other. Note that per the Linux FHS, /dev is required on a Linux host and thus
-	// will always be present in a system container
+	// The method for reopening the rootfs directory is pretty lame,
+	// but I could not find any other. Note that the "dev" subdirectory
+	// is guaranteed to be present, as it's created by our parent
+	// sysbox-runc.
 
 	if err := os.Chdir("dev"); err != nil {
 		return newSystemErrorWithCause(err, "chdir dev")
