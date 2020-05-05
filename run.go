@@ -84,7 +84,7 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 		sysMgr := sysbox.NewMgr(id, !context.GlobalBool("no-sysbox-mgr"))
 		sysFs := sysbox.NewFs(id, !context.GlobalBool("no-sysbox-fs"))
 
-		// register with sysMgr (registration with sysFs occurs later (within libcontainer))
+		// register with sysMgr
 		if sysMgr.Enabled() {
 			if err = sysMgr.Register(); err != nil {
 				return err
@@ -94,6 +94,15 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 					sysMgr.Unregister()
 				}
 			}()
+		}
+
+		spec, shiftUids, err = setupSpec(context, sysMgr, sysFs)
+		if err != nil {
+			return err
+		}
+
+		if err = sysbox.CheckHostConfig(context, shiftUids); err != nil {
+			return err
 		}
 
 		// pre-register with sysFs
@@ -106,15 +115,6 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 					sysFs.Unregister()
 				}
 			}()
-		}
-
-		spec, shiftUids, err = setupSpec(context, sysMgr, sysFs)
-		if err != nil {
-			return err
-		}
-
-		if err = sysbox.CheckHostConfig(context, shiftUids); err != nil {
-			return err
 		}
 
 		status, err = startContainer(context, spec, CT_ACT_RUN, nil, shiftUids, sysMgr, sysFs)
