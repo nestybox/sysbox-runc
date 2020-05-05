@@ -5,14 +5,10 @@
 package syscont
 
 import (
-	"bytes"
-	"os"
-	"path/filepath"
 	"testing"
 
+	utils "github.com/nestybox/sysbox/utils"
 	"github.com/opencontainers/runtime-spec/specs-go"
-
-	"golang.org/x/sys/unix"
 )
 
 func findSeccompSyscall(seccomp *specs.LinuxSeccomp, targetSyscalls []string) (allFound bool, notFound []string) {
@@ -132,42 +128,6 @@ func TestCfgSeccomp(t *testing.T) {
 	// TODO: Test handling of non-conflicting blacklist
 }
 
-func TestCfgLibModMount(t *testing.T) {
-
-	var utsname unix.Utsname
-	if err := unix.Uname(&utsname); err != nil {
-		t.Errorf("cfgLibModMount: uname failed: %v", err)
-	}
-
-	n := bytes.IndexByte(utsname.Release[:], 0)
-	path := filepath.Join("/lib/modules/", string(utsname.Release[:n]))
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return // skip test
-	}
-
-	spec := new(specs.Spec)
-
-	// Test handling of spec without "/lib/modules/<kernel-release>" mount
-	if err := cfgLibModMount(spec); err != nil {
-		t.Errorf("cfgLibModMount: returned error: %v", err)
-	}
-	m := spec.Mounts[0]
-	if (m.Destination != path) || (m.Source != path) || (m.Type != "bind") {
-		t.Errorf("cfgLibModMount: failed basic mount test")
-	}
-
-	// Test handling of spec with matching "/lib/modules/<kernel-release>" mount
-	if err := cfgLibModMount(spec); err != nil {
-		t.Errorf("cfgLibModMount: failed matching mount test: %v", err)
-	}
-
-	// test config with conflicting /lib/modules mount
-	spec.Mounts[0].Options = []string{}
-	if err := cfgLibModMount(spec); err != nil {
-		t.Errorf("cfgLibModMount: failed conflicting mount test: %v", err)
-	}
-}
-
 func TestCfgMaskedPaths(t *testing.T) {
 	spec := new(specs.Spec)
 	spec.Linux = new(specs.Linux)
@@ -186,7 +146,7 @@ func TestCfgMaskedPaths(t *testing.T) {
 	}
 
 	want := []string{"/some/path", "/other/path"}
-	if !stringSliceEqual(spec.Linux.MaskedPaths, want) {
+	if !utils.StringSliceEqual(spec.Linux.MaskedPaths, want) {
 		t.Errorf("cfgMaskedPaths: removed unexpected path; got %v, want %v", spec.Linux.MaskedPaths, want)
 	}
 }
@@ -209,7 +169,7 @@ func TestCfgReadonlyPaths(t *testing.T) {
 	}
 
 	want := []string{"/some/path", "/other/path"}
-	if !stringSliceEqual(spec.Linux.ReadonlyPaths, want) {
+	if !utils.StringSliceEqual(spec.Linux.ReadonlyPaths, want) {
 		t.Errorf("cfgReadonlyPaths: removed unexpected path; got %v, want %v", spec.Linux.ReadonlyPaths, want)
 	}
 }
@@ -233,29 +193,8 @@ func TestSortMounts(t *testing.T) {
 
 	sortMounts(spec)
 
-	if !mountSliceEqual(spec.Mounts, wantMounts) {
+	if !utils.MountSliceEqual(spec.Mounts, wantMounts) {
 		t.Errorf("sortMounts() failed: got %v, want %v", spec.Mounts, wantMounts)
-	}
-}
-
-func TestGetEnvVarInfo(t *testing.T) {
-
-	test := []string{"a=b", "var=1", "other-var=hello", "var2="}
-	name := []string{"a", "var", "other-var", "var2"}
-	val := []string{"b", "1", "hello", ""}
-
-	for i, _ := range test {
-		n, v, err := getEnvVarInfo(test[i])
-		if err != nil {
-			t.Errorf("getEnvVarInfo(%s) failed: returned unexpected error %v", test[i], err)
-		}
-		if n != name[i] || v != val[i] {
-			t.Errorf("getEnvVarInfo(%s) failed: want %s, %s; got %s, %s", test[i], name[i], val[i], n, v)
-		}
-	}
-
-	if _, _, err := getEnvVarInfo("a=b=c"); err == nil {
-		t.Errorf("getEnvVarInfo(%s) failed: expected error, got no error.", "a=b=c")
 	}
 }
 
@@ -325,7 +264,7 @@ func TestCfgSystemd(t *testing.T) {
 		},
 	}
 
-	if !mountSliceEqual(spec.Mounts, wantMounts) {
+	if !utils.MountSliceEqual(spec.Mounts, wantMounts) {
 		t.Errorf("cfgSystemd() failed: spec.Mounts: want %v, got %v", wantMounts, spec.Mounts)
 	}
 

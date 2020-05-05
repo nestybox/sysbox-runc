@@ -15,6 +15,7 @@ import (
 
 	mapset "github.com/deckarep/golang-set"
 	ipcLib "github.com/nestybox/sysbox-ipc/sysboxMgrLib"
+	utils "github.com/nestybox/sysbox/utils"
 	"github.com/opencontainers/runc/libsysbox/sysbox"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
@@ -437,18 +438,18 @@ func cfgCapabilities(p *specs.Process) {
 // sysbox-fs will handle accesses.
 func cfgMaskedPaths(spec *specs.Spec) {
 	if systemdInit(spec.Process) {
-		spec.Linux.MaskedPaths = stringSliceRemove(spec.Linux.MaskedPaths, sysboxSystemdExposedPaths)
+		spec.Linux.MaskedPaths = utils.StringSliceRemove(spec.Linux.MaskedPaths, sysboxSystemdExposedPaths)
 	}
-	spec.Linux.MaskedPaths = stringSliceRemove(spec.Linux.MaskedPaths, sysboxExposedPaths)
+	spec.Linux.MaskedPaths = utils.StringSliceRemove(spec.Linux.MaskedPaths, sysboxExposedPaths)
 }
 
 // cfgReadonlyPaths removes from the container's config any read-only paths
 // that must be read-write in the system container
 func cfgReadonlyPaths(spec *specs.Spec) {
 	if systemdInit(spec.Process) {
-		spec.Linux.ReadonlyPaths = stringSliceRemove(spec.Linux.ReadonlyPaths, sysboxSystemdRwPaths)
+		spec.Linux.ReadonlyPaths = utils.StringSliceRemove(spec.Linux.ReadonlyPaths, sysboxSystemdRwPaths)
 	}
-	spec.Linux.ReadonlyPaths = stringSliceRemove(spec.Linux.ReadonlyPaths, sysboxRwPaths)
+	spec.Linux.ReadonlyPaths = utils.StringSliceRemove(spec.Linux.ReadonlyPaths, sysboxRwPaths)
 }
 
 // cfgMounts configures the system container mounts
@@ -476,7 +477,7 @@ func cfgMounts(spec *specs.Spec, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs, shiftUids
 
 // cfgSysboxMounts adds sysbox generic mounts to the sys container's spec.
 func cfgSysboxMounts(spec *specs.Spec) {
-	spec.Mounts = mountSliceRemove(spec.Mounts, sysboxMounts, func(m1, m2 specs.Mount) bool {
+	spec.Mounts = utils.MountSliceRemove(spec.Mounts, sysboxMounts, func(m1, m2 specs.Mount) bool {
 		return m1.Destination == m2.Destination
 	})
 	spec.Mounts = append(spec.Mounts, sysboxMounts...)
@@ -484,7 +485,7 @@ func cfgSysboxMounts(spec *specs.Spec) {
 
 // cfgSysboxFsMounts adds the sysbox-fs mounts to the containers config.
 func cfgSysboxFsMounts(spec *specs.Spec, sysFs *sysbox.Fs) {
-	spec.Mounts = mountSliceRemove(spec.Mounts, sysboxFsMounts, func(m1, m2 specs.Mount) bool {
+	spec.Mounts = utils.MountSliceRemove(spec.Mounts, sysboxFsMounts, func(m1, m2 specs.Mount) bool {
 		return m1.Destination == m2.Destination
 	})
 
@@ -506,7 +507,7 @@ func cfgSysboxFsMounts(spec *specs.Spec, sysFs *sysbox.Fs) {
 
 // cfgSystemdMounts adds systemd related mounts to the spec
 func cfgSystemdMounts(spec *specs.Spec) {
-	spec.Mounts = mountSliceRemove(spec.Mounts, sysboxSystemdMounts, func(m1, m2 specs.Mount) bool {
+	spec.Mounts = utils.MountSliceRemove(spec.Mounts, sysboxSystemdMounts, func(m1, m2 specs.Mount) bool {
 		return m1.Destination == m2.Destination
 	})
 	spec.Mounts = append(spec.Mounts, sysboxSystemdMounts...)
@@ -575,7 +576,7 @@ func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, shiftUids bool) error 
 
 	// If the sysbox-mgr mounts conflict with any in the spec (i.e.,
 	// same dest), prioritize the spec ones
-	mounts := mountSliceRemove(m, spec.Mounts, func(m1, m2 specs.Mount) bool {
+	mounts := utils.MountSliceRemove(m, spec.Mounts, func(m1, m2 specs.Mount) bool {
 		return m1.Destination == m2.Destination
 	})
 
@@ -759,13 +760,13 @@ func needUidShiftOnRootfs(spec *specs.Spec) (bool, error) {
 // Configure environment variables required for systemd
 func cfgSystemdEnv(p *specs.Process) {
 
-	p.Env = stringSliceRemoveMatch(p.Env, func(specEnvVar string) bool {
-		name, _, err := getEnvVarInfo(specEnvVar)
+	p.Env = utils.StringSliceRemoveMatch(p.Env, func(specEnvVar string) bool {
+		name, _, err := utils.GetEnvVarInfo(specEnvVar)
 		if err != nil {
 			return false
 		}
 		for _, sysboxSysdEnvVar := range sysboxSystemdEnvVars {
-			sname, _, err := getEnvVarInfo(sysboxSysdEnvVar)
+			sname, _, err := utils.GetEnvVarInfo(sysboxSysdEnvVar)
 			if err == nil && name == sname {
 				return true
 			}
