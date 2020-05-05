@@ -5,14 +5,9 @@
 package syscont
 
 import (
-	"bytes"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
-
-	"golang.org/x/sys/unix"
 )
 
 func findSeccompSyscall(seccomp *specs.LinuxSeccomp, targetSyscalls []string) (allFound bool, notFound []string) {
@@ -130,42 +125,6 @@ func TestCfgSeccomp(t *testing.T) {
 	// TODO: Test handling of empty blacklist
 	// TODO: Test handling of conflicting blacklist
 	// TODO: Test handling of non-conflicting blacklist
-}
-
-func TestCfgLibModMount(t *testing.T) {
-
-	var utsname unix.Utsname
-	if err := unix.Uname(&utsname); err != nil {
-		t.Errorf("cfgLibModMount: uname failed: %v", err)
-	}
-
-	n := bytes.IndexByte(utsname.Release[:], 0)
-	path := filepath.Join("/lib/modules/", string(utsname.Release[:n]))
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return // skip test
-	}
-
-	spec := new(specs.Spec)
-
-	// Test handling of spec without "/lib/modules/<kernel-release>" mount
-	if err := cfgLibModMount(spec); err != nil {
-		t.Errorf("cfgLibModMount: returned error: %v", err)
-	}
-	m := spec.Mounts[0]
-	if (m.Destination != path) || (m.Source != path) || (m.Type != "bind") {
-		t.Errorf("cfgLibModMount: failed basic mount test")
-	}
-
-	// Test handling of spec with matching "/lib/modules/<kernel-release>" mount
-	if err := cfgLibModMount(spec); err != nil {
-		t.Errorf("cfgLibModMount: failed matching mount test: %v", err)
-	}
-
-	// test config with conflicting /lib/modules mount
-	spec.Mounts[0].Options = []string{}
-	if err := cfgLibModMount(spec); err != nil {
-		t.Errorf("cfgLibModMount: failed conflicting mount test: %v", err)
-	}
 }
 
 func TestCfgMaskedPaths(t *testing.T) {
