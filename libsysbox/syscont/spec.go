@@ -456,14 +456,6 @@ func cfgMounts(spec *specs.Spec, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs, shiftUids
 
 	cfgSysboxMounts(spec)
 
-	if err := cfgLinuxHeadersMount(spec); err != nil {
-		return err
-	}
-
-	if err := cfgLibModMount(spec); err != nil {
-		return err
-	}
-
 	if sysFs.Enabled() {
 		cfgSysboxFsMounts(spec, sysFs)
 	}
@@ -520,109 +512,29 @@ func cfgSystemdMounts(spec *specs.Spec) {
 	spec.Mounts = append(spec.Mounts, sysboxSystemdMounts...)
 }
 
-// cfgLibModMount configures the sys container spec with a read-only mount of the host's
-// kernel modules directory (/lib/modules/<kernel-release>). This allows system container
-// processes to verify the presence of modules via modprobe. System apps such as Docker
-// and K8s do this. Note that this does not imply module loading/unloading is supported in
-// a system container (it's not). It merely lets processes check if a module is loaded.
-func cfgLibModMount(spec *specs.Spec) error {
-
-	kernelRel, err := sysbox.GetKernelRelease()
-	if err != nil {
-		return err
-	}
-
-	path := filepath.Join("/lib/modules/", kernelRel)
-	if _, err := os.Stat(path); err != nil {
-		return err
-	}
-
-	mounts := []specs.Mount{}
-
-	// don't follow symlinks as they normally point to the linux headers which we
-	// mount in cfgLinuxHeadersMount
-	mounts, err = createMountSpec(
-		path,
-		path,
-		"bind",
-		[]string{"ro", "rbind", "rprivate"}, true, []string{"/usr/src"},
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create mount spec for linux modules at %s: %v",
-			path, err)
-	}
-
-	// if the mounts conflict with any in the spec (i.e., same dest), prioritize
-	// the spec ones
-	mounts = mountSliceRemove(mounts, spec.Mounts, func(m1, m2 specs.Mount) bool {
-		return m1.Destination == m2.Destination
-	})
-
-	spec.Mounts = append(spec.Mounts, mounts...)
-	return nil
-}
-
-// cfgLinuxHeadersMount configures the sys container spec with a read-only mount
-// of the host's linux kernel headers. This is needed to build or run apps that
-// interact with the Linux kernel directly within a sys container.
-func cfgLinuxHeadersMount(spec *specs.Spec) error {
-
-	kernelRel, err := sysbox.GetKernelRelease()
-	if err != nil {
-		return err
-	}
-
-	kernelHdr := "linux-headers-" + kernelRel
-
-	path := filepath.Join("/usr/src/", kernelHdr)
-	if _, err := os.Stat(path); err != nil {
-		return err
-	}
-
-	mounts := []specs.Mount{}
-
-	// follow symlinks as some distros (e.g., Ubuntu) heavily symlink the linux
-	// header directory
-	mounts, err = createMountSpec(
-		path,
-		path,
-		"bind",
-		[]string{"ro", "rbind", "rprivate"}, true, []string{"/usr/src"},
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create mount spec for linux headers at %s: %v",
-			path, err)
-	}
-
-	// if the mounts conflict with any in the spec (i.e., same dest), prioritize
-	// the spec ones
-	mounts = mountSliceRemove(mounts, spec.Mounts, func(m1, m2 specs.Mount) bool {
-		return m1.Destination == m2.Destination
-	})
-
-	spec.Mounts = append(spec.Mounts, mounts...)
-	return nil
-}
-
 // sysMgrSetupMounts requests the sysbox-mgr to setup special sys container mounts
 func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, shiftUids bool) error {
 
-	// These directories in the sys container are backed by mounts handled by sysbox-mgr
-	specialDir := map[string]bool{
-		"/var/lib/docker":  true,
-		"/var/lib/kubelet": true,
-		"/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs": true,
+	// These directories in the sys container are bind-mounted to host dirs managed by sysbox-mgr
+	specialDir := map[string]ipcLib.MntKind{
+		"/var/lib/docker":  ipcLib.MntVarLibDocker,
+		"/var/lib/kubelet": ipcLib.MntVarLibKubelet,
+		"/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs": ipcLib.MntVarLibContainerdOvfs,
 	}
 
 	uid := spec.Linux.UIDMappings[0].HostID
 	gid := spec.Linux.GIDMappings[0].HostID
 
-	// if the spec has a bind-mount over one of the special dirs, ask the sysbox-mgr to
+	// If the spec has a bind-mount over one of the special dirs, ask the sysbox-mgr to
 	// prepare the mount source
 	prepList := []ipcLib.MountPrepInfo{}
+
 	for i := len(spec.Mounts) - 1; i >= 0; i-- {
+
 		m := spec.Mounts[i]
-		if m.Type == "bind" && specialDir[m.Destination] {
+		_, isSpecialDir := specialDir[m.Destination]
+
+		if m.Type == "bind" && isSpecialDir {
 			info := ipcLib.MountPrepInfo{
 				Source:    m.Source,
 				Exclusive: true,
@@ -638,22 +550,36 @@ func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, shiftUids bool) error 
 		}
 	}
 
-	// otherwise, request sysbox-mgr to create a bind-mount to back the special dir
+	// Otherwise, add the special dir to the list of mounts that we
+	// will request sysbox-mgr to setup
 	reqList := []ipcLib.MountReqInfo{}
-	for m := range specialDir {
+	for dest, kind := range specialDir {
 		info := ipcLib.MountReqInfo{
-			Dest: m,
+			Kind: kind,
+			Dest: dest,
 		}
 		reqList = append(reqList, info)
 	}
 
-	if len(reqList) > 0 {
-		m, err := mgr.ReqMounts(spec.Root.Path, uid, gid, shiftUids, reqList)
-		if err != nil {
-			return err
-		}
-		spec.Mounts = append(spec.Mounts, m...)
+	// sysbox-mgr will setup host dirs to back the mounts in the
+	// request list; it will also send us any other mounts it needs.
+	rootPath, err := filepath.Abs(spec.Root.Path)
+	if err != nil {
+		return err
 	}
+
+	m, err := mgr.ReqMounts(rootPath, uid, gid, shiftUids, reqList)
+	if err != nil {
+		return err
+	}
+
+	// If the sysbox-mgr mounts conflict with any in the spec (i.e.,
+	// same dest), prioritize the spec ones
+	mounts := mountSliceRemove(m, spec.Mounts, func(m1, m2 specs.Mount) bool {
+		return m1.Destination == m2.Destination
+	})
+
+	spec.Mounts = append(spec.Mounts, mounts...)
 
 	return nil
 }

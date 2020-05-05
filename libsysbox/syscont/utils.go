@@ -212,7 +212,7 @@ func followSymlinksUnder(dir string) ([]string, error) {
 }
 
 // createMountSpec returns a mount spec with the given source, destination, type, and
-// options. 'source' must an absolute path. 'dest' is absolute with respect to the
+// options. 'source' must be an absolute path. 'dest' is absolute with respect to the
 // container's rootfs. If followSymlinks is true, this function follows symlinks under the
 // source path and returns additional mount specs to ensure the symlinks are valid at the
 // destination. If symlinkFilt is not empty, only symlinks that resolve to paths that
