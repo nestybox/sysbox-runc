@@ -7,6 +7,7 @@ package syscont
 import (
 	"testing"
 
+	utils "github.com/nestybox/sysbox-libs/utils"
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
@@ -145,7 +146,7 @@ func TestCfgMaskedPaths(t *testing.T) {
 	}
 
 	want := []string{"/some/path", "/other/path"}
-	if !stringSliceEqual(spec.Linux.MaskedPaths, want) {
+	if !utils.StringSliceEqual(spec.Linux.MaskedPaths, want) {
 		t.Errorf("cfgMaskedPaths: removed unexpected path; got %v, want %v", spec.Linux.MaskedPaths, want)
 	}
 }
@@ -168,7 +169,7 @@ func TestCfgReadonlyPaths(t *testing.T) {
 	}
 
 	want := []string{"/some/path", "/other/path"}
-	if !stringSliceEqual(spec.Linux.ReadonlyPaths, want) {
+	if !utils.StringSliceEqual(spec.Linux.ReadonlyPaths, want) {
 		t.Errorf("cfgReadonlyPaths: removed unexpected path; got %v, want %v", spec.Linux.ReadonlyPaths, want)
 	}
 }
@@ -192,29 +193,8 @@ func TestSortMounts(t *testing.T) {
 
 	sortMounts(spec)
 
-	if !mountSliceEqual(spec.Mounts, wantMounts) {
+	if !utils.MountSliceEqual(spec.Mounts, wantMounts) {
 		t.Errorf("sortMounts() failed: got %v, want %v", spec.Mounts, wantMounts)
-	}
-}
-
-func TestGetEnvVarInfo(t *testing.T) {
-
-	test := []string{"a=b", "var=1", "other-var=hello", "var2="}
-	name := []string{"a", "var", "other-var", "var2"}
-	val := []string{"b", "1", "hello", ""}
-
-	for i, _ := range test {
-		n, v, err := getEnvVarInfo(test[i])
-		if err != nil {
-			t.Errorf("getEnvVarInfo(%s) failed: returned unexpected error %v", test[i], err)
-		}
-		if n != name[i] || v != val[i] {
-			t.Errorf("getEnvVarInfo(%s) failed: want %s, %s; got %s, %s", test[i], name[i], val[i], n, v)
-		}
-	}
-
-	if _, _, err := getEnvVarInfo("a=b=c"); err == nil {
-		t.Errorf("getEnvVarInfo(%s) failed: expected error, got no error.", "a=b=c")
 	}
 }
 
@@ -284,7 +264,7 @@ func TestCfgSystemd(t *testing.T) {
 		},
 	}
 
-	if !mountSliceEqual(spec.Mounts, wantMounts) {
+	if !utils.MountSliceEqual(spec.Mounts, wantMounts) {
 		t.Errorf("cfgSystemd() failed: spec.Mounts: want %v, got %v", wantMounts, spec.Mounts)
 	}
 
