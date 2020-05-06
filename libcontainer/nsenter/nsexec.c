@@ -595,7 +595,7 @@ void mountShiftfsOnBindSources(char *mntlist) {
 	char *mntpath = strtok_r(mntlist, ",", &saveptr);
 
 	if (!mntpath || !strlen(mntpath) || !strlen(mntlist))
-		bail("mount paths are empty");
+		return;
 
 	do {
 		if (mount(mntpath, mntpath, "shiftfs", 0, "") < 0) {
