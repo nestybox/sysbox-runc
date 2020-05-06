@@ -713,7 +713,7 @@ func (p *initProcess) setupDevSubdir() error {
 	// container's init process must have a subdir under the rootfs
 	// that it can chdir into and back to the rootfs in order to "feel"
 	// the effect of mounts that it performs on the container's rootfs
-	// (e.g., shiftfs mounts). And witout feeling the effect of those
+	// (e.g., shiftfs mounts). And without feeling the effect of those
 	// mounts it may not have permission to create the subdir itself.
 	// See function effectRootfsMount() in rootfs_linux.go.
 	//
