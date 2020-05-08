@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"runtime"
 
 	"github.com/pkg/profile"
 	"github.com/sirupsen/logrus"
@@ -27,6 +28,18 @@ func runProfiler(ctx *cli.Context) (interface{ Stop() }, error) {
 	}
 
 	if cpuProfOn {
+
+		// set the profiler's sampling rate at twice the usual to get a
+		// more accurate result (sysbox-runc executes quickly).
+		//
+		// Note: this may result in the following error message when
+		// running sysbox-runc with profiling enabled: "runtime: cannot
+		// set cpu profile rate until previous profile has finished."
+		// We can ignore it; it occurs because profile.Start() invokes
+		// pprof.go which calls SetCPUProfileRate() again. Since we have
+		// already set the value, the one from pprof will be ignored.
+		runtime.SetCPUProfileRate(200)
+
 		prof = profile.Start(
 			profile.Quiet,
 			profile.CPUProfile,
