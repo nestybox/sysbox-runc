@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/nestybox/sysbox-libs/capability"
 	"github.com/opencontainers/runc/libcontainer/configs"
-	"github.com/syndtr/gocapability/capability"
 )
 
 const allCapabilityTypes = capability.CAPS | capability.BOUNDS | capability.AMBS

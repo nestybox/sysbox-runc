@@ -16,6 +16,7 @@ require (
 	github.com/moby/sys/mountinfo v0.4.0
 	github.com/mrunalp/fileutils v0.5.0
 	github.com/nestybox/sysbox-ipc v0.0.0-00010101000000-000000000000
+	github.com/nestybox/sysbox-libs/capability v0.0.0-00010101000000-000000000000
 	github.com/nestybox/sysbox-libs/libseccomp-golang v0.0.0-00010101000000-000000000000
 	github.com/nestybox/sysbox-libs/utils v0.0.0-00010101000000-000000000000
 	github.com/opencontainers/runc v0.0.0-00010101000000-000000000000
@@ -32,10 +33,12 @@ require (
 	golang.org/x/sys v0.0.0-20201107080550-4d91cf3a1aaf
 )
 
-replace github.com/opencontainers/runc => ./
-
 replace github.com/nestybox/sysbox-ipc => ../sysbox-ipc
 
 replace github.com/nestybox/sysbox-libs/libseccomp-golang => ../sysbox-libs/libseccomp-golang
 
+replace github.com/nestybox/sysbox-libs/capability => ../sysbox-libs/capability
+
 replace github.com/nestybox/sysbox-libs/utils => ../sysbox-libs/utils
+
+replace github.com/opencontainers/runc => ./
