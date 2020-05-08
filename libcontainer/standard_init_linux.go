@@ -39,12 +39,10 @@ const (
 )
 
 type opReq struct {
-	Op        opReqType     `json:"type"`       // op request type
-	Rootfs    string        `json:"rootfs"`     // container's rootfs path
-	Mount     configs.Mount `json:"mount"`      // bind mount info
-	Label     string        `json:"label"`      // bind mount label
-	Pid       int           `json:"pid"`        // pid of container's init process
-	SeccompFd int32         `json:"seccomp_fd"` // seccomp notification file-descriptor
+	Op     opReqType     `json:"type"`   // op request type
+	Rootfs string        `json:"rootfs"` // container's rootfs path
+	Mount  configs.Mount `json:"mount"`  // bind mount info
+	Label  string        `json:"label"`  // bind mount label
 }
 
 func (l *linuxStandardInit) getSessionRingParams() (string, uint32, uint32) {

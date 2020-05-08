@@ -16,9 +16,9 @@ func sortMounts(spec *specs.Spec) {
 
 	// The OCI spec requires the runtime to honor the ordering on
 	// mounts in the spec. However, we deviate a bit and always order
-	// the mounts in the orderList below. Other mounts are left in the
-	// order given by the spec.
+	// the mounts in the orderList below.
 
+	// First, sort by destination prefix
 	orderList := map[string]int{
 		"/sys":  1,
 		"/proc": 2,
@@ -62,4 +62,23 @@ func sortMounts(spec *specs.Spec) {
 		// for mounts not in the sort list, leave their ordering untouched
 		return false
 	})
+
+	// Now, place all the bind mounts at the end of the mount list (this improves performance
+	// as it allows us to process the bind mounts in bulk (see rootfs_linux.go))
+	sort.SliceStable(spec.Mounts, func(i, j int) bool {
+
+		t1 := spec.Mounts[i].Type
+		t2 := spec.Mounts[j].Type
+
+		if t1 == "bind" && t2 == "bind" {
+			return false
+		}
+
+		if t2 == "bind" {
+			return true
+		}
+
+		return false
+	})
+
 }

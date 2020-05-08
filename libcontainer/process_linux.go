@@ -419,6 +419,7 @@ func (p *initProcess) start() error {
 	if err := p.createNetworkInterfaces(); err != nil {
 		return newSystemErrorWithCause(err, "creating network interfaces")
 	}
+
 	if err := p.sendConfig(); err != nil {
 		return newSystemErrorWithCause(err, "sending config to init process")
 	}
@@ -492,14 +493,14 @@ func (p *initProcess) start() error {
 			sentResume = true
 
 		case reqOp:
-			var req opReq
+			var reqs []opReq
 			if err := writeSync(p.parentPipe, sendOpInfo); err != nil {
 				return newSystemErrorWithCause(err, "writing syncT 'sendOpInfo'")
 			}
-			if err := json.NewDecoder(p.parentPipe).Decode(&req); err != nil {
-				return newSystemErrorWithCause(err, "receiving / decoding mountInfo'")
+			if err := json.NewDecoder(p.parentPipe).Decode(&reqs); err != nil {
+				return newSystemErrorWithCause(err, "receiving / decoding reqOp'")
 			}
-			if err := p.container.handleReqOp(childPid, &req); err != nil {
+			if err := p.container.handleReqOp(childPid, reqs); err != nil {
 				return newSystemErrorWithCausef(err, "handleReqOp")
 			}
 			if err := writeSync(p.parentPipe, opDone); err != nil {

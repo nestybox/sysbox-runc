@@ -173,14 +173,11 @@ func mountCmd(cmd configs.Command) error {
 func prepareBindDest(m *configs.Mount, rootfs string, absDestPath bool) (err error) {
 	var base, dest string
 
-	if err := validateCwd(rootfs); err != nil {
-		return newSystemErrorWithCause(err, "validating cwd")
-	}
-
 	// ensure that the destination of the bind mount is resolved of symlinks at mount time because
 	// any previous mounts can invalidate the next mount's destination.
 	// this can happen when a user specifies mounts within other mounts to cause breakouts or other
 	// evil stuff to try to escape the container's rootfs.
+
 	if absDestPath {
 		base = rootfs
 	} else {
@@ -301,27 +298,6 @@ func mountToRootfs(m *configs.Mount, rootfs, mountLabel string, enableCgroupns, 
 			}
 		}
 		return nil
-	case "bind":
-		// sysbox-runc: the sys container's init process is in a dedicated
-		// user-ns, so it may not have search permission to the bind mount source
-		// (and thus can't perform the bind mount itself). As a result,
-		// we perform the bind mount by asking the parent runc to spawn a helper child
-		// process which enters the container's mount namespace (only) and performs the
-		// mount. That helper process has true root credentials (because it's in the
-		// initial user-ns rather than the sys container's user-ns) yet it can perform
-		// mounts inside the container.
-		if err := prepareBindDest(m, rootfs, false); err != nil {
-			return err
-		}
-		mountInfo := &opReq{
-			Op:     bind,
-			Mount:  *m,
-			Label:  mountLabel,
-			Rootfs: rootfs,
-		}
-		if err := syncParentDoOp(mountInfo, pipe); err != nil {
-			return newSystemErrorWithCause(err, "syncing with parent runc to perform bind mount")
-		}
 	case "cgroup":
 		binds, err := getCgroupMounts(m)
 		if err != nil {
@@ -404,6 +380,46 @@ func mountToRootfs(m *configs.Mount, rootfs, mountLabel string, enableCgroupns, 
 		}
 		return mountPropagate(m, mountLabel)
 	}
+	return nil
+}
+
+func doBindMounts(config *configs.Config, pipe io.ReadWriter) error {
+
+	mntReqs := []opReq{}
+
+	for _, m := range config.Mounts {
+		if m.Device == "bind" {
+
+			if err := prepareBindDest(m, config.Rootfs, false); err != nil {
+				return err
+			}
+
+			req := opReq{
+				Op:     bind,
+				Mount:  *m,
+				Label:  config.MountLabel,
+				Rootfs: config.Rootfs,
+			}
+
+			mntReqs = append(mntReqs, req)
+		}
+	}
+
+	// sysbox-runc: the sys container's init process is in a dedicated
+	// user-ns, so it may not have search permission to the bind mount sources
+	// (and thus can't perform the bind mount itself). As a result,
+	// we perform the bind mounts by asking the parent runc to spawn a helper child
+	// process which enters the container's mount namespace (only) and performs the
+	// mounts. That helper process has true root credentials (because it's in the
+	// initial user-ns rather than the sys container's user-ns) yet it can perform
+	// mounts inside the container.
+
+	if len(mntReqs) > 0 {
+		if err := syncParentDoOp(mntReqs, pipe); err != nil {
+			return newSystemErrorWithCause(err, "syncing with parent runc to perform bind mounts")
+		}
+	}
+
 	return nil
 }
 
@@ -872,21 +888,20 @@ func mountNewCgroup(m *configs.Mount) error {
 
 // sysbox-runc: doMounts sets up all of the container's mounts as specified in the given config.
 func doMounts(config *configs.Config, pipe io.ReadWriter) error {
+
+	// Do non-bind mounts
 	for _, m := range config.Mounts {
-		for _, precmd := range m.PremountCmds {
-			if err := mountCmd(precmd); err != nil {
-				return newSystemErrorWithCause(err, "running premount command")
-			}
-		}
-		if err := mountToRootfs(m, config.Rootfs, config.MountLabel, true, config.ShiftUids, pipe); err != nil {
-			return newSystemErrorWithCausef(err, "mounting %q to rootfs %q at %q", m.Source, config.Rootfs, m.Destination)
-		}
-		for _, postcmd := range m.PostmountCmds {
-			if err := mountCmd(postcmd); err != nil {
-				return newSystemErrorWithCause(err, "running postmount command")
+		if m.Device != "bind" {
+			if err := mountToRootfs(m, config.Rootfs, config.MountLabel, true, config.ShiftUids, pipe); err != nil {
+				return newSystemErrorWithCausef(err, "mounting %q to rootfs %q at %q", m.Source, config.Rootfs, m.Destination)
 			}
 		}
 	}
+
+	if err := doBindMounts(config, pipe); err != nil {
+		return err
+	}
+
 	return nil
 }
 

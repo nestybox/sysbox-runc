@@ -839,6 +839,9 @@ func TestPassExtraFiles(t *testing.T) {
 }
 
 func TestMountCmds(t *testing.T) {
+
+	// TODO: fix this test
+
 	if testing.Short() {
 		return
 	}
