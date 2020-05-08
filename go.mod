@@ -15,6 +15,7 @@ require (
 	github.com/mrunalp/fileutils v0.0.0-20171103030105-7d4729fb3618
 	github.com/nestybox/libseccomp-golang v0.0.0-00010101000000-000000000000
 	github.com/nestybox/sysbox-ipc v0.0.0-00010101000000-000000000000
+	github.com/nestybox/sysbox/lib/capability v0.0.0-00010101000000-000000000000 // indirect
 	github.com/nestybox/sysbox/utils v0.0.0-00010101000000-000000000000
 	github.com/opencontainers/runc v0.0.0-00010101000000-000000000000
 	github.com/opencontainers/runtime-spec v1.0.2
@@ -22,7 +23,6 @@ require (
 	github.com/pkg/errors v0.8.1
 	github.com/pkg/profile v1.4.0
 	github.com/sirupsen/logrus v1.4.2
-	github.com/syndtr/gocapability v0.0.0-20180916011248-d98352740cb2
 	github.com/urfave/cli v1.20.0
 	github.com/vishvananda/netlink v1.0.0
 	github.com/vishvananda/netns v0.0.0-20191106174202-0a2b9b5464df // indirect
@@ -32,6 +32,8 @@ require (
 replace github.com/nestybox/sysbox-ipc => ../sysbox-ipc
 
 replace github.com/nestybox/libseccomp-golang => ../lib/seccomp-golang
+
+replace github.com/nestybox/sysbox/lib/capability => ../lib/capability
 
 replace github.com/nestybox/sysbox/utils => ../lib/utils
 
