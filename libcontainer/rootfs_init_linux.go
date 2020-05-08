@@ -14,7 +14,7 @@ import (
 
 type linuxRootfsInit struct {
 	pipe *os.File
-	req  *opReq
+	reqs []opReq
 }
 
 // getDir returns the path to the directory that contains the file at the given path
@@ -64,40 +64,51 @@ func (l *linuxRootfsInit) Init() error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	switch l.req.Op {
-	case bind:
-		rootfs := l.req.Rootfs
-		m := &l.req.Mount
-		mountLabel := l.req.Label
+	if len(l.reqs) == 0 {
+		return newSystemError(fmt.Errorf("no op requests!"))
+	}
 
-		// The call to mountPropagate below requires that the process cwd be the rootfs directory
+	// If multiple requests are passed in the slice, they must all be
+	// of the same type.
+
+	switch l.reqs[0].Op {
+	case bind:
+
+		// The calls to mountPropagate below requires that the process cwd be the rootfs directory
+		rootfs := l.reqs[0].Rootfs
 		if err := unix.Chdir(rootfs); err != nil {
 			return newSystemErrorWithCausef(err, "chdir to rootfs %s", rootfs)
 		}
 
-		if err := doBindMount(m); err != nil {
-			return newSystemErrorWithCausef(err, "bind mounting %s to %s", m.Source, m.Destination)
+		for _, req := range l.reqs {
+			m := &req.Mount
+			mountLabel := req.Label
+
+			if err := doBindMount(m); err != nil {
+				return newSystemErrorWithCausef(err, "bind mounting %s to %s", m.Source, m.Destination)
+			}
+
+			// The bind mount won't change mount options, we need remount to make mount options effective.
+			// first check that we have non-default options required before attempting a remount
+			if m.Flags&^(unix.MS_REC|unix.MS_REMOUNT|unix.MS_BIND) != 0 {
+				// only remount if unique mount options are set
+				if err := remount(m); err != nil {
+					return newSystemErrorWithCausef(err, "remount %s to %s", m.Source, m.Destination)
+				}
+			}
+
+			// Apply label
+			if m.Relabel != "" {
+				if err := label.Validate(m.Relabel); err != nil {
+					return newSystemErrorWithCausef(err, "validating label %s", m.Relabel)
+				}
+				shared := label.IsShared(m.Relabel)
+				if err := label.Relabel(m.Source, mountLabel, shared); err != nil {
+					return newSystemErrorWithCausef(err, "relabeling %s to %s", m.Source, mountLabel)
+				}
+			}
 		}
 
-		// The bind mount won't change mount options, we need remount to make mount options effective.
-		// first check that we have non-default options required before attempting a remount
-		if m.Flags&^(unix.MS_REC|unix.MS_REMOUNT|unix.MS_BIND) != 0 {
-			// only remount if unique mount options are set
-			if err := remount(m); err != nil {
-				return newSystemErrorWithCausef(err, "remount %s to %s", m.Source, m.Destination)
-			}
-		}
-
-		// Apply label
-		if m.Relabel != "" {
-			if err := label.Validate(m.Relabel); err != nil {
-				return newSystemErrorWithCausef(err, "validating label %s", m.Relabel)
-			}
-			shared := label.IsShared(m.Relabel)
-			if err := label.Relabel(m.Source, mountLabel, shared); err != nil {
-				return newSystemErrorWithCausef(err, "relabeling %s to %s", m.Source, mountLabel)
-			}
-		}
 	default:
 		return newSystemError(fmt.Errorf("invalid init type"))
 	}
@@ -105,6 +116,7 @@ func (l *linuxRootfsInit) Init() error {
 	if err := writeSync(l.pipe, opDone); err != nil {
 		return err
 	}
+
 	l.pipe.Close()
 	return nil
 }

@@ -105,13 +105,13 @@ func newContainerInit(t initType, pipe *os.File, consoleSocket *os.File, fifoFd 
 			}, nil
 		}
 	} else if t == initMount {
-		var req *opReq
-		if err := json.NewDecoder(pipe).Decode(&req); err != nil {
+		var reqs []opReq
+		if err := json.NewDecoder(pipe).Decode(&reqs); err != nil {
 			return nil, err
 		}
 		return &linuxRootfsInit{
 			pipe: pipe,
-			req:  req,
+			reqs: reqs,
 		}, nil
 	}
 
@@ -263,14 +263,14 @@ func syncParentHooks(pipe io.ReadWriter) error {
 // sys container's init process; this is useful in cases where the container's init process
 // can't do the operation because it may not have appropriate permissions.
 // See sync.go for the sync sequence.
-func syncParentDoOp(req *opReq, pipe io.ReadWriter) error {
+func syncParentDoOp(reqs []opReq, pipe io.ReadWriter) error {
 	if err := writeSync(pipe, reqOp); err != nil {
 		return err
 	}
 	if err := readSync(pipe, sendOpInfo); err != nil {
 		return err
 	}
-	if err := utils.WriteJSON(pipe, req); err != nil {
+	if err := utils.WriteJSON(pipe, reqs); err != nil {
 		return err
 	}
 	if err := readSync(pipe, opDone); err != nil {

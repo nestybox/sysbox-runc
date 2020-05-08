@@ -2291,26 +2291,32 @@ func formatIDMappings(idMap []configs.IDMap) []byte {
 }
 
 // sysbox-runc: handleReqOp handles requests from the container's init process for actions
-// that can't be done by it (e.g., due to lack of permissions, etc.). Actions include
-// setting up uid(gid) mappings for the container's user-ns, performing bind mounts in
-// cases where the container's init process has no permission to access to the source of
-// the mount, and others. See opReq for the list of actions.
-func (c *linuxContainer) handleReqOp(childPid int, req *opReq) error {
-	switch req.Op {
-	case bind:
-		return c.handleBindOp(childPid, req)
-	default:
-		return newSystemError(fmt.Errorf("invalid opReq type %d", int(req.Op)))
+// that can't be done by it (e.g., due to lack of permissions, etc.).
+func (c *linuxContainer) handleReqOp(childPid int, reqs []opReq) error {
+
+	if len(reqs) == 0 {
+		return newSystemError(fmt.Errorf("no op requests!"))
 	}
+
+	// If multiple requests are passed in the slice, they must all be
+	// of the same type.
+
+	switch reqs[0].Op {
+	case bind:
+		return c.handleBindOp(childPid, reqs)
+	default:
+		return newSystemError(fmt.Errorf("invalid opReq type %d", int(reqs[0].Op)))
+	}
+
 }
 
-// sysbox-runc: handleBindOp performs a bind mount on the system container's rootfs. It
+// sysbox-runc: handleBindOp performs bind mounts on the system container's rootfs. It
 // does this by dispatching a child helper process that uses sysbox-runc's reexec mechanism
-// to enter the mount namespace of the sys container to perform the bind mount. By virtue
+// to enter the mount namespace of the sys container to perform the bind mounts. By virtue
 // of only entering the mount namespace, the child helper can perform mounts inside the
-// sys container but bypass any permission restrictions that the container's init process
+// sys container and bypass any permission restrictions that the container's init process
 // may have (e.g., as a result of user-ns uid(gid) mappings).
-func (c *linuxContainer) handleBindOp(childPid int, req *opReq) error {
+func (c *linuxContainer) handleBindOp(childPid int, reqs []opReq) error {
 
 	// create the socket pairs for communication with the child
 	parentMsgPipe, childMsgPipe, err := utils.NewSockPair("initMount")
@@ -2331,7 +2337,9 @@ func (c *linuxContainer) handleBindOp(childPid int, req *opReq) error {
 	// Log error messages from the initMount child process
 	go logs.ForwardLogs(parentLogPipe)
 
-	// start the rootfsInitProcess
+	// start the command (creates parent, child, and grandchild
+	// processes; the granchild enters the go-runtime in the desired
+	// namespaces).
 	err = cmd.Start()
 	childMsgPipe.Close()
 	childLogPipe.Close()
@@ -2354,7 +2362,7 @@ func (c *linuxContainer) handleBindOp(childPid int, req *opReq) error {
 		return newSystemErrorWithCause(err, "copying initMount bootstrap data to pipe")
 	}
 
-	// wait for first rootfsInitProcess to finish
+	// wait for parent process to exit
 	status, err := cmd.Process.Wait()
 	if err != nil {
 		cmd.Wait()
@@ -2365,7 +2373,7 @@ func (c *linuxContainer) handleBindOp(childPid int, req *opReq) error {
 		return newSystemError(&exec.ExitError{ProcessState: status})
 	}
 
-	// get the initMount child pid from the pipe (it was sent by the first rootfsInitProcess)
+	// get the first child pid from the pipe
 	var pid pid
 	decoder := json.NewDecoder(parentMsgPipe)
 	if err := decoder.Decode(&pid); err != nil {
@@ -2378,24 +2386,23 @@ func (c *linuxContainer) handleBindOp(childPid int, req *opReq) error {
 		return err
 	}
 
-	// wait for second rootfsInitProcess to finish; ignore the error in case the child has
+	// wait for the first child to exit; ignore errors in case the child has
 	// already been reaped for any reason
 	_, _ = firstChildProcess.Wait()
 
-	// third rootfsInitProcess remains and will enter the go runtime
+	// grandchild remains and will enter the go runtime
 	process, err := os.FindProcess(pid.Pid)
 	if err != nil {
 		return err
 	}
 	cmd.Process = process
 
-	// send the mount info to the rootfsInitProcess
-	req.Pid = childPid
-	if err := utils.WriteJSON(parentMsgPipe, req); err != nil {
+	// send the mount requests to the grandchild
+	if err := utils.WriteJSON(parentMsgPipe, reqs); err != nil {
 		return newSystemErrorWithCause(err, "writing init mount info to pipe")
 	}
 
-	// wait for msg from the initMount child indicating that it's done
+	// wait for msg from the grandchild indicating that it's done
 	ierr := parseSync(parentMsgPipe, func(sync *syncT) error {
 		switch sync.Type {
 		case opDone:

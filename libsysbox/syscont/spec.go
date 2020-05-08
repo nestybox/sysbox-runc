@@ -472,6 +472,7 @@ func cfgMounts(spec *specs.Spec, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs, shiftUids
 	}
 
 	sortMounts(spec)
+
 	return nil
 }
 
