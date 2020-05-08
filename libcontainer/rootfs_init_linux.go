@@ -3,7 +3,6 @@ package libcontainer
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 
 	"github.com/opencontainers/runc/libcontainer/configs"
@@ -31,18 +30,23 @@ func getDir(file string) (string, error) {
 
 func doBindMount(m *configs.Mount) error {
 
-	// sysbox-runc: For some reason, invoking the "mount" syscall fails
-	// with "permission denied" when the bind-mount source is on
-	// shiftfs. I investigated for several hours but was never able to
-	// find the underlying cause. As a work-around, we are invoking the
-	// /bin/mount command instead of the syscall, which does work. This
-	// should be fine, as all Linux systems are required to have
-	// /bin/mount per the Linux FHS.
+	// sysbox-runc: For some reason, when the rootfs is on shiftfs, we
+	// need to do an Lstat() of the destination path prior to doing the
+	// mount. Otherwise we get a "permission denied" error. It took me
+	// a while to figure this out. I found out by noticing that the
+	// mount cmd (not the syscall) would not hit the permission error,
+	// and then did an strace of the syscalls being done by the mount
+	// command, which led me to realize that the Lstat() was solving
+	// the problem. FYI, in order to do the strace, I had to enable the
+	// ptrace syscall inside the container (via the libsysbox's syscalls.go).
 
-	cmd := exec.Command("/bin/mount", "--rbind", m.Source, m.Destination)
-	err := cmd.Run()
+	_, err := os.Lstat(filepath.Dir(m.Source))
 	if err != nil {
 		return err
+	}
+
+	if err := unix.Mount(m.Source, m.Destination, "", unix.MS_BIND|unix.MS_REC, ""); err != nil {
+		return fmt.Errorf("bind-mount of %s to %s failed: %v", m.Source, m.Destination, err)
 	}
 
 	for _, pflag := range m.PropagationFlags {
