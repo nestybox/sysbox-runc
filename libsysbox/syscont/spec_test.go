@@ -178,17 +178,34 @@ func TestSortMounts(t *testing.T) {
 
 	spec := new(specs.Spec)
 
-	orig := []string{"/dev", "/proc/swaps", "/proc", "/var/lib", "/tmp/run", "/sys/fs/cgroup", "/sys", "/tmp/run2"}
-	want := []string{"/sys", "/sys/fs/cgroup", "/proc", "/proc/swaps", "/dev", "/var/lib", "/tmp/run", "/tmp/run2"}
-
-	spec.Mounts = []specs.Mount{}
-	for _, s := range orig {
-		spec.Mounts = append(spec.Mounts, specs.Mount{Destination: s})
+	spec.Mounts = []specs.Mount{
+		{Destination: "/dev", Type: "tmpfs"},
+		{Destination: "/proc/swaps", Type: "bind"},
+		{Destination: "/proc", Type: "proc"},
+		{Destination: "/var/lib/docker/overlay2", Type: "bind"},
+		{Destination: "/var/lib/docker", Type: "bind"},
+		{Destination: "/var/lib/docker/overlay2/diff", Type: "bind"},
+		{Destination: "/tmp/run", Type: "tmpfs"},
+		{Destination: "/sys/fs/cgroup", Type: "cgroup"},
+		{Destination: "/sys", Type: "sysfs"},
+		{Destination: "/tmp/run2", Type: "tmpfs"},
 	}
 
-	wantMounts := []specs.Mount{}
-	for _, s := range want {
-		wantMounts = append(wantMounts, specs.Mount{Destination: s})
+	wantMounts := []specs.Mount{
+		{Destination: "/sys", Type: "sysfs"},
+		{Destination: "/sys/fs/cgroup", Type: "cgroup"},
+		{Destination: "/proc", Type: "proc"},
+		{Destination: "/dev", Type: "tmpfs"},
+		{Destination: "/tmp/run", Type: "tmpfs"},
+		{Destination: "/tmp/run2", Type: "tmpfs"},
+
+		// bind mounts should be grouped at the end; bind mounts
+		// dependent on others must be placed after those others.
+
+		{Destination: "/proc/swaps", Type: "bind"},
+		{Destination: "/var/lib/docker", Type: "bind"},
+		{Destination: "/var/lib/docker/overlay2", Type: "bind"},
+		{Destination: "/var/lib/docker/overlay2/diff", Type: "bind"},
 	}
 
 	sortMounts(spec)
