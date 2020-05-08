@@ -455,8 +455,13 @@ func doBindMounts(config *configs.Config, pipe io.ReadWriter) error {
 			continue
 		}
 
+		// Determine if the current mount is dependent on a prior one.
 		mntDependsOnPrior := false
 		for _, mr := range mntReqs {
+
+			// Mount destinations in mntReqs are relative to the rootfs
+			// (see prepareBindDest()); thus we need to prepent "/" for a
+			// proper comparison.
 			if strings.HasPrefix(m.Destination, filepath.Join("/", mr.Mount.Destination)) {
 				mntDependsOnPrior = true
 			}
