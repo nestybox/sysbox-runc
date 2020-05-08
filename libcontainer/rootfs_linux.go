@@ -431,34 +431,61 @@ func mountToRootfs(m *configs.Mount, rootfs, mountLabel string, enableCgroupns, 
 
 func doBindMounts(config *configs.Config, pipe io.ReadWriter) error {
 
+	// sysbox-runc: the sys container's init process is in a dedicated
+	// user-ns, so it may not have search permission to the bind mount
+	// sources (and thus can't perform the bind mount itself). As a
+	// result, we perform the bind mounts by asking the parent
+	// sysbox-runc to spawn a helper child process which enters the
+	// container's mount namespace (only) and performs the mounts. That
+	// helper process has true root credentials (because it's in the
+	// initial user-ns rather than the sys container's user-ns) yet it
+	// can perform mounts inside the container.
+	//
+	// Also, to avoid sending too many requests to our parent
+	// sysbox-runc, we group bind mounts and send a bulk request, with
+	// one exception: when a bind mount depends on a prior one, we must
+	// ask the parent sysbox-runc to perform the prior ones before we
+	// can prepare the bind destination and perform the current one.
+
 	mntReqs := []opReq{}
 
 	for _, m := range config.Mounts {
-		if m.Device == "bind" {
 
-			if err := prepareBindDest(m, config.Rootfs, false); err != nil {
-				return err
-			}
-
-			req := opReq{
-				Op:     bind,
-				Mount:  *m,
-				Label:  config.MountLabel,
-				Rootfs: config.Rootfs,
-			}
-
-			mntReqs = append(mntReqs, req)
+		if m.Device != "bind" {
+			continue
 		}
-	}
 
-	// sysbox-runc: the sys container's init process is in a dedicated
-	// user-ns, so it may not have search permission to the bind mount sources
-	// (and thus can't perform the bind mount itself). As a result,
-	// we perform the bind mounts by asking the parent runc to spawn a helper child
-	// process which enters the container's mount namespace (only) and performs the
-	// mounts. That helper process has true root credentials (because it's in the
-	// initial user-ns rather than the sys container's user-ns) yet it can perform
-	// mounts inside the container.
+		mntDependsOnPrior := false
+		for _, mr := range mntReqs {
+			if strings.HasPrefix(m.Destination, filepath.Join("/", mr.Mount.Destination)) {
+				mntDependsOnPrior = true
+			}
+		}
+
+		// If the current mount depends on a prior one, ask our parent
+		// runc to actually do the prior mount(s).
+		if mntDependsOnPrior {
+			if len(mntReqs) > 0 {
+				if err := syncParentDoOp(mntReqs, pipe); err != nil {
+					return newSystemErrorWithCause(err, "syncing with parent runc to perform bind mounts")
+				}
+				mntReqs = mntReqs[:0]
+			}
+		}
+
+		if err := prepareBindDest(m, config.Rootfs, false); err != nil {
+			return err
+		}
+
+		req := opReq{
+			Op:     bind,
+			Mount:  *m,
+			Label:  config.MountLabel,
+			Rootfs: config.Rootfs,
+		}
+
+		mntReqs = append(mntReqs, req)
+	}
 
 	if len(mntReqs) > 0 {
 		if err := syncParentDoOp(mntReqs, pipe); err != nil {
