@@ -96,7 +96,7 @@ func main() {
 		},
 		cli.BoolFlag{
 			Name:   "cpu-profiling",
-			Usage:  "enable cpu-profiling data collection; profile data is stored in the cwd of the process invoking sysbox-runc.",
+			Usage:  "enable cpu-profiling data collection; profile data is stored in the cwd of the process invoking sysbox-runc. Ignore the 'cannot set cpu profile rate' message (it's expected).",
 			Hidden: true,
 		},
 		cli.BoolFlag{
