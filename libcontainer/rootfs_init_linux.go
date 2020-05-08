@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/selinux/go-selinux/label"
@@ -61,8 +60,6 @@ func doBindMount(m *configs.Mount) error {
 // root-level access to the host and thus can perform operations that the container's init
 // process is not allowed to.
 func (l *linuxRootfsInit) Init() error {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
 
 	if len(l.reqs) == 0 {
 		return newSystemError(fmt.Errorf("no op requests!"))
@@ -74,7 +71,7 @@ func (l *linuxRootfsInit) Init() error {
 	switch l.reqs[0].Op {
 	case bind:
 
-		// The calls to mountPropagate below requires that the process cwd be the rootfs directory
+		// The mount requests assume that the process cwd be the rootfs directory
 		rootfs := l.reqs[0].Rootfs
 		if err := unix.Chdir(rootfs); err != nil {
 			return newSystemErrorWithCausef(err, "chdir to rootfs %s", rootfs)

@@ -71,6 +71,13 @@ func sortMounts(spec *specs.Spec) {
 		t2 := spec.Mounts[j].Type
 
 		if t1 == "bind" && t2 == "bind" {
+
+			// Among bind mounts, sort them such that a mount that
+			// depends on another one come after that other one.
+			if strings.HasPrefix(spec.Mounts[j].Destination, spec.Mounts[i].Destination) {
+				return true
+			}
+
 			return false
 		}
 
