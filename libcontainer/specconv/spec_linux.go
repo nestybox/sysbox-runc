@@ -567,8 +567,9 @@ func stringToDeviceRune(s string) (rune, error) {
 }
 
 func createDevices(spec *specs.Spec, config *configs.Config) error {
+
 	// add whitelisted devices
-	config.Devices = []*configs.Device{
+	devWhitelist := []*configs.Device{
 		{
 			Type:     'c',
 			Path:     "/dev/null",
@@ -624,6 +625,24 @@ func createDevices(spec *specs.Spec, config *configs.Config) error {
 			Gid:      0,
 		},
 	}
+
+	// If spec devices conflict with whitelisted devices, the spec ones take priority.
+	config.Devices = []*configs.Device{}
+
+	if spec.Linux != nil {
+		for _, wd := range devWhitelist {
+			conflict := false
+			for _, sd := range spec.Linux.Devices {
+				if sd.Path == wd.Path {
+					conflict = true
+				}
+			}
+			if !conflict {
+				config.Devices = append(config.Devices, wd)
+			}
+		}
+	}
+
 	// merge in additional devices from the spec
 	if spec.Linux != nil {
 		for _, d := range spec.Linux.Devices {
