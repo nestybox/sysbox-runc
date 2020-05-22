@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/nestybox/sysbox-libs/dockerUtils"
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/cgroups/systemd"
 	"github.com/opencontainers/runc/libcontainer/configs"
@@ -260,11 +261,13 @@ func createPidFile(path string, process *libcontainer.Process) error {
 	return os.Rename(tmpName, path)
 }
 
-func createContainer(context *cli.Context, id string, spec *specs.Spec, shiftUids bool, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs) (libcontainer.Container, error) {
+func createContainer(context *cli.Context, id string, spec *specs.Spec, shiftUids, switchDockerDns bool, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs) (libcontainer.Container, error) {
+
 	rootlessCg, err := shouldUseRootlessCgroupManager(context)
 	if err != nil {
 		return nil, err
 	}
+
 	config, err := specconv.CreateLibcontainerConfig(&specconv.CreateOpts{
 		CgroupName:       id,
 		UseSystemdCgroup: context.GlobalBool("systemd-cgroup"),
@@ -274,6 +277,7 @@ func createContainer(context *cli.Context, id string, spec *specs.Spec, shiftUid
 		RootlessEUID:     os.Geteuid() != 0,
 		RootlessCgroups:  rootlessCg,
 		ShiftUids:        shiftUids,
+		SwitchDockerDns:  switchDockerDns,
 	})
 	if err != nil {
 		return nil, err
@@ -468,6 +472,14 @@ func startContainer(context *cli.Context, spec *specs.Spec, action CtAct, criuOp
 		return -1, errEmptyID
 	}
 
+	switchDockerDns := false
+	if sysMgr.Enabled() && sysMgr.Config.AliasDns {
+		docker, err := dockerUtils.DockerConnect()
+		if err == nil && docker.ContainerIsDocker(id) {
+			switchDockerDns = true
+		}
+	}
+
 	notifySocket := newNotifySocket(context, os.Getenv("NOTIFY_SOCKET"), id)
 	if notifySocket != nil {
 		if err := notifySocket.setupSpec(context, spec); err != nil {
@@ -475,7 +487,7 @@ func startContainer(context *cli.Context, spec *specs.Spec, action CtAct, criuOp
 		}
 	}
 
-	container, err := createContainer(context, id, spec, shiftUids, sysMgr, sysFs)
+	container, err := createContainer(context, id, spec, shiftUids, switchDockerDns, sysMgr, sysFs)
 	if err != nil {
 		return -1, err
 	}

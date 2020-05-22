@@ -1,9 +1,12 @@
 package libcontainer
 
 import (
+	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/selinux/go-selinux/label"
@@ -53,6 +56,50 @@ func doBindMount(m *configs.Mount) error {
 		if err := unix.Mount("", m.Destination, "", uintptr(pflag), ""); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+// Creates an alias for the Docker DNS via iptables.
+func doDockerDnsSwitch(oldDns, newDns string) error {
+	var cmdOut, cmdErr bytes.Buffer
+
+	// Get current iptables
+	cmd := exec.Command("/usr/sbin/iptables-save")
+	cmd.Stdout = &cmdOut
+	cmd.Stderr = &cmdErr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to start %v: %s", cmd.Args, err)
+	}
+
+	// Create the alias for the Docker DNS (it's at oldDns (e.g., 127.0.0.11),
+	// but we will alias it to newDns (e.g., 172.20.0.1)).
+	//
+	// That is, inside the container, all processes will think the Docker DNS is
+	// at newDns, but iptables will send the packet to oldDns. Similarly, when
+	// oldDns responds, iptables will make it seem like newDns is responding.
+
+	iptables := cmdOut.String()
+
+	// All packets destined to oldDns now go to newDns
+	iptables = strings.Replace(iptables, fmt.Sprintf("-d %s", oldDns), fmt.Sprintf("-d %s", newDns), -1)
+
+	// Source NATing from oldDns is now from newDns
+	iptables = strings.Replace(iptables, "--to-source :53", fmt.Sprintf("--to-source %s:53", newDns), -1)
+
+	// Add pre-routing rule so that packets from inner containers go through DOCKER_OUTPUT rule (DNAT)
+	rule := fmt.Sprintf("-A OUTPUT -d %s/32 -j DOCKER_OUTPUT", newDns)
+	newRule := rule + "\n" + fmt.Sprintf("-A PREROUTING -d %s/32 -j DOCKER_OUTPUT", newDns)
+	iptables = strings.Replace(iptables, rule, newRule, 1)
+
+	// Commit the changed iptables
+	cmd = exec.Command("/usr/sbin/iptables-restore")
+	cmd.Stdin = strings.NewReader(iptables)
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to start %v: %s", cmd.Args, err)
 	}
 
 	return nil
@@ -108,6 +155,14 @@ func (l *linuxRootfsInit) Init() error {
 					return newSystemErrorWithCausef(err, "relabeling %s to %s", m.Source, mountLabel)
 				}
 			}
+		}
+
+	case switchDockerDns:
+		oldDns := l.reqs[0].OldDns
+		newDns := l.reqs[0].NewDns
+
+		if err := doDockerDnsSwitch(oldDns, newDns); err != nil {
+			return newSystemErrorWithCausef(err, "Docker DNS switch from %s to %s", oldDns, newDns)
 		}
 
 	default:

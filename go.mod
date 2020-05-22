@@ -7,6 +7,7 @@ require (
 	github.com/cilium/ebpf v0.1.0
 	github.com/cobaugh/osrelease v0.0.0-20181218015638-a93a0a55a249
 	github.com/containerd/console v1.0.1
+	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/coreos/go-systemd/v22 v22.1.0
 	github.com/cyphar/filepath-securejoin v0.2.2
 	github.com/deckarep/golang-set v1.7.1
@@ -17,6 +18,7 @@ require (
 	github.com/mrunalp/fileutils v0.5.0
 	github.com/nestybox/sysbox-ipc v0.0.0-00010101000000-000000000000
 	github.com/nestybox/sysbox-libs/capability v0.0.0-00010101000000-000000000000
+	github.com/nestybox/sysbox-libs/dockerUtils v0.0.0-00010101000000-000000000000
 	github.com/nestybox/sysbox-libs/libseccomp-golang v0.0.0-00010101000000-000000000000
 	github.com/nestybox/sysbox-libs/utils v0.0.0-00010101000000-000000000000
 	github.com/opencontainers/runc v0.0.0-00010101000000-000000000000
@@ -25,7 +27,6 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/profile v1.5.0
 	github.com/sirupsen/logrus v1.7.0
-	github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635
 	// NOTE: urfave/cli must be <= v1.22.1 due to a regression: https://github.com/urfave/cli/issues/1092
 	github.com/urfave/cli v1.22.1
 	github.com/vishvananda/netlink v1.1.0
@@ -40,5 +41,7 @@ replace github.com/nestybox/sysbox-libs/libseccomp-golang => ../sysbox-libs/libs
 replace github.com/nestybox/sysbox-libs/capability => ../sysbox-libs/capability
 
 replace github.com/nestybox/sysbox-libs/utils => ../sysbox-libs/utils
+
+replace github.com/nestybox/sysbox-libs/dockerUtils => ../sysbox-libs/dockerUtils
 
 replace github.com/opencontainers/runc => ./

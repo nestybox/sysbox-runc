@@ -200,6 +200,7 @@ type CreateOpts struct {
 	RootlessEUID     bool
 	RootlessCgroups  bool
 	ShiftUids        bool
+	SwitchDockerDns  bool
 }
 
 // CreateLibcontainerConfig creates a new libcontainer configuration from a
@@ -236,6 +237,7 @@ func CreateLibcontainerConfig(opts *CreateOpts) (*configs.Config, error) {
 		RootlessEUID:    opts.RootlessEUID,
 		RootlessCgroups: opts.RootlessCgroups,
 		ShiftUids:       opts.ShiftUids,
+		SwitchDockerDns: opts.SwitchDockerDns,
 	}
 
 	for _, m := range spec.Mounts {
