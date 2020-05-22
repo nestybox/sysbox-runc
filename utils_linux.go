@@ -11,6 +11,7 @@ import (
 	"strconv"
 
 	"github.com/coreos/go-systemd/activation"
+	"github.com/nestybox/sysbox/dockerUtils"
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/cgroups/systemd"
 	"github.com/opencontainers/runc/libcontainer/configs"
@@ -244,11 +245,13 @@ func createPidFile(path string, process *libcontainer.Process) error {
 	return os.Rename(tmpName, path)
 }
 
-func createContainer(context *cli.Context, id string, spec *specs.Spec, shiftUids bool, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs) (libcontainer.Container, error) {
+func createContainer(context *cli.Context, id string, spec *specs.Spec, shiftUids, switchDockerDns bool, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs) (libcontainer.Container, error) {
+
 	rootlessCg, err := shouldUseRootlessCgroupManager(context)
 	if err != nil {
 		return nil, err
 	}
+
 	config, err := specconv.CreateLibcontainerConfig(&specconv.CreateOpts{
 		CgroupName:       id,
 		UseSystemdCgroup: context.GlobalBool("systemd-cgroup"),
@@ -258,6 +261,7 @@ func createContainer(context *cli.Context, id string, spec *specs.Spec, shiftUid
 		RootlessEUID:     os.Geteuid() != 0,
 		RootlessCgroups:  rootlessCg,
 		ShiftUids:        shiftUids,
+		SwitchDockerDns:  switchDockerDns,
 	})
 	if err != nil {
 		return nil, err
@@ -447,12 +451,18 @@ func startContainer(context *cli.Context, spec *specs.Spec, action CtAct, criuOp
 		return -1, errEmptyID
 	}
 
+	switchDockerDns := false
+	docker, err := dockerUtils.DockerConnect()
+	if err == nil && docker.IsDockerContainer(id) {
+		switchDockerDns = true
+	}
+
 	notifySocket := newNotifySocket(context, os.Getenv("NOTIFY_SOCKET"), id)
 	if notifySocket != nil {
 		notifySocket.setupSpec(context, spec)
 	}
 
-	container, err := createContainer(context, id, spec, shiftUids, sysMgr, sysFs)
+	container, err := createContainer(context, id, spec, shiftUids, switchDockerDns, sysMgr, sysFs)
 	if err != nil {
 		return -1, err
 	}

@@ -215,6 +215,10 @@ type Config struct {
 
 	// ShiftfsMounts is a list of directories on which shiftfs needs to be mounted
 	ShiftfsMounts []ShiftfsMount `json:"shiftfs_mounts,omitempty"`
+
+	// SwitchDockerDns indicates if the containers should change the IP address
+	// of Docker DNS hosts with localhost addresses.
+	SwitchDockerDns bool `json:"switch_docker_dns,omitempty"`
 }
 
 type Hooks struct {

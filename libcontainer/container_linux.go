@@ -577,7 +577,7 @@ func (c *linuxContainer) newSetnsProcess(p *Process, cmd *exec.Cmd, parentPipe, 
 }
 
 // sysbox-runc: create a new helper process command to perform rootfs mount initialization
-func (c *linuxContainer) initMountCmdTemplate(childPipe *os.File) *exec.Cmd {
+func (c *linuxContainer) initHelperCmdTemplate(childPipe *os.File) *exec.Cmd {
 	cmd := exec.Command(c.initPath, c.initArgs[1:]...)
 	cmd.Args[0] = c.initArgs[0]
 	cmd.Stdin = nil
@@ -2204,33 +2204,29 @@ func (c *linuxContainer) handleReqOp(childPid int, reqs []opReq) error {
 
 	// If multiple requests are passed in the slice, they must all be
 	// of the same type.
+	op := reqs[0].Op
 
-	switch reqs[0].Op {
-	case bind:
-		return c.handleBindOp(childPid, reqs)
-	default:
-		return newSystemError(fmt.Errorf("invalid opReq type %d", int(reqs[0].Op)))
+	if op != bind && op != switchDockerDns {
+		return newSystemError(fmt.Errorf("invalid opReq type %d", int(op)))
 	}
 
+	return c.handleOp(op, childPid, reqs)
 }
 
-// sysbox-runc: handleBindOp performs bind mounts on the system container's rootfs. It
-// does this by dispatching a child helper process that uses sysbox-runc's reexec mechanism
-// to enter the mount namespace of the sys container to perform the bind mounts. By virtue
-// of only entering the mount namespace, the child helper can perform mounts inside the
-// sys container and bypass any permission restrictions that the container's init process
-// may have (e.g., as a result of user-ns uid(gid) mappings).
-func (c *linuxContainer) handleBindOp(childPid int, reqs []opReq) error {
+// sysbox-runc: handleOp dispatches a helpter process that enters one or more of
+// the container's namespaces and performs the given request. By virtue of only
+// entering a subset of the container's namespaces, the helper can bypass restrictions
+// that the container's init process would have in order to perform those same actions.
+func (c *linuxContainer) handleOp(op opReqType, childPid int, reqs []opReq) error {
 
 	// create a socket pair
-	parentPipe, childPipe, err := utils.NewSockPair("initMount")
+	parentPipe, childPipe, err := utils.NewSockPair("initHelper")
 	if err != nil {
-		return newSystemErrorWithCause(err, "creating new initMount pipe")
+		return newSystemErrorWithCause(err, "creating new initHelper pipe")
 	}
 	defer parentPipe.Close()
 
-	// create a new initMount command
-	cmd := c.initMountCmdTemplate(childPipe)
+	cmd := c.initHelperCmdTemplate(childPipe)
 
 	// start the command (creates parent, child, and grandchild
 	// processes; the granchild enters the go-runtime in the desired
@@ -2238,12 +2234,20 @@ func (c *linuxContainer) handleBindOp(childPid int, reqs []opReq) error {
 	err = cmd.Start()
 	childPipe.Close()
 	if err != nil {
-		return newSystemErrorWithCause(err, "starting initMount child")
+		return newSystemErrorWithCause(err, "starting initHelper child")
 	}
 
 	// create the config payload
-	mntNsPath := fmt.Sprintf("mnt:/proc/%d/ns/mnt", childPid)
-	namespaces := []string{mntNsPath}
+	var nsPath string
+
+	switch op {
+	case bind:
+		nsPath = fmt.Sprintf("mnt:/proc/%d/ns/mnt", childPid)
+	case switchDockerDns:
+		nsPath = fmt.Sprintf("net:/proc/%d/ns/net", childPid)
+	}
+
+	namespaces := []string{nsPath}
 
 	r := nl.NewNetlinkRequest(int(InitMsg), 0)
 	r.AddData(&Bytemsg{
@@ -2253,7 +2257,7 @@ func (c *linuxContainer) handleBindOp(childPid int, reqs []opReq) error {
 
 	// send the config to the parent process
 	if _, err := io.Copy(parentPipe, bytes.NewReader(r.Serialize())); err != nil {
-		return newSystemErrorWithCause(err, "copying initMount bootstrap data to pipe")
+		return newSystemErrorWithCause(err, "copying initHelper bootstrap data to pipe")
 	}
 
 	// wait for parent process to exit
@@ -2272,7 +2276,7 @@ func (c *linuxContainer) handleBindOp(childPid int, reqs []opReq) error {
 	decoder := json.NewDecoder(parentPipe)
 	if err := decoder.Decode(&pid); err != nil {
 		cmd.Wait()
-		return newSystemErrorWithCause(err, "getting the initMount pid from pipe")
+		return newSystemErrorWithCause(err, "getting the initHelper pid from pipe")
 	}
 
 	firstChildProcess, err := os.FindProcess(pid.PidFirstChild)
@@ -2291,9 +2295,9 @@ func (c *linuxContainer) handleBindOp(childPid int, reqs []opReq) error {
 	}
 	cmd.Process = process
 
-	// send the mount requests to the grandchild
+	// send the action requests to the grandchild
 	if err := utils.WriteJSON(parentPipe, reqs); err != nil {
-		return newSystemErrorWithCause(err, "writing init mount info to pipe")
+		return newSystemErrorWithCause(err, "writing init info to pipe")
 	}
 
 	// wait for msg from the grandchild indicating that it's done
@@ -2309,7 +2313,7 @@ func (c *linuxContainer) handleBindOp(childPid int, reqs []opReq) error {
 
 	// destroy the socket pair
 	if err := unix.Shutdown(int(parentPipe.Fd()), unix.SHUT_WR); err != nil {
-		return newSystemErrorWithCause(err, "shutting down initMount pipe")
+		return newSystemErrorWithCause(err, "shutting down initHelper pipe")
 	}
 
 	if ierr != nil {

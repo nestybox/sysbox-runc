@@ -3,13 +3,17 @@
 package libcontainer
 
 import (
+	"bufio"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -1039,6 +1043,166 @@ func effectRootfsMount() error {
 	}
 	if err := os.Chdir(".."); err != nil {
 		return newSystemErrorWithCause(err, "chdir ..")
+	}
+
+	return nil
+}
+
+// Returns the IP address(es) of the nameserver(ers) in the
+// DNS resolver configuration file
+func getDnsNameservers(resolvconf string) ([]string, error) {
+
+	file, err := os.Open(resolvconf)
+	if err != nil {
+		return nil, newSystemErrorWithCausef(err, "opening %s", resolvconf)
+	}
+	defer file.Close()
+
+	nameservers := []string{}
+	scanner := bufio.NewScanner(file)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		words := strings.Fields(line)
+		if len(words) > 1 {
+			if words[0] == "nameserver" {
+				nameservers = append(nameservers, words[1])
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, newSystemErrorWithCausef(err, "scanning %s", resolvconf)
+	}
+
+	return nameservers, nil
+}
+
+// Returns the IP address of the container's default gateway
+func getDefaultRoute() (string, error) {
+	var ipStr string
+
+	file, err := os.Open("/proc/net/route")
+	if err != nil {
+		return "", newSystemErrorWithCause(err, "opening /proc/net/route")
+	}
+	defer file.Close()
+
+	// /proc/net/route:
+	//
+	// Iface   Destination     Gateway         Flags   RefCnt  Use     Metric  Mask            MTU     Window  IRTT
+	// eth0    00000000        010011AC        0003    0       0       0       00000000        0       0       0
+	// eth0    000011AC        00000000        0001    0       0       0       0000FFFF        0       0       0
+
+	scanner := bufio.NewScanner(file)
+	line := 0
+
+	for scanner.Scan() {
+
+		// Skip header line
+		if line < 1 {
+			line++
+			continue
+		}
+
+		// Skip if this is not a default route
+		tokens := strings.Fields(scanner.Text())
+		destIP := tokens[1]
+		if destIP != "00000000" {
+			continue
+		}
+
+		// Gateway address is field 2
+		tokens = strings.Fields(scanner.Text())
+		hexIP := "0x" + tokens[2]
+
+		intIP, err := strconv.ParseInt(hexIP, 0, 64)
+		if err != nil {
+			return "", newSystemErrorWithCausef(err, "converting %s to int", hexIP)
+		}
+		uintIP := uint32(intIP)
+
+		// Generate the IP address string
+		//
+		// TODO: ideally we should use host byte-order; the binary conversion
+		// below is x86-specific.
+
+		ip := make(net.IP, 4)
+		binary.LittleEndian.PutUint32(ip, uintIP)
+		ipStr = net.IP(ip).String()
+
+		break
+	}
+
+	return ipStr, nil
+}
+
+// Switches the IP address of the Docker DNS nameserver inside the container
+// when it has localhost address (e.g., 127.0.0.11). This avoids DNS resolution
+// problems with inner Docker containers. See Sysbox issue #679.
+func switchDockerDnsIP(config *configs.Config, pipe io.ReadWriter) error {
+
+	// Docker places a DNS resolver in containers deployed on custom bridge networks
+	dockerDns := "127.0.0.11"
+
+	resolvconf := "/etc/resolv.conf"
+	if _, err := os.Stat(resolvconf); os.IsNotExist(err) {
+		return nil
+	}
+
+	nameservers, err := getDnsNameservers(resolvconf)
+	if err != nil {
+		return err
+	}
+
+	needSwitch := false
+	for _, ns := range nameservers {
+		if ns == dockerDns {
+			needSwitch = true
+		}
+	}
+
+	if !needSwitch {
+		return nil
+	}
+
+	defRoute, err := getDefaultRoute()
+	if err != nil {
+		return err
+	}
+
+	// Request the parent runc to enter the container's net-ns and change the DNS
+	// in the iptables (can't do this from within the container as we may not
+	// have the required / compatible iptables package in the container).
+	reqs := []opReq{
+		{
+			Op:     switchDockerDns,
+			OldDns: dockerDns,
+			NewDns: defRoute,
+		},
+	}
+
+	if err := syncParentDoOp(reqs, pipe); err != nil {
+		return newSystemErrorWithCause(err, "syncing with parent runc to switch DNS IP")
+	}
+
+	oldData, err := ioutil.ReadFile(resolvconf)
+	if err != nil {
+		return newSystemErrorWithCausef(err, "reading %s", resolvconf)
+	}
+
+	newData := strings.Replace(string(oldData), dockerDns, defRoute, -1)
+
+	err = ioutil.WriteFile(resolvconf, []byte(newData), 0644)
+	if err != nil {
+		return newSystemErrorWithCausef(err, "writing %s", resolvconf)
+	}
+
+	// Enable routing of local-host addresses to ensure packets make it to the
+	// Docker DNS (127.0.0.11:53).
+
+	if err := ioutil.WriteFile("/proc/sys/net/ipv4/conf/all/route_localnet", []byte("1"), 0644); err != nil {
+		return fmt.Errorf("failed to enble routing of local-host addresses: %s", err)
 	}
 
 	return nil

@@ -35,14 +35,21 @@ type opReqType int
 
 const (
 	bind = iota
+	switchDockerDns
 	seccompFd
 )
 
 type opReq struct {
-	Op     opReqType     `json:"type"`   // op request type
-	Rootfs string        `json:"rootfs"` // container's rootfs path
-	Mount  configs.Mount `json:"mount"`  // bind mount info
-	Label  string        `json:"label"`  // bind mount label
+	Op opReqType `json:"type"`
+
+	// bind
+	Rootfs string        `json:"rootfs"`
+	Mount  configs.Mount `json:"mount"`
+	Label  string        `json:"label"`
+
+	// switchDockerDns
+	OldDns string `json:"olddns"`
+	NewDns string `json:"newdns"`
 }
 
 func (l *linuxStandardInit) getSessionRingParams() (string, uint32, uint32) {
@@ -131,6 +138,13 @@ func (l *linuxStandardInit) Init() error {
 			return errors.Wrap(err, "sethostname")
 		}
 	}
+
+	if l.config.Config.SwitchDockerDns {
+		if err := switchDockerDnsIP(l.config.Config, l.pipe); err != nil {
+			return errors.Wrap(err, "switching Docker DNS")
+		}
+	}
+
 	if err := apparmor.ApplyProfile(l.config.AppArmorProfile); err != nil {
 		return errors.Wrap(err, "apply apparmor profile")
 	}
