@@ -452,9 +452,11 @@ func startContainer(context *cli.Context, spec *specs.Spec, action CtAct, criuOp
 	}
 
 	switchDockerDns := false
-	docker, err := dockerUtils.DockerConnect()
-	if err == nil && docker.IsDockerContainer(id) {
-		switchDockerDns = true
+	if sysMgr.Config.AliasDns {
+		docker, err := dockerUtils.DockerConnect()
+		if err == nil && docker.IsDockerContainer(id) {
+			switchDockerDns = true
+		}
 	}
 
 	notifySocket := newNotifySocket(context, os.Getenv("NOTIFY_SOCKET"), id)

@@ -18,6 +18,7 @@ import (
 type Mgr struct {
 	Active bool
 	Id     string // container-id
+	Config *ipcLib.MgrConfig
 }
 
 func NewMgr(id string, enable bool) *Mgr {
@@ -31,11 +32,14 @@ func (mgr *Mgr) Enabled() bool {
 	return mgr.Active
 }
 
-// Register registers the container with sysbox-mgr.
+// Register registers the container with sysbox-mgr. If successful, returns
+// configuration tokens for sysbox-runc.
 func (mgr *Mgr) Register() error {
-	if err := sysboxMgrGrpc.Register(mgr.Id); err != nil {
+	config, err := sysboxMgrGrpc.Register(mgr.Id)
+	if err != nil {
 		return fmt.Errorf("failed to register with sysbox-mgr: %v", err)
 	}
+	mgr.Config = config
 	return nil
 }
 
