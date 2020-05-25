@@ -452,7 +452,7 @@ func startContainer(context *cli.Context, spec *specs.Spec, action CtAct, criuOp
 	}
 
 	switchDockerDns := false
-	if sysMgr.Config.AliasDns {
+	if sysMgr.Enabled() && sysMgr.Config.AliasDns {
 		docker, err := dockerUtils.DockerConnect()
 		if err == nil && docker.IsDockerContainer(id) {
 			switchDockerDns = true
