@@ -63,10 +63,18 @@ func doBindMount(m *configs.Mount) error {
 
 // Creates an alias for the Docker DNS via iptables.
 func doDockerDnsSwitch(oldDns, newDns string) error {
-	var cmdOut, cmdErr bytes.Buffer
+	var (
+		cmdOut, cmdErr bytes.Buffer
+		cmd            *exec.Cmd
+	)
 
 	// Get current iptables
-	cmd := exec.Command("/usr/sbin/iptables-save")
+	if _, err := os.Stat("/usr/sbin/iptables-save"); os.IsNotExist(err) {
+		cmd = exec.Command("/sbin/iptables-save")
+	} else {
+		cmd = exec.Command("/usr/sbin/iptables-save")
+	}
+
 	cmd.Stdout = &cmdOut
 	cmd.Stderr = &cmdErr
 
@@ -95,7 +103,12 @@ func doDockerDnsSwitch(oldDns, newDns string) error {
 	iptables = strings.Replace(iptables, rule, newRule, 1)
 
 	// Commit the changed iptables
-	cmd = exec.Command("/usr/sbin/iptables-restore")
+	if _, err := os.Stat("/usr/sbin/iptables-restore"); os.IsNotExist(err) {
+		cmd = exec.Command("/sbin/iptables-restore")
+	} else {
+		cmd = exec.Command("/usr/sbin/iptables-restore")
+	}
+
 	cmd.Stdin = strings.NewReader(iptables)
 
 	if err := cmd.Run(); err != nil {
