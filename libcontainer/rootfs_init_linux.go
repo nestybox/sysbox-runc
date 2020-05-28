@@ -103,10 +103,14 @@ func doDockerDnsSwitch(oldDns, newDns string) error {
 	iptables = strings.Replace(iptables, rule, newRule, 1)
 
 	// Commit the changed iptables
+
+	xtablesWait := "30"             // wait up to 30 secs for the xtables lock
+	xtablesWaitInterval := "100000" // poll the lock every 100ms when waiting
+
 	if _, err := os.Stat("/usr/sbin/iptables-restore"); os.IsNotExist(err) {
-		cmd = exec.Command("/sbin/iptables-restore")
+		cmd = exec.Command("/sbin/iptables-restore", "--wait", xtablesWait, "--wait-interval", xtablesWaitInterval)
 	} else {
-		cmd = exec.Command("/usr/sbin/iptables-restore")
+		cmd = exec.Command("/usr/sbin/iptables-restore", "--wait", xtablesWait, "--wait-interval", xtablesWaitInterval)
 	}
 
 	cmd.Stdin = strings.NewReader(iptables)
