@@ -62,6 +62,13 @@ var sysboxMounts = []specs.Mount{
 		Type:        "tmpfs",
 		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "size=1m"},
 	},
+	// we don't virtualize tracefs; create a dummy one.
+	specs.Mount{
+		Destination: "/sys/kernel/tracing",
+		Source:      "tmpfs",
+		Type:        "tmpfs",
+		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "size=1m"},
+	},
 	specs.Mount{
 		Destination: "/proc",
 		Source:      "proc",
@@ -237,6 +244,7 @@ var sysboxSystemdExposedPaths = []string{
 	"/tmp",
 	"/sys/kernel/config",
 	"/sys/kernel/debug",
+	"/sys/kernel/tracing",
 }
 
 // sysboxRwPaths list the paths within the sys container's rootfs
@@ -247,6 +255,7 @@ var sysboxSystemdRwPaths = []string{
 	"/tmp",
 	"/sys/kernel/config",
 	"/sys/kernel/debug",
+	"/sys/kernel/tracing",
 }
 
 // linuxCaps is the full list of Linux capabilities
