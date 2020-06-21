@@ -251,6 +251,9 @@ EOF
 }
 
 @test "update rt period and runtime" {
+
+    skip "SYSBOX ISSUE #714"
+
     [[ "$ROOTLESS" -ne 0 ]] && requires rootless_cgroup
     requires cgroups_kmem cgroups_rt
 
