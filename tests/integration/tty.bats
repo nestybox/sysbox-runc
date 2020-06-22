@@ -175,10 +175,13 @@ EOF
 }
 
 @test "runc create [terminal=false]" {
+
+        skip "Sysbox issue #707"
+
 	# Disable terminal creation.
 	sed -i 's|"terminal": true,|"terminal": false,|g' config.json
 	# Replace sh script with sleep.
-    sed -i 's|"sh"|"sleep", "1000s"|' config.json
+        sed -i 's|"sh"|"sleep", "1000s"|' config.json
 
 	# Make sure that the handling of detached IO is done properly. See #1354.
 	__runc create test_busybox
@@ -195,10 +198,13 @@ EOF
 }
 
 @test "runc run [terminal=false]" {
+
+        skip "Sysbox issue #707"
+
 	# Disable terminal creation.
 	sed -i 's|"terminal": true,|"terminal": false,|g' config.json
 	# Replace sh script with sleep.
-    sed -i 's|"sh"|"sleep", "1000s"|' config.json
+        sed -i 's|"sh"|"sleep", "1000s"|' config.json
 
 	# Make sure that the handling of non-detached IO is done properly. See #1354.
 	(
@@ -214,10 +220,13 @@ EOF
 }
 
 @test "runc run -d [terminal=false]" {
+
+        skip "Sysbox issue #707"
+
 	# Disable terminal creation.
 	sed -i 's|"terminal": true,|"terminal": false,|g' config.json
 	# Replace sh script with sleep.
-    sed -i 's|"sh"|"sleep", "1000s"|' config.json
+        sed -i 's|"sh"|"sleep", "1000s"|' config.json
 
 	# Make sure that the handling of detached IO is done properly. See #1354.
 	__runc run -d test_busybox

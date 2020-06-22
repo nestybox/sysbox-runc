@@ -198,24 +198,27 @@ func setupIO(process *libcontainer.Process, rootuid, rootgid int, createTTY, det
 	// and the container's process inherits runc's stdio.
 	if detach {
 
-		// sysbox-runc: ensure the ownership of stdio matches the container init process uid(gid).
-		// This is necessary because sysbox-runc allocates the container's uid(gid) when using
-		// uid-shifting. The higher layer (e.g., containerd-shim) does not know about this and
-		// therefore will not set the correct permissions on stdio.
+		// sysbox-runc: ensure the ownership of stdio matches the container init
+		// process uid(gid). This is necessary because sysbox-runc allocates the
+		// container's uid(gid) when using uid-shifting, and that uid may not have
+		// permission to access stdio. However, this is not ideal, as we are
+		// changing the ownership of files which we don't really own.
 
 		if err := unix.Fchown(int(os.Stdin.Fd()), rootuid, rootgid); err != nil {
-			return &tty{}, fmt.Errorf("failed to chown stdout")
+			return nil, fmt.Errorf("failed to chown stdin")
 		}
+
 		if err := unix.Fchown(int(os.Stdout.Fd()), rootuid, rootgid); err != nil {
-			return &tty{}, fmt.Errorf("failed to chown stdout")
+			return nil, fmt.Errorf("failed to chown stdout")
 		}
 		if err := unix.Fchown(int(os.Stderr.Fd()), rootuid, rootgid); err != nil {
-			return &tty{}, fmt.Errorf("failed to chown stdout")
+			return nil, fmt.Errorf("failed to chown stderr")
 		}
 
 		if err := inheritStdio(process); err != nil {
 			return nil, err
 		}
+
 		return &tty{}, nil
 	}
 	return setupProcessPipes(process, rootuid, rootgid)
