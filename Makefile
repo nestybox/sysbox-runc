@@ -36,6 +36,8 @@ RELEASE_DIR := $(CURDIR)/release
 
 SHELL := $(shell command -v bash 2>/dev/null)
 
+SHIFTFS_MODULE_PRESENT = $(shell lsmod | grep shiftfs)
+
 LDFLAGS := '-X main.version=${VERSION} -X main.commitId=${COMMIT_ID} \
 			-X "main.builtAt=${BUILT_AT}" -X main.builtBy=${BUILT_BY}'
 
@@ -110,13 +112,21 @@ integration: runcimage
 	$(RUN_TEST_CONT) make localintegration TESTPATH=${TESTPATH}
 
 integration-shiftuid: runcimage
+ifeq ($(SHIFTFS_MODULE_PRESENT),)
+	@printf "\n** Skipped 'integration-shiftuid' target due to missing 'shiftfs' module **\n\n"
+else
 	$(RUN_TEST_CONT) make localintegration-shiftuid TESTPATH=${TESTPATH}
+endif
 
 localintegration: all
 	bats -t tests/integration${TESTPATH}
 
 localintegration-shiftuid: all
+ifeq ($(SHIFTFS_MODULE_PRESENT),)
+	@printf "\n** Skipped 'localintegration-shiftuid' target due to missing 'shiftfs' module **\n\n"
+else
 	SHIFT_UIDS=true bats -t tests/integration${TESTPATH}
+endif
 
 rootlessintegration: runcimage
 	$(RUN_TEST_CONT) make localrootlessintegration
