@@ -3,6 +3,7 @@ module github.com/nestybox/sysbox-runc
 go 1.14
 
 require (
+	github.com/Masterminds/semver v1.5.0
 	github.com/checkpoint-restore/go-criu/v4 v4.1.0
 	github.com/cilium/ebpf v0.1.0
 	github.com/cobaugh/osrelease v0.0.0-20181218015638-a93a0a55a249
