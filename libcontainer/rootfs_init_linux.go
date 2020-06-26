@@ -6,10 +6,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/selinux/go-selinux/label"
+	"github.com/Masterminds/semver"
 	"golang.org/x/sys/unix"
 )
 
@@ -29,6 +32,43 @@ func getDir(file string) (string, error) {
 	} else {
 		return file, nil
 	}
+}
+
+// iptablesRestoreHasWait determines if the version of iptables-restore on the
+// host has "--wait" option.
+func iptablesRestoreHasWait() (bool, error) {
+	var cmd *exec.Cmd
+
+	if _, err := os.Stat("/usr/sbin/iptables"); os.IsNotExist(err) {
+		cmd = exec.Command("/sbin/iptables", "--version")
+	} else {
+		cmd = exec.Command("/usr/sbin/iptables", "--version")
+	}
+
+	bytes, err := cmd.CombinedOutput()
+	if err != nil {
+		return false, fmt.Errorf("failed to start %v: %s", cmd.Args, err)
+	}
+
+	// output is "iptables <version>"; we are looking for version >= v1.6.2
+	output := strings.Fields(string(bytes))
+	if len(output) != 2 {
+		return false, fmt.Errorf("failed to get iptables version: got %v", output)
+	}
+
+	// The iptables "--wait" option shows up in v1.6.2 and above
+	// (see iptables commit 999eaa241212d3952ddff39a99d0d55a74e3639e on 03/16/2017)
+
+	verStr := strings.TrimPrefix(output[1], "v")
+
+	verConstraint, _ := semver.NewConstraint(">= 1.6.2")
+
+	ver, err := semver.NewVersion(verStr)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse iptables version: %s", err)
+	}
+
+	return verConstraint.Check(ver), nil
 }
 
 func doBindMount(m *configs.Mount) error {
@@ -103,20 +143,76 @@ func doDockerDnsSwitch(oldDns, newDns string) error {
 	iptables = strings.Replace(iptables, rule, newRule, 1)
 
 	// Commit the changed iptables
+	//
+	// The iptables-restore command holds the xtables lock to ensure consistency
+	// in case multiple processes try to restore iptables concurrently. Recent
+	// versions of this command (e.g., iptables 1.8.3) support the "--wait" flag
+	// to deal with xtables lock contention. However, older versions (e.g.,
+	// iptables 1.6.1) don't. For those older versions, we do the wait ourselves.
 
-	xtablesWait := "30"             // wait up to 30 secs for the xtables lock
-	xtablesWaitInterval := "100000" // poll the lock every 100ms when waiting
+	xtablesWait := 30             // wait up to 30 secs for the xtables lock
+	xtablesWaitInterval := 100000 // poll the lock every 100ms when waiting
 
-	if _, err := os.Stat("/usr/sbin/iptables-restore"); os.IsNotExist(err) {
-		cmd = exec.Command("/sbin/iptables-restore", "--wait", xtablesWait, "--wait-interval", xtablesWaitInterval)
-	} else {
-		cmd = exec.Command("/usr/sbin/iptables-restore", "--wait", xtablesWait, "--wait-interval", xtablesWaitInterval)
+	iptablesRestoreHasWait, err := iptablesRestoreHasWait()
+	if err != nil {
+		return err
 	}
 
-	cmd.Stdin = strings.NewReader(iptables)
+	iptablesRestorePath := "/usr/sbin/iptables-restore"
+	if _, err = os.Stat(iptablesRestorePath); os.IsNotExist(err) {
+		iptablesRestorePath = "/sbin/iptables-restore"
+	}
 
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to start %v: %s", cmd.Args, err)
+	if iptablesRestoreHasWait {
+
+		wait := strconv.Itoa(xtablesWait)
+		waitInterval := strconv.Itoa(xtablesWaitInterval)
+
+		cmd = exec.Command(iptablesRestorePath, "--wait", wait, "--wait-interval", waitInterval)
+		cmd.Stdin = strings.NewReader(iptables)
+
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to start %v: %s", cmd.Args, err)
+		}
+
+	} else {
+
+		// If we are here, iptables-restore is old and does not support concurrent
+		// accesses (does not have the "--wait") option. This means that if
+		// multiple processes do iptables-restore concurrently, the command may
+		// return exit status "4" (resource unavailable) (see iptables/include/xtables.h).
+		// Here we do our best to deal with this by retrying the operation whenever
+		// we get this error.
+
+		var err error
+
+		exitCodeResourceUnavailable := 4
+		success := false
+
+		for start := time.Now(); time.Since(start) < (time.Duration(xtablesWait) * time.Second); {
+
+			cmd = exec.Command(iptablesRestorePath)
+			cmd.Stdin = strings.NewReader(iptables)
+
+			err := cmd.Run()
+			if err == nil {
+				success = true
+				break
+			}
+
+			if exitError, ok := err.(*exec.ExitError); ok {
+				exitCode := exitError.ExitCode()
+				if exitCode != exitCodeResourceUnavailable {
+					break
+				}
+			}
+
+			time.Sleep(time.Duration(xtablesWaitInterval) * time.Microsecond)
+		}
+
+		if !success {
+			return fmt.Errorf("failed to run %v: %s", cmd.Args, err)
+		}
 	}
 
 	return nil
