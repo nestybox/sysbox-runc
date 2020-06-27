@@ -52,7 +52,7 @@ func iptablesRestoreHasWait() (bool, error) {
 
 	// output is "iptables <version>"; we are looking for version >= v1.6.2
 	output := strings.Fields(string(bytes))
-	if len(output) != 2 {
+	if len(output) < 2 {
 		return false, fmt.Errorf("failed to get iptables version: got %v", output)
 	}
 
