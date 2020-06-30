@@ -32,7 +32,7 @@ func (mgr *Mgr) Enabled() bool {
 	return mgr.Active
 }
 
-// Register registers the container with sysbox-mgr. If successful, returns
+// Registers the container with sysbox-mgr. If successful, returns
 // configuration tokens for sysbox-runc.
 func (mgr *Mgr) Register() error {
 	config, err := sysboxMgrGrpc.Register(mgr.Id)
@@ -43,7 +43,7 @@ func (mgr *Mgr) Register() error {
 	return nil
 }
 
-// Unregister unregisters the container with sysbox-mgr.
+// Unregisters the container with sysbox-mgr.
 func (mgr *Mgr) Unregister() error {
 	if err := sysboxMgrGrpc.Unregister(mgr.Id); err != nil {
 		return fmt.Errorf("failed to unregister with sysbox-mgr: %v", err)
