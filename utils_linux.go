@@ -11,7 +11,7 @@ import (
 	"strconv"
 
 	"github.com/coreos/go-systemd/activation"
-	"github.com/nestybox/sysbox/dockerUtils"
+	"github.com/nestybox/sysbox-libs/dockerUtils"
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/cgroups/systemd"
 	"github.com/opencontainers/runc/libcontainer/configs"

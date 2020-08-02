@@ -7,7 +7,7 @@ package syscont
 import (
 	"testing"
 
-	utils "github.com/nestybox/sysbox/utils"
+	utils "github.com/nestybox/sysbox-libs/utils"
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
 

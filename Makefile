@@ -24,7 +24,7 @@ SYSIPC := github.com/nestybox/sysbox/sysbox-ipc
 SYSIPC_DIR := ../sysbox-ipc
 SYSIPC_SRC := $(shell find $(SYSIPC_DIR) 2>&1 | grep -E '.*\.(c|h|go|proto)$$')
 
-LIBSECCOMP_DIR := ../lib/seccomp-golang
+LIBSECCOMP_DIR := ../sysbox-libs/libseccomp-golang
 LIBSECCOMP_SRC := $(shell find $(LIBSECCOMP_DIR) 2>&1 | grep -E '.*\.(go)')
 
 MAN_DIR := $(CURDIR)/man/man8

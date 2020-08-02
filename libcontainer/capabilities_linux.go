@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/opencontainers/runc/libcontainer/configs"
-	"github.com/nestybox/sysbox/lib/capability"
+	"github.com/nestybox/sysbox-libs/capability"
 )
 
 const allCapabilityTypes = capability.CAPS | capability.BOUNDS | capability.AMBS

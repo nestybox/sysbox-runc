@@ -15,7 +15,7 @@ import (
 
 	mapset "github.com/deckarep/golang-set"
 	ipcLib "github.com/nestybox/sysbox-ipc/sysboxMgrLib"
-	utils "github.com/nestybox/sysbox/utils"
+	utils "github.com/nestybox/sysbox-libs/utils"
 	"github.com/opencontainers/runc/libsysbox/sysbox"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"

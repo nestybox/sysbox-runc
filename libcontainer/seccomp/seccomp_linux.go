@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	libseccomp "github.com/nestybox/libseccomp-golang"
+	libseccomp "github.com/nestybox/sysbox-libs/libseccomp-golang"
 	"github.com/opencontainers/runc/libcontainer/configs"
 
 	"golang.org/x/sys/unix"
