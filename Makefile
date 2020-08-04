@@ -51,7 +51,7 @@ HEADERS_BASE := $(shell find /usr/src/$(HEADERS) -maxdepth 1 -type l -exec readl
 RUN_TEST_CONT := docker run ${DOCKER_RUN_PROXY} -t --privileged --rm \
 		-v $(CURDIR):$(RUNC)                                 \
 		-v $(CURDIR)/../sysbox-ipc:$(NBOX)/sysbox-ipc        \
-		-v $(CURDIR)/../lib:$(NBOX)/lib                      \
+		-v $(CURDIR)/../sysbox-libs:$(NBOX)/sysbox-libs      \
 		-v /lib/modules/$(KERNEL_REL):/lib/modules/$(KERNEL_REL):ro \
 		-v /usr/src/$(HEADERS):/usr/src/$(HEADERS):ro               \
 		-v /usr/src/$(HEADERS_BASE):/usr/src/$(HEADERS_BASE):ro     \
