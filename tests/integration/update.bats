@@ -16,7 +16,7 @@ function setup() {
 	set_cgroups_path "$BUSYBOX_BUNDLE"
 
 	# Set some initial known values
-	update_config ' .linux.resources.memory |= {"limit": 33554432, "reservation": 25165824}
+	update_config ' .linux.resources.memory |= {"limit": 38551552, "reservation": 25165824}
 			| .linux.resources.cpu |= {"shares": 100, "quota": 500000, "period": 1000000, "cpus": "0"}
 			| .linux.resources.pids |= {"limit": 20}' "${BUSYBOX_BUNDLE}"
 }
@@ -79,8 +79,8 @@ function setup() {
 		# This happen on containerized environment because "echo +memory > /sys/fs/cgroup/cgroup.subtree_control" fails with EINVAL
 		skip "memory controller not available"
 	fi
-	check_cgroup_value $MEM_LIMIT 33554432
-	check_systemd_value $SD_MEM_LIMIT 33554432
+	check_cgroup_value $MEM_LIMIT 38551552
+	check_systemd_value $SD_MEM_LIMIT 38551552
 
 	check_cgroup_value $MEM_RESERVE 25165824
 	check_systemd_value $SD_MEM_RESERVE 25165824
@@ -114,10 +114,10 @@ function setup() {
 	check_systemd_value $SD_MEM_LIMIT 52428800
 
 	# update memory soft limit
-	runc update test_update --memory-reservation 33554432
+	runc update test_update --memory-reservation 38551552
 	[ "$status" -eq 0 ]
-	check_cgroup_value "$MEM_RESERVE" 33554432
-	check_systemd_value "$SD_MEM_RESERVE" 33554432
+	check_cgroup_value "$MEM_RESERVE" 38551552
+	check_systemd_value "$SD_MEM_RESERVE" 38551552
 
 	# Run swap memory tests if swap is available
 	if [ "$HAVE_SWAP" = "yes" ]; then
@@ -173,7 +173,7 @@ function setup() {
 	runc update -r - test_update <<EOF
 {
   "memory": {
-    "limit": 33554432,
+    "limit": 38551552,
     "reservation": 25165824
   },
   "cpu": {
@@ -190,8 +190,8 @@ EOF
 	[ "$status" -eq 0 ]
 	check_cgroup_value "cpuset.cpus" 0
 
-	check_cgroup_value $MEM_LIMIT 33554432
-	check_systemd_value $SD_MEM_LIMIT 33554432
+	check_cgroup_value $MEM_LIMIT 38551552
+	check_systemd_value $SD_MEM_LIMIT 38551552
 
 	check_cgroup_value $MEM_RESERVE 25165824
 	check_systemd_value $SD_MEM_RESERVE 25165824
@@ -202,14 +202,14 @@ EOF
 	# redo all the changes at once
 	runc update test_update \
 		  --cpu-period 900000 --cpu-quota 600000 --cpu-share 200 \
-		  --memory 67108864 --memory-reservation 33554432 \
+		  --memory 67108864 --memory-reservation 38551552 \
 		  --pids-limit 10
 	[ "$status" -eq 0 ]
 	check_cgroup_value $MEM_LIMIT 67108864
 	check_systemd_value $SD_MEM_LIMIT 67108864
 
-	check_cgroup_value $MEM_RESERVE 33554432
-	check_systemd_value $SD_MEM_RESERVE 33554432
+	check_cgroup_value $MEM_RESERVE 38551552
+	check_systemd_value $SD_MEM_RESERVE 38551552
 
 	check_cgroup_value "pids.max" 10
 	check_systemd_value "TasksMax" 10
@@ -218,7 +218,7 @@ EOF
 	cat <<EOF >"$BATS_TMPDIR"/runc-cgroups-integration-test.json
 {
   "memory": {
-    "limit": 33554432,
+    "limit": 38551552,
     "reservation": 25165824
   },
   "cpu": {
@@ -237,8 +237,8 @@ EOF
 	[ "$status" -eq 0 ]
 	check_cgroup_value "cpuset.cpus" 0
 
-	check_cgroup_value $MEM_LIMIT 33554432
-	check_systemd_value $SD_MEM_LIMIT 33554432
+	check_cgroup_value $MEM_LIMIT 38551552
+	check_systemd_value $SD_MEM_LIMIT 38551552
 
 	check_cgroup_value $MEM_RESERVE 25165824
 	check_systemd_value $SD_MEM_RESERVE 25165824
