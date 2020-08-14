@@ -18,7 +18,7 @@ function setup() {
     # Set some initial known values
     DATA=$(cat <<EOF
     "memory": {
-        "limit": 33554432,
+        "limit": 38551552,
         "reservation": 25165824,
         "kernel": 16777216,
         "kernelTCP": 11534336
@@ -49,6 +49,8 @@ function check_cgroup_value() {
     expected=$3
 
     current=$(cat $cgroup/$source)
+    echo "current = ${current}"
+    echo "expected = ${expected}"
     [ "$current" == "$expected" ]
 }
 
@@ -78,7 +80,7 @@ function check_cgroup_value() {
     check_cgroup_value $CGROUP_CPUSET "cpuset.cpus" 0
     check_cgroup_value $CGROUP_MEMORY "memory.kmem.limit_in_bytes" 16777216
     check_cgroup_value $CGROUP_MEMORY "memory.kmem.tcp.limit_in_bytes" 11534336
-    check_cgroup_value $CGROUP_MEMORY "memory.limit_in_bytes" 33554432
+    check_cgroup_value $CGROUP_MEMORY "memory.limit_in_bytes" 38551552
     check_cgroup_value $CGROUP_MEMORY "memory.soft_limit_in_bytes" 25165824
     check_cgroup_value $CGROUP_PIDS "pids.max" 20
 
