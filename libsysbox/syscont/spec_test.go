@@ -140,6 +140,57 @@ func TestCfgSeccomp(t *testing.T) {
 	// TODO: Test handling of non-conflicting blacklist
 }
 
+// Test removal of seccomp syscall arg restrictions
+func TestCfgSeccompArgRemoval(t *testing.T) {
+
+	// The following resembles the way Docker programs seccomp syscall argument
+	// restrictions for the "personality" and "clone" syscalls.
+
+	personalityArg := specs.LinuxSeccompArg{
+		Index: 0,
+		Value: 131072,
+		Op:    "SCMP_CMP_EQ",
+	}
+
+	cloneArg := specs.LinuxSeccompArg{
+		Index: 0,
+		Value: 2080505856,
+		Op:    "SCMP_CMP_MASKED_EQ",
+	}
+
+	seccomp := &specs.LinuxSeccomp{
+		DefaultAction: specs.ActErrno,
+		Architectures: []specs.Arch{specs.ArchX86_64},
+		Syscalls: []specs.LinuxSyscall{
+			{
+				Names:  []string{"personality"},
+				Action: "SCMP_ACT_ALLOW",
+				Args:   []specs.LinuxSeccompArg{personalityArg},
+			},
+			{
+				Names:  []string{"clone"},
+				Action: "SCMP_ACT_ALLOW",
+				Args:   []specs.LinuxSeccompArg{cloneArg},
+			},
+		},
+	}
+
+	if err := cfgSeccomp(seccomp); err != nil {
+		t.Errorf("cfgSeccomp: returned error: %v", err)
+	}
+
+	// Verify that arg restrictions for personality() where left untouched, while arg
+	// restrictions for clone() were removed. See syscontSyscallAllowRestrList.
+
+	if seccomp.Syscalls[0].Args[0] != personalityArg {
+		t.Errorf("cfgSeccompArgRemoval failed: personality() syscall args invalid: want %v, got %v", personalityArg, seccomp.Syscalls[0].Args[0])
+	}
+
+	if seccomp.Syscalls[1].Args != nil {
+		t.Errorf("cfgSeccompArgRemoval failed: clone() syscall args invalid: want nil, got %v", seccomp.Syscalls[1].Args)
+	}
+}
+
 func TestCfgMaskedPaths(t *testing.T) {
 	spec := new(specs.Spec)
 	spec.Linux = new(specs.Linux)

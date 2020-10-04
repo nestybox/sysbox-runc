@@ -358,6 +358,11 @@ var syscontSyscallWhitelist = []string{
 	"unshare",
 }
 
+// List of syscalls with allowed argument restrictions (via seccomp)
+var syscontSyscallAllowRestrList = []string{
+	"personality",
+}
+
 // List of syscalls trapped & emulated inside a system container
 //
 // NOTE: all of these must also be in the syscontSyscallWhitelist, as otherwise seccomp
