@@ -714,6 +714,18 @@ func cfgSeccomp(seccomp *specs.LinuxSeccomp) error {
 		logrus.Debugf("removed syscalls from seccomp profile: %v", diffSet)
 	}
 
+	if whitelist {
+		// Remove argument restrictions on syscalls (except those for which we
+		// allow such restrictions).
+		for i, syscall := range seccomp.Syscalls {
+			for _, name := range syscall.Names {
+				if !utils.StringSliceContains(syscontSyscallAllowRestrList, name) {
+					seccomp.Syscalls[i].Args = nil
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
