@@ -18,15 +18,13 @@ package sysbox
 
 import (
 	"bufio"
-	"bytes"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
 
-	"github.com/cobaugh/osrelease"
+	libutils "github.com/nestybox/sysbox-libs/utils"
 	"github.com/urfave/cli"
-	"golang.org/x/sys/unix"
 )
 
 // The min supported kernel release is chosen based on whether it contains all kernel
@@ -37,7 +35,7 @@ type kernelRelease struct{ major, minor int }
 var minKernel = kernelRelease{4, 10} // 4.10 (see issue #89)
 
 // uid shifting requires shiftfs, currenlty present in Ubuntu only.
-var uidShiftDistros = []string{"Ubuntu"}
+var uidShiftDistros = []string{"ubuntu"}
 
 // checkUnprivilegedUserns checks if the kernel is configured to allow
 // unprivileged users to create namespaces. This is necessary for
@@ -86,33 +84,24 @@ func checkDistro(shiftUids bool) error {
 		return nil
 	}
 
-	osrelease, err := osrelease.Read()
+	osrelease, err := libutils.GetDistro()
 	if err != nil {
 		return err
 	}
 
 	for _, entry := range uidShiftDistros {
-		if entry == osrelease["NAME"] {
+		if entry == osrelease {
 			return nil
 		}
 	}
 
 	return fmt.Errorf("%s is not supported when using uid shifting; supported distros are %v",
-		osrelease["NAME"], uidShiftDistros)
-}
-
-// GetKernelRelease returns the kernel release (e.g., "4.18")
-func GetKernelRelease() (string, error) {
-	var utsname unix.Utsname
-	if err := unix.Uname(&utsname); err != nil {
-		return "", fmt.Errorf("uname: %v", err)
-	}
-	n := bytes.IndexByte(utsname.Release[:], 0)
-	return string(utsname.Release[:n]), nil
+		osrelease, uidShiftDistros)
 }
 
 func checkKernel(uidShift bool) error {
-	rel, err := GetKernelRelease()
+
+	rel, err := libutils.GetKernelRelease()
 	if err != nil {
 		return err
 	}
