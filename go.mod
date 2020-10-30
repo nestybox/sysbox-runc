@@ -28,7 +28,7 @@ require (
 	github.com/urfave/cli v1.20.0
 	github.com/vishvananda/netlink v1.0.0
 	github.com/vishvananda/netns v0.0.0-20200520041808-52d707b772fe
-	golang.org/x/sys v0.0.0-20200420163511-1957bb5e6d1f
+	golang.org/x/sys v0.0.0-20201029080932-201ba4db2418
 )
 
 replace github.com/nestybox/sysbox-ipc => ../sysbox-ipc
