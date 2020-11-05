@@ -231,9 +231,9 @@ func doDockerDnsSwitch(oldDns, newDns string) error {
 
 // sysbox-runc:
 // Init performs container rootfs initialization actions from within the container's mount
-// namespace only. By virtue of only entering the mount namespace, Init has true
-// root-level access to the host and thus can perform operations that the container's init
-// process is not allowed to.
+// namespace only. By virtue of only entering a specific namespace (e.g. 'mount'), Init has
+// true root-level access to the host and thus can perform operations that the container's
+// init process is not allowed to.
 func (l *linuxRootfsInit) Init() error {
 
 	if len(l.reqs) == 0 {
@@ -244,6 +244,7 @@ func (l *linuxRootfsInit) Init() error {
 	// of the same type.
 
 	switch l.reqs[0].Op {
+
 	case bind:
 
 		// The mount requests assume that the process cwd is the rootfs directory
