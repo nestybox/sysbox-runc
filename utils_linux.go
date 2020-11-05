@@ -261,6 +261,20 @@ func createPidFile(path string, process *libcontainer.Process) error {
 	return os.Rename(tmpName, path)
 }
 
+// sysMgrGetFsState inquires sysbox-mgr for special files/dirs to
+// to be added to container's rootfs.
+func sysMgrGetFsState(mgr *sysbox.Mgr, config *configs.Config) error {
+
+	state, err := mgr.ReqFsState(config.Rootfs)
+	if err != nil {
+		return err
+	}
+
+	config.FsState = state
+
+	return nil
+}
+
 func createContainer(context *cli.Context, id string, spec *specs.Spec, shiftUids, switchDockerDns bool, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs) (libcontainer.Container, error) {
 
 	rootlessCg, err := shouldUseRootlessCgroupManager(context)
@@ -281,6 +295,14 @@ func createContainer(context *cli.Context, id string, spec *specs.Spec, shiftUid
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	// sysbox-runc: For container's proper operation, collect from sysbox-mgr
+	// fsState to be added to container's rootfs.
+	if sysMgr.Enabled() {
+		if err := sysMgrGetFsState(sysMgr, config); err != nil {
+			return nil, err
+		}
 	}
 
 	// sysbox-runc: setup sys container syscall trapping

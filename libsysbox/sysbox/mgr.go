@@ -97,6 +97,16 @@ func (mgr *Mgr) ReqShiftfsMark(rootfs string, mounts []configs.ShiftfsMount) err
 	return nil
 }
 
+// ReqFsState sends a request to sysbox-mgr for container's rootfs state.
+func (mgr *Mgr) ReqFsState(rootfs string) ([]configs.FsEntry, error) {
+	state, err := sysboxMgrGrpc.ReqFsState(mgr.Id, rootfs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to request fsState from sysbox-mgr: %v", err)
+	}
+
+	return state, nil
+}
+
 func (mgr *Mgr) Pause() error {
 	if err := sysboxMgrGrpc.Pause(mgr.Id); err != nil {
 		return fmt.Errorf("failed to notify pause to sysbox-mgr: %v", err)
