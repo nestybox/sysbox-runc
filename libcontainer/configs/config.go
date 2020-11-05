@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
 	"time"
 
@@ -237,97 +236,6 @@ type Capabilities struct {
 	Permitted []string
 	// Ambient is the ambient set of capabilities that are kept.
 	Ambient []string
-}
-
-//
-// FsEntry type.
-//
-
-type FsEntryKind uint32
-
-const (
-	InvalidFsKind FsEntryKind = iota
-	FileFsKind
-	DirFsKind
-	SoftlinkFsKind
-)
-
-type FsEntry struct {
-	Kind FsEntryKind
-	Path string
-	Mode os.FileMode
-	Dst  string
-}
-
-func NewFsEntry(path, dst string, mode os.FileMode, kind FsEntryKind) *FsEntry {
-
-	entry := &FsEntry{
-		Kind: kind,
-		Path: path,
-		Mode: mode,
-		Dst:  dst,
-	}
-
-	return entry
-}
-
-func (e *FsEntry) Create() error {
-
-	switch e.Kind {
-
-	case FileFsKind:
-		// Check if file exists.
-		var _, err = os.Stat(e.Path)
-
-		// Create file if not exits.
-		if os.IsNotExist(err) {
-			file, err := os.OpenFile(e.Path, os.O_RDWR|os.O_CREATE, e.Mode)
-			if err != nil {
-				return err
-			}
-			defer file.Close()
-		}
-
-	case DirFsKind:
-		if err := os.MkdirAll(e.Path, e.Mode); err != nil {
-			return err
-		}
-
-	case SoftlinkFsKind:
-		// In Linux softlink permissions are irrelevant; i.e. changing a
-		// permission on a symbolic link by chmod() will simply act as if it
-		// was performed against the target of the symbolic link, so we are
-		// obviating it here.
-		if err := os.Symlink(e.Dst, e.Path); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (e *FsEntry) Remove() error {
-	if err := os.RemoveAll(e.Path); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (e *FsEntry) GetPath() string {
-	return e.Path
-}
-
-func (e *FsEntry) GetMode() os.FileMode {
-	return e.Mode
-}
-
-func (e *FsEntry) GetKind() FsEntryKind {
-	return e.Kind
-}
-
-func (e *FsEntry) GetDest() string {
-	return e.Dst
 }
 
 type Hooks struct {
