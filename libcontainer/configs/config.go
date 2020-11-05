@@ -219,18 +219,10 @@ type Config struct {
 	// SwitchDockerDns indicates if the containers should change the IP address
 	// of Docker DNS hosts with localhost addresses.
 	SwitchDockerDns bool `json:"switch_docker_dns,omitempty"`
-}
 
-type Hooks struct {
-	// Prestart commands are executed after the container namespaces are created,
-	// but before the user supplied command is executed from init.
-	Prestart []Hook
-
-	// Poststart commands are executed after the container init process starts.
-	Poststart []Hook
-
-	// Poststop commands are executed after the container init process exits.
-	Poststop []Hook
+	// FsState slice is utilized to host file-system state (e.g. dir, file, softlinks,
+	// etc) to be created in container's rootfs during initialization.
+	FsState []FsEntry `json:"fs_state,omitempty"`
 }
 
 type Capabilities struct {
@@ -244,6 +236,18 @@ type Capabilities struct {
 	Permitted []string
 	// Ambient is the ambient set of capabilities that are kept.
 	Ambient []string
+}
+
+type Hooks struct {
+	// Prestart commands are executed after the container namespaces are created,
+	// but before the user supplied command is executed from init.
+	Prestart []Hook
+
+	// Poststart commands are executed after the container init process starts.
+	Poststart []Hook
+
+	// Poststop commands are executed after the container init process exits.
+	Poststop []Hook
 }
 
 func (hooks *Hooks) UnmarshalJSON(b []byte) error {

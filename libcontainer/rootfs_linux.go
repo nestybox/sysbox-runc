@@ -102,6 +102,11 @@ func prepareRootfs(pipe io.ReadWriter, iConfig *initConfig) (err error) {
 		return newSystemErrorWithCause(err, "jailing process inside rootfs")
 	}
 
+	// Add pending fsState to container's rootfs.
+	if err := addFsState(config); err != nil {
+		return newSystemErrorWithCause(err, "adding rootfs state")
+	}
+
 	if setupDev {
 		if err := reOpenDevNull(); err != nil {
 			return newSystemErrorWithCause(err, "reopening /dev/null inside container")
@@ -1203,6 +1208,21 @@ func switchDockerDnsIP(config *configs.Config, pipe io.ReadWriter) error {
 
 	if err := ioutil.WriteFile("/proc/sys/net/ipv4/conf/all/route_localnet", []byte("1"), 0644); err != nil {
 		return fmt.Errorf("failed to enble routing of local-host addresses: %s", err)
+	}
+
+	return nil
+}
+
+// Function creates file-system state (i.e. files, dirs, softlinks) inside the
+// container's rootfs, as required by Sysbox. Notice that the path of these fs
+// components is with respect to the container's rootfs, so this instruction
+// should be only called after pivot-root invokation.
+func addFsState(config *configs.Config) error {
+
+	for _, entry := range config.FsState {
+		if err := entry.Add(); err != nil {
+			return newSystemErrorWithCausef(err, "unable to create fsEntry %s", entry.GetPath())
+		}
 	}
 
 	return nil
