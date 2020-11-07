@@ -73,12 +73,18 @@ func (e *FsEntry) Add() error {
 		}
 
 	case SoftlinkFsKind:
-		// In Linux softlink permissions are irrelevant; i.e. changing a
-		// permission on a symbolic link by chmod() will simply act as if it
-		// was performed against the target of the symbolic link, so we are
-		// obviating it here.
-		if err := os.Symlink(e.Dst, e.Path); err != nil {
-			return err
+		// Check if softlink exists.
+		var _, err = os.Stat(e.Path)
+
+		// Create softlink if not present.
+		if os.IsNotExist(err) {
+			// In Linux softlink permissions are irrelevant; i.e. changing a
+			// permission on a symbolic link by chmod() will simply act as if it
+			// was performed against the target of the symbolic link, so we are
+			// obviating it here.
+			if err := os.Symlink(e.Dst, e.Path); err != nil {
+				return err
+			}
 		}
 	}
 
