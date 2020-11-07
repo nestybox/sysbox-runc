@@ -41,21 +41,13 @@ SHIFTFS_MODULE_PRESENT = $(shell lsmod | grep shiftfs)
 LDFLAGS := '-X main.version=${VERSION} -X main.commitId=${COMMIT_ID} \
 			-X "main.builtAt=${BUILT_AT}" -X main.builtBy=${BUILT_BY}'
 
-
-KERNEL_REL := $(shell uname -r)
-HEADERS := linux-headers-$(KERNEL_REL)
-
-# hacky: works on ubuntu but may not work on other distros
-HEADERS_BASE := $(shell find /usr/src/$(HEADERS) -maxdepth 1 -type l -exec readlink {} \; | cut -d"/" -f2 | head -1)
-
 RUN_TEST_CONT := docker run ${DOCKER_RUN_PROXY} -t --privileged --rm \
 		-v $(CURDIR):$(RUNC)                                 \
 		-v $(CURDIR)/../sysbox-ipc:$(NBOX)/sysbox-ipc        \
 		-v $(CURDIR)/../sysbox-libs:$(NBOX)/sysbox-libs      \
 		-v /lib/modules/$(KERNEL_REL):/lib/modules/$(KERNEL_REL):ro \
-		-v /usr/src/$(HEADERS):/usr/src/$(HEADERS):ro               \
-		-v /usr/src/$(HEADERS_BASE):/usr/src/$(HEADERS_BASE):ro     \
 		-v $(GOPATH)/pkg/mod:/go/pkg/mod                            \
+		$(KERNEL_HEADERS_MOUNTS)                                    \
 		$(RUNC_IMAGE)
 
 .DEFAULT: $(RUNC_TARGET)
@@ -140,9 +132,8 @@ shell: runcimage
 	   -v $(CURDIR)/../sysbox-ipc:$(NBOX)/sysbox-ipc     \
 	   -v $(CURDIR)/../lib:$(NBOX)/lib                   \
 	   -v /lib/modules/$(KERNEL_REL):/lib/modules/$(KERNEL_REL):ro \
-	   -v /usr/src/$(HEADERS):/usr/src/$(HEADERS):ro               \
-	   -v /usr/src/$(HEADERS_BASE):/usr/src/$(HEADERS_BASE):ro     \
 	   -v $(GOPATH)/pkg/mod:/go/pkg/mod                            \
+	   $(KERNEL_HEADERS_MOUNTS)                                    \
 	   $(RUNC_IMAGE) bash
 
 install:
