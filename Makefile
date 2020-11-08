@@ -41,6 +41,24 @@ SHIFTFS_MODULE_PRESENT = $(shell lsmod | grep shiftfs)
 LDFLAGS := '-X main.version=${VERSION} -X main.commitId=${COMMIT_ID} \
 			-X "main.builtAt=${BUILT_AT}" -X main.builtBy=${BUILT_BY}'
 
+# Identify kernel-headers path if not previously defined. Notice that this logic is already
+# present in Sysbox's Makefile; we are duplicating it here to keep sysbox-runc as independent
+# as possible. If KERNEL_HEADERS is not already defined, we will assume that the same applies
+# to all related variables declared below.
+ifeq ($(KERNEL_HEADERS),)
+	KERNEL_REL := $(shell uname -r)
+	IMAGE_BASE_DISTRO := $(shell lsb_release -is | tr '[:upper:]' '[:lower:]')
+	ifeq ($(IMAGE_BASE_DISTRO),$(filter $(IMAGE_BASE_DISTRO),centos fedora redhat))
+		KERNEL_HEADERS := kernels/$(KERNEL_REL)
+		KERNEL_HEADERS_MOUNTS := -v /usr/src/$(KERNEL_HEADERS):/usr/src/$(KERNEL_HEADERS):ro
+	else
+		KERNEL_HEADERS := linux-headers-$(KERNEL_REL)
+		KERNEL_HEADERS_BASE := $(shell find /usr/src/$(KERNEL_HEADERS) -maxdepth 1 -type l -exec readlink {} \; | cut -d"/" -f2 | head -1)
+		KERNEL_HEADERS_MOUNTS := -v /usr/src/$(KERNEL_HEADERS):/usr/src/$(KERNEL_HEADERS):ro \
+					 -v /usr/src/$(KERNEL_HEADERS_BASE):/usr/src/$(KERNEL_HEADERS_BASE):ro
+	endif
+endif
+
 RUN_TEST_CONT := docker run ${DOCKER_RUN_PROXY} -t --privileged --rm \
 		-v $(CURDIR):$(RUNC)                                 \
 		-v $(CURDIR)/../sysbox-ipc:$(NBOX)/sysbox-ipc        \
