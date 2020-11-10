@@ -18,6 +18,7 @@ import (
 	dbus "github.com/godbus/dbus/v5"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
+	"github.com/opencontainers/runc/libcontainer/devices"
 	"github.com/opencontainers/runc/libcontainer/seccomp"
 	libcontainerUtils "github.com/opencontainers/runc/libcontainer/utils"
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -62,22 +63,22 @@ var mountPropagationMapping = map[string]int{
 //
 //    ... unfortunately I'm too scared to change this now because who knows how
 //    many people depend on this (incorrect and arguably insecure) behaviour.
-var AllowedDevices = []*configs.Device{
+var AllowedDevices = []*devices.Device{
 	// allow mknod for any device
 	{
-		DeviceRule: configs.DeviceRule{
-			Type:        configs.CharDevice,
-			Major:       configs.Wildcard,
-			Minor:       configs.Wildcard,
+		DeviceRule: devices.DeviceRule{
+			Type:        devices.CharDevice,
+			Major:       devices.Wildcard,
+			Minor:       devices.Wildcard,
 			Permissions: "m",
 			Allow:       true,
 		},
 	},
 	{
-		DeviceRule: configs.DeviceRule{
-			Type:        configs.BlockDevice,
-			Major:       configs.Wildcard,
-			Minor:       configs.Wildcard,
+		DeviceRule: devices.DeviceRule{
+			Type:        devices.BlockDevice,
+			Major:       devices.Wildcard,
+			Minor:       devices.Wildcard,
 			Permissions: "m",
 			Allow:       true,
 		},
@@ -87,8 +88,8 @@ var AllowedDevices = []*configs.Device{
 		FileMode: 0666,
 		Uid:      0,
 		Gid:      0,
-		DeviceRule: configs.DeviceRule{
-			Type:        configs.CharDevice,
+		DeviceRule: devices.DeviceRule{
+			Type:        devices.CharDevice,
 			Major:       1,
 			Minor:       3,
 			Permissions: "rwm",
@@ -100,8 +101,8 @@ var AllowedDevices = []*configs.Device{
 		FileMode: 0666,
 		Uid:      0,
 		Gid:      0,
-		DeviceRule: configs.DeviceRule{
-			Type:        configs.CharDevice,
+		DeviceRule: devices.DeviceRule{
+			Type:        devices.CharDevice,
 			Major:       1,
 			Minor:       8,
 			Permissions: "rwm",
@@ -113,8 +114,8 @@ var AllowedDevices = []*configs.Device{
 		FileMode: 0666,
 		Uid:      0,
 		Gid:      0,
-		DeviceRule: configs.DeviceRule{
-			Type:        configs.CharDevice,
+		DeviceRule: devices.DeviceRule{
+			Type:        devices.CharDevice,
 			Major:       1,
 			Minor:       7,
 			Permissions: "rwm",
@@ -126,8 +127,8 @@ var AllowedDevices = []*configs.Device{
 		FileMode: 0666,
 		Uid:      0,
 		Gid:      0,
-		DeviceRule: configs.DeviceRule{
-			Type:        configs.CharDevice,
+		DeviceRule: devices.DeviceRule{
+			Type:        devices.CharDevice,
 			Major:       5,
 			Minor:       0,
 			Permissions: "rwm",
@@ -139,8 +140,8 @@ var AllowedDevices = []*configs.Device{
 		FileMode: 0666,
 		Uid:      0,
 		Gid:      0,
-		DeviceRule: configs.DeviceRule{
-			Type:        configs.CharDevice,
+		DeviceRule: devices.DeviceRule{
+			Type:        devices.CharDevice,
 			Major:       1,
 			Minor:       5,
 			Permissions: "rwm",
@@ -152,8 +153,8 @@ var AllowedDevices = []*configs.Device{
 		FileMode: 0666,
 		Uid:      0,
 		Gid:      0,
-		DeviceRule: configs.DeviceRule{
-			Type:        configs.CharDevice,
+		DeviceRule: devices.DeviceRule{
+			Type:        devices.CharDevice,
 			Major:       1,
 			Minor:       9,
 			Permissions: "rwm",
@@ -162,17 +163,17 @@ var AllowedDevices = []*configs.Device{
 	},
 	// /dev/pts/ - pts namespaces are "coming soon"
 	{
-		DeviceRule: configs.DeviceRule{
-			Type:        configs.CharDevice,
+		DeviceRule: devices.DeviceRule{
+			Type:        devices.CharDevice,
 			Major:       136,
-			Minor:       configs.Wildcard,
+			Minor:       devices.Wildcard,
 			Permissions: "rwm",
 			Allow:       true,
 		},
 	},
 	{
-		DeviceRule: configs.DeviceRule{
-			Type:        configs.CharDevice,
+		DeviceRule: devices.DeviceRule{
+			Type:        devices.CharDevice,
 			Major:       5,
 			Minor:       2,
 			Permissions: "rwm",
@@ -181,8 +182,8 @@ var AllowedDevices = []*configs.Device{
 	},
 	// tuntap
 	{
-		DeviceRule: configs.DeviceRule{
-			Type:        configs.CharDevice,
+		DeviceRule: devices.DeviceRule{
+			Type:        devices.CharDevice,
 			Major:       10,
 			Minor:       200,
 			Permissions: "rwm",
@@ -453,7 +454,7 @@ func initSystemdProps(spec *specs.Spec) ([]systemdDbus.Property, error) {
 	return sp, nil
 }
 
-func CreateCgroupConfig(opts *CreateOpts, defaultDevs []*configs.Device) (*configs.Cgroup, error) {
+func CreateCgroupConfig(opts *CreateOpts, defaultDevs []*devices.Device) (*configs.Cgroup, error) {
 	var (
 		myCgroupPath string
 
@@ -531,11 +532,11 @@ func CreateCgroupConfig(opts *CreateOpts, defaultDevs []*configs.Device) (*confi
 				if err != nil {
 					return nil, err
 				}
-				c.Resources.Devices = append(c.Resources.Devices, &configs.DeviceRule{
+				c.Resources.Devices = append(c.Resources.Devices, &devices.DeviceRule{
 					Type:        dt,
 					Major:       major,
 					Minor:       minor,
-					Permissions: configs.DevicePermissions(d.Access),
+					Permissions: devices.DevicePermissions(d.Access),
 					Allow:       d.Allow,
 				})
 			}
@@ -674,36 +675,36 @@ func CreateCgroupConfig(opts *CreateOpts, defaultDevs []*configs.Device) (*confi
 	return c, nil
 }
 
-func stringToCgroupDeviceRune(s string) (configs.DeviceType, error) {
+func stringToCgroupDeviceRune(s string) (devices.DeviceType, error) {
 	switch s {
 	case "a":
-		return configs.WildcardDevice, nil
+		return devices.WildcardDevice, nil
 	case "b":
-		return configs.BlockDevice, nil
+		return devices.BlockDevice, nil
 	case "c":
-		return configs.CharDevice, nil
+		return devices.CharDevice, nil
 	default:
 		return 0, fmt.Errorf("invalid cgroup device type %q", s)
 	}
 }
 
-func stringToDeviceRune(s string) (configs.DeviceType, error) {
+func stringToDeviceRune(s string) (devices.DeviceType, error) {
 	switch s {
 	case "p":
-		return configs.FifoDevice, nil
+		return devices.FifoDevice, nil
 	case "u", "c":
-		return configs.CharDevice, nil
+		return devices.CharDevice, nil
 	case "b":
-		return configs.BlockDevice, nil
+		return devices.BlockDevice, nil
 	default:
 		return 0, fmt.Errorf("invalid device type %q", s)
 	}
 }
 
-func createDevices(spec *specs.Spec, config *configs.Config) ([]*configs.Device, error) {
+func createDevices(spec *specs.Spec, config *configs.Config) ([]*devices.Device, error) {
 	// If a spec device is redundant with a default device, remove that default
 	// device (the spec one takes priority).
-	dedupedAllowDevs := []*configs.Device{}
+	dedupedAllowDevs := []*devices.Device{}
 
 next:
 	for _, ad := range AllowedDevices {
@@ -739,8 +740,8 @@ next:
 			if d.FileMode != nil {
 				filemode = *d.FileMode
 			}
-			device := &configs.Device{
-				DeviceRule: configs.DeviceRule{
+			device := &devices.Device{
+				DeviceRule: devices.DeviceRule{
 					Type:  dt,
 					Major: d.Major,
 					Minor: d.Minor,
