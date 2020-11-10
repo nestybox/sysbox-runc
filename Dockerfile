@@ -26,6 +26,7 @@ RUN dpkg --add-architecture armel \
     python-minimal \
     uidmap \
     kmod \
+    lsb-release \
     crossbuild-essential-armel crossbuild-essential-armhf crossbuild-essential-arm64 crossbuild-essential-ppc64el \
     libseccomp-dev:armel libseccomp-dev:armhf libseccomp-dev:arm64 libseccomp-dev:ppc64el \
     --no-install-recommends \
