@@ -347,5 +347,46 @@ func TestCfgSystemd(t *testing.T) {
 	if !utils.MountSliceEqual(spec.Mounts, wantMounts) {
 		t.Errorf("cfgSystemd() failed: spec.Mounts: want %v, got %v", wantMounts, spec.Mounts)
 	}
-
 }
+
+func TestCfgSystemdOverride(t *testing.T) {
+
+	spec := new(specs.Spec)
+	spec.Process = new(specs.Process)
+	spec.Linux = new(specs.Linux)
+
+	// Create a spec that overrides the sysbox systemd mounts (spec tmpfs mounts override
+	// the sysbox tmpfs mounts for systemd).
+	spec.Process.Args = []string{"/sbin/init"}
+
+	spec.Mounts = []specs.Mount{
+		specs.Mount{
+			Source:      "/somepath",
+			Destination: "/run",
+			Type:        "tmpfs",
+			Options:     []string{"rw", "nosuid", "noexec", "size=128m"},
+		},
+		specs.Mount{
+			Source:      "/otherpath",
+			Destination: "/run/lock",
+			Type:        "tmpfs",
+			Options:     []string{"rw", "nosuid", "noexec", "size=8m"},
+		},
+		specs.Mount{
+			Source:      "/yetanotherpath",
+			Destination: "/tmp",
+			Type:        "tmpfs",
+			Options:     []string{"rw", "nosuid", "noexec", "size=128m"},
+		},
+	}
+
+	wantMounts := spec.Mounts
+
+	// This call should honor the spec mount overrides.
+	cfgSystemdMounts(spec)
+
+	if !utils.MountSliceEqual(spec.Mounts, wantMounts) {
+		t.Errorf("cfgSystemd() failed: spec.Mounts: want %v, got %v", wantMounts, spec.Mounts)
+	}
+}
+
