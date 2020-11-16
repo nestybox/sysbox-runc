@@ -529,9 +529,20 @@ func cfgSysboxFsMounts(spec *specs.Spec, sysFs *sysbox.Fs) {
 
 // cfgSystemdMounts adds systemd related mounts to the spec
 func cfgSystemdMounts(spec *specs.Spec) {
+
+	// For sys containers with systemd inside, sysbox mounts tmpfs over certain directories
+	// of the container (this is a systemd requirement). However, if the container spec
+	// already has tmpfs mounts over any of these directories, we honor the spec mounts
+	// (i.e., these override the sysbox mount).
+
 	spec.Mounts = utils.MountSliceRemove(spec.Mounts, sysboxSystemdMounts, func(m1, m2 specs.Mount) bool {
-		return m1.Destination == m2.Destination
+		return m1.Destination == m2.Destination && m1.Type != "tmpfs"
 	})
+
+	sysboxSystemdMounts = utils.MountSliceRemove(sysboxSystemdMounts, spec.Mounts, func(m1, m2 specs.Mount) bool {
+		return m1.Destination == m2.Destination && m2.Type == "tmpfs"
+	})
+
 	spec.Mounts = append(spec.Mounts, sysboxSystemdMounts...)
 }
 
