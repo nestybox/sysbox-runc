@@ -182,8 +182,10 @@ validate:
 	$(GO) vet ./...
 	shellcheck tests/integration/*.bats
 	# TODO: add shellcheck for sh files
-	shfmt -ln bats -d tests/integration/*.bats
-	shfmt -ln bash -d man/*.sh script/*.sh tests/*.sh tests/integration/*.bash
+
+shfmt:
+	shfmt -ln bats -d -w tests/integration/*.bats
+	shfmt -ln bash -d -w man/*.sh script/*.sh tests/*.sh tests/integration/*.bash
 
 ci: validate test release
 
@@ -206,5 +208,5 @@ listpackages:
 .PHONY: runc all recvtty static release dbuild lint man runcimage \
 	test localtest unittest localunittest integration localintegration \
 	rootlessintegration localrootlessintegration shell install install-bash \
-	install-man uninstall uninstall-bash clean validate ci \
+	install-man uninstall uninstall-bash clean validate ci shfmt \
 	cross localcross
