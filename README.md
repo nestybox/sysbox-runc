@@ -17,7 +17,7 @@ modified for running system containers. It was forked in early 2019 and has unde
 significant changes since then.
 
 sysbox-runc is mostly (but not 100%) compatible with the OCI runtime specification (more on this
-[here](../docs/user-guide/design.md#sysbox-oci-compatibility)).
+[here](https://github.com/nestybox/sysbox/blob/master/docs/user-guide/design.md#sysbox-oci-compatibility)).
 
 ## Building
 
