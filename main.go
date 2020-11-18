@@ -40,13 +40,10 @@ bare-metal host.
 Unlike application containers which are used to package and deploy
 application micro-services, system containers package and deploy
 virtual Linux host images (inside of which application containers may
-be deployed).
+be deployed, e.g., using Docker or Kubernetes).
 
-sysbox-runc is a fork of the Open Container Initiative (OCI) runc. As
-such, it runs system containers that are packaged according to the OCI
-format. However, sysbox-runc overrides OCI configurations that are
-incompatible with the system container abstraction (i.e., sysbox-runc
-is mostly but not fully OCI compliant).
+sysbox-runc is a fork of the Open Container Initiative (OCI) runc
+that has been customized for system containers.
 
 sysbox-runc is configured using OCI bundles (i.e., a directory that
 includes a specification file named "` + specConfig + `" and a root

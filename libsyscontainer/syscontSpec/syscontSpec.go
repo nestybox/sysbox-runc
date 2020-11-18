@@ -1,6 +1,6 @@
 // +build linux
 
-package libsyscontainer
+package syscontSpec
 
 import (
 	"fmt"
@@ -133,7 +133,7 @@ var linuxCaps = []string{
 }
 
 // idRangeMin represents the minimum uid/gid range required by a sys container instance
-var idRangeMin uint32 = 65536
+var idRangeMin uint32 = 1
 
 // cfgNamespaces checks that the namespace config is valid and adds any missing Linux
 // namespaces to the system container config
@@ -277,19 +277,15 @@ func cfgSysboxfsMounts(spec *specs.Spec) {
 	}
 }
 
-// cfgCgroupPath configures the system container's cgroupPath.
-func cfgCgroupPath(spec *specs.Spec) error {
-
-	// System container specs require a cgroupsPath
-	if spec.Linux.CgroupsPath == "" {
-		return fmt.Errorf("cgroupsPath not found in spec")
-	}
+// cfgCgroups configures the system container's cgroup settings.
+func cfgCgroups(spec *specs.Spec) error {
 
 	// Remove the read-only attribute from the cgroup mount; this is fine because the sys
 	// container's cgroup root will be in a child cgroup of the cgroup that controls the
 	// sys container's resources; thus, root processes inside the sys container will be
 	// able to allocate cgroup resources yet not modify the resources allocated to the sys
 	// container itself.
+
 	for i, mount := range spec.Mounts {
 		if mount.Type == "cgroup" {
 			for j := 0; j < len(mount.Options); j++ {
@@ -326,7 +322,7 @@ func ConvertSpec(spec *specs.Spec, strict bool) error {
 	cfgReadonlyPaths(spec)
 	cfgSysboxfsMounts(spec)
 
-	if err := cfgCgroupPath(spec); err != nil {
+	if err := cfgCgroups(spec); err != nil {
 		return fmt.Errorf("failed to configure cgroup mounts: %v", err)
 	}
 
