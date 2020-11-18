@@ -98,7 +98,7 @@ using the sysbox-runc checkpoint command.`,
 		}
 		// XXX: Currently this is untested with rootless containers.
 		if os.Geteuid() != 0 || system.RunningInUserNS() {
-			logrus.Warn("runc checkpoint is untested with rootless containers")
+			logrus.Warn("sysbox-runc restore is untested")
 		}
 
 		spec, err := setupSpec(context)
