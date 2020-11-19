@@ -567,7 +567,7 @@ func (c *linuxContainer) newSetnsProcess(p *Process, cmd *exec.Cmd, messageSockP
 	// cgroup root)
 	return &setnsProcess{
 		cmd:             cmd,
-		cgroupPaths:     state.CgroupPaths,
+		cgroupPaths:     c.cgroupManager.GetChildCgroupPaths(),
 		rootlessCgroups: c.config.RootlessCgroups,
 		intelRdtPath:    state.IntelRdtPath,
 		messageSockPair: messageSockPair,
@@ -1903,7 +1903,7 @@ func (c *linuxContainer) currentState() (*State, error) {
 			Created:              c.created,
 		},
 		Rootless:            c.config.RootlessEUID && c.config.RootlessCgroups,
-		CgroupPaths:         c.cgroupManager.GetChildCgroupPaths(),
+		CgroupPaths:         c.cgroupManager.GetPaths(),
 		IntelRdtPath:        intelRdtPath,
 		NamespacePaths:      make(map[configs.NamespaceType]string),
 		ExternalDescriptors: externalDescriptors,

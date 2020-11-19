@@ -61,11 +61,17 @@ type manager struct {
 }
 
 func NewManager(cg *configs.Cgroup, paths map[string]string, rootless bool) cgroups.Manager {
+
+	childCgroupCreated := false
+	if paths != nil {
+		childCgroupCreated = true
+	}
+
 	return &manager{
 		cgroups:            cg,
 		paths:              paths,
 		rootless:           rootless,
-		childCgroupCreated: false,
+		childCgroupCreated: childCgroupCreated,
 	}
 }
 
