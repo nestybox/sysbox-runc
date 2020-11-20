@@ -180,6 +180,8 @@ validate:
 	script/validate-gofmt
 	script/validate-c
 	$(GO) vet ./...
+
+shellcheck:
 	shellcheck tests/integration/*.bats
 	# TODO: add shellcheck for sh files
 
@@ -208,5 +210,5 @@ listpackages:
 .PHONY: runc all recvtty static release dbuild lint man runcimage \
 	test localtest unittest localunittest integration localintegration \
 	rootlessintegration localrootlessintegration shell install install-bash \
-	install-man uninstall uninstall-bash clean validate ci shfmt \
+	install-man uninstall uninstall-bash clean validate ci shfmt shellcheck \
 	cross localcross
