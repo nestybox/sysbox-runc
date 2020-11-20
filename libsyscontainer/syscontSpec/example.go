@@ -57,7 +57,7 @@ func Example(uid, gid, idRange uint32, bundle string) (*specs.Spec, error) {
 				Destination: "/dev/pts",
 				Type:        "devpts",
 				Source:      "devpts",
-				Options:     []string{"nosuid", "noexec", "newinstance", "ptmxmode=0666", "mode=0620"},  // TODO: skip "gid=5" option until we come up with a valid uid/gid allocation strategy
+				Options:     []string{"nosuid", "noexec", "newinstance", "ptmxmode=0666", "mode=0620", "gid=5"},
 			},
 			{
 				Destination: "/dev/shm",

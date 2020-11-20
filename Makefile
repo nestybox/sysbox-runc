@@ -2,6 +2,7 @@ CONTAINER_ENGINE := docker
 GO := go
 
 RUNC_TARGET := sysbox-runc
+RUNC_DEBUG_TARGET := sysbox-runc-debug
 
 PREFIX ?= /usr/local
 BINDIR := $(PREFIX)/sbin
@@ -21,17 +22,21 @@ ifeq ($(shell $(GO) env GOOS),linux)
 		GO_BUILDMODE := "-buildmode=pie"
 	endif
 endif
-GO_BUILD := $(GO) build $(GO_BUILDMODE) $(EXTRA_FLAGS) -tags "$(BUILDTAGS)" \
-	-ldflags "$(LDFLAGS) $(EXTRA_LDFLAGS)"
-GO_BUILD_STATIC := CGO_ENABLED=1 $(GO) build $(EXTRA_FLAGS) -tags "$(BUILDTAGS) netgo osusergo" \
-	-ldflags "-w -extldflags -static $(LDFLAGS) $(EXTRA_LDFLAGS)"
-GO_BUILD_DEBUG := $(GO) build --buildmode=exe $(EXTRA_FLAGS) -tags "$(BUILDTAGS)" \
-	-ldflags "$(LDFLAGS) $(EXTRA_LDFLAGS)" -gcflags="all=-N -l"
+GO_BUILD := $(GO) build $(MOD_VENDOR) $(GO_BUILDMODE) $(EXTRA_FLAGS) -tags "$(BUILDTAGS)" \
+	-ldflags "-X main.gitCommit=$(COMMIT) -X main.version=$(VERSION) $(EXTRA_LDFLAGS)"
+GO_BUILD_STATIC := CGO_ENABLED=1 $(GO) build $(MOD_VENDOR) $(EXTRA_FLAGS) -tags "$(BUILDTAGS) netgo osusergo" \
+	-ldflags "-w -extldflags -static -X main.gitCommit=$(COMMIT) -X main.version=$(VERSION) $(EXTRA_LDFLAGS)"
+GO_BUILD_DEBUG := $(GO) build $(MOD_VENDOR) --buildmode=exe $(EXTRA_FLAGS) -tags "$(BUILDTAGS)" \
+	-ldflags "-X main.gitCommit=$(COMMIT) -X main.version=$(VERSION) $(EXTRA_LDFLAGS)" -gcflags="all=-N -l"
 
 .DEFAULT: $(RUNC_TARGET)
 
 $(RUNC_TARGET):
 	$(GO_BUILD) -o $(RUNC_TARGET) .
+
+# -buildmode=exe required in order to debug nsenter (cgo)
+$(RUNC_DEBUG_TARGET):
+	$(GO_BUILD_DEBUG) -o $(RUNC_TARGET) .
 
 all: $(RUNC_TARGET) recvtty
 
@@ -152,6 +157,10 @@ localcross:
 	CGO_ENABLED=1 GOARCH=arm GOARM=7 CC=arm-linux-gnueabihf-gcc $(GO_BUILD) -o runc-armhf .
 	CGO_ENABLED=1 GOARCH=arm64 CC=aarch64-linux-gnu-gcc         $(GO_BUILD) -o runc-arm64 .
 	CGO_ENABLED=1 GOARCH=ppc64le CC=powerpc64le-linux-gnu-gcc   $(GO_BUILD) -o runc-ppc64le .
+
+# memoize allpackages, so that it's executed only once and only if used
+_allpackages = $(shell $(GO) list ./... | grep -v vendor)
+allpackages = $(if $(__allpackages),,$(eval __allpackages := $$(_allpackages)))$(__allpackages)
 
 .PHONY: runc all recvtty static release dbuild lint man runcimage \
 	test localtest unittest localunittest integration localintegration \

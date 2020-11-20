@@ -78,6 +78,40 @@ You can run a test using your container engine's flags by setting `CONTAINER_ENG
 # make test CONTAINER_ENGINE_BUILD_FLAGS="--build-arg http_proxy=http://yourproxy/" CONTAINER_ENGINE_RUN_FLAGS="-e http_proxy=http://yourproxy/"
 ```
 
+### Test Shell
+
+You can get a shell in the test container with:
+
+```bash
+# make shell
+```
+
+To run a specific integration test:
+
+```bash
+# bats -t tests/integration/sometest.bats
+```
+
+To run a specific unit test, point to the go package and test.
+
+```bash
+# go test "-mod=vendor" -timeout 3m -tags "seccomp selinux apparmor"  -v github.com/opencontainers/runc/libcontainer/integration -run TestEnter
+```
+
+You can get the list of go packages with:
+
+```bash
+# go list ./...
+```
+
+The delve debugger is installed in the test container. You can attach it to a sysbox-runc process with:
+
+```bash
+# dlv attach <pid>
+```
+
+where `<pid>` is the pid of the sysbox-runc process.
+
 ### Dependencies Management
 
 `sysbox-runc` uses [Go Modules](https://github.com/golang/go/wiki/Modules) for dependencies management.

@@ -19,11 +19,7 @@ function teardown() {
 	runc run test_dev
 	[ "$status" -eq 0 ]
 
-	if [[ "$ROOTLESS" -ne 0 ]]; then
-		[[ "${lines[0]}" =~ "crw-rw-rw".+"1".+"65534".+"65534".+"5,".+"0".+"/dev/tty" ]]
-	else
-		[[ "${lines[0]}" =~ "crw-rw-rw".+"1".+"0".+"0".+"5,".+"0".+"/dev/tty" ]]
-	fi
+	[[ "${lines[0]}" =~ "crw-rw-rw".+"1".+"65534".+"65534".+"5,".+"0".+"/dev/tty" ]]
 }
 
 @test "runc run [redundant default /dev/ptmx]" {
@@ -48,7 +44,7 @@ function teardown() {
 	# test write
 	runc exec test_deny sh -c 'hostname | tee /dev/kmsg'
 	[ "$status" -eq 1 ]
-	[[ "${output}" == *'Operation not permitted'* ]]
+	[[ "${output}" == *'Permission denied'* ]]
 
 	# test read
 	runc exec test_deny sh -c 'head -n 1 /dev/kmsg'
@@ -57,6 +53,8 @@ function teardown() {
 }
 
 @test "runc run [device cgroup allow rw char device]" {
+        skip "Unsupported"
+
 	requires root
 
 	update_config ' .linux.resources.devices = [{"allow": false, "access": "rwm"},{"allow": true, "type": "c", "major": 1, "minor": 11, "access": "rwm"}]
@@ -78,6 +76,8 @@ function teardown() {
 }
 
 @test "runc run [device cgroup allow rm block device]" {
+        skip "Unsupported"
+
 	requires root
 
 	# get first block device

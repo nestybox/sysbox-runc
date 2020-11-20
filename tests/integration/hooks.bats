@@ -25,6 +25,8 @@ function teardown() {
 }
 
 @test "runc run (hooks library tests)" {
+        skip "unsupported"
+
 	requires root
 	requires no_systemd
 

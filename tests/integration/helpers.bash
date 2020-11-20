@@ -42,6 +42,11 @@ CONSOLE_SOCKET="$BATS_TMPDIR/console.sock"
 # Check if we're in rootless mode.
 ROOTLESS=$(id -u)
 
+# sysbox-runc
+UID_MAP=100000
+GID_MAP=100000
+ID_MAP_SIZE=65536
+
 # Wrapper for runc.
 function runc() {
 	run __runc "$@"
@@ -72,7 +77,8 @@ function runc_spec() {
 		args+=("--bundle" "$bundle")
 	fi
 
-	runc spec "${args[@]}"
+        # sysbox-runc: sys container spec requires id mappings
+        runc spec "${args[@]}" "$UID_MAP" "$GID_MAP" "$ID_MAP_SIZE"
 
 	# Always add additional mappings if we have idmaps.
 	if [[ "$ROOTLESS" -ne 0 ]] && [[ "$ROOTLESS_FEATURES" == *"idmap"* ]]; then
@@ -133,7 +139,7 @@ function init_cgroup_paths() {
 			OCI_CGROUPS_PATH="machine.slice:runc-cgroups:integration-test"
 		fi
 	else
-		REL_CGROUPS_PATH="/runc-cgroups-integration-test/test-cgroup"
+		REL_CGROUPS_PATH="/runc-cgroups-integration-test/test-cgroup/"
 		OCI_CGROUPS_PATH=$REL_CGROUPS_PATH
 	fi
 
@@ -486,7 +492,12 @@ function setup_busybox() {
 		curl -o $BUSYBOX_IMAGE -sSL $(get_busybox)
 	fi
 	tar --exclude './dev/*' -C "$BUSYBOX_BUNDLE"/rootfs -xf "$BUSYBOX_IMAGE"
+
+        # sysbox-runc: set bundle ownership to match system container's uid/gid map (see runc_spec())
+        chown -R "$UID_MAP":"$GID_MAP" $BUSYBOX_BUNDLE
+
 	cd "$BUSYBOX_BUNDLE"
+
 	runc_spec
 }
 

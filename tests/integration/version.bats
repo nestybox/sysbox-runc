@@ -6,6 +6,9 @@ load helpers
 	runc -v
 	[ "$status" -eq 0 ]
 	[[ ${lines[0]} =~ runc\ version\ [0-9]+\.[0-9]+\.[0-9]+ ]]
-	[[ ${lines[1]} =~ commit:+ ]]
-	[[ ${lines[2]} =~ spec:\ [0-9]+\.[0-9]+\.[0-9]+ ]]
+
+        # For sysbox, we use the Git commit of the parent sysbox repo, not the commit of the sysbox-runc repo
+	#[[ ${lines[1]} =~ commit:+ ]]
+
+	[[ ${lines[1]} =~ spec:\ [0-9]+\.[0-9]+\.[0-9]+ ]]
 }

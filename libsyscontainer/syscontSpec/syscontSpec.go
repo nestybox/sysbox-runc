@@ -157,14 +157,14 @@ func cfgNamespaces(spec *specs.Spec) error {
 	// Add any missing namespaces (currently the cgroup namespace only)
 	found := false
 	for _, cfgNs := range spec.Linux.Namespaces {
-		if cfgNs.Type == "cgroup" {
+		if cfgNs.Type == specs.CgroupNamespace {
 			found = true
 		}
 	}
 
 	if !found {
 		newns := specs.LinuxNamespace{
-			Type: "cgroup",
+			Type: specs.CgroupNamespace,
 			Path: "",
 		}
 		spec.Linux.Namespaces = append(spec.Linux.Namespaces, newns)

@@ -117,10 +117,14 @@ function simple_cr() {
 }
 
 @test "checkpoint and restore " {
+        skip "sysbox-runc unsupported feature"
+
 	simple_cr
 }
 
 @test "checkpoint and restore (cgroupns)" {
+        skip "sysbox-runc unsupported feature"
+
 	# cgroupv2 already enables cgroupns so this case was tested above already
 	requires cgroups_v1 cgroupns
 
@@ -131,6 +135,8 @@ function simple_cr() {
 }
 
 @test "checkpoint --pre-dump and restore" {
+        skip "sysbox-runc unsupported feature"
+
 	setup_pipes
 	runc_run_with_pipes test_busybox
 
@@ -157,6 +163,8 @@ function simple_cr() {
 }
 
 @test "checkpoint --lazy-pages and restore" {
+        skip "sysbox-runc unsupported feature"
+
 	# check if lazy-pages is supported
 	if ! "${CRIU}" check --feature uffd-noncoop; then
 		skip "this criu does not support lazy migration"
@@ -215,6 +223,8 @@ function simple_cr() {
 }
 
 @test "checkpoint and restore in external network namespace" {
+        skip "sysbox-runc unsupported feature"
+
 	# check if external_net_ns is supported; only with criu 3.10++
 	if ! "${CRIU}" check --feature external_net_ns; then
 		# this criu does not support external_net_ns; skip the test
@@ -268,6 +278,8 @@ function simple_cr() {
 }
 
 @test "checkpoint and restore with container specific CRIU config" {
+        skip "sysbox-runc unsupported feature"
+
 	tmp=$(mktemp /tmp/runc-criu-XXXXXX.conf)
 	# This is the file we write to /etc/criu/default.conf
 	tmplog1=$(mktemp /tmp/runc-criu-log-XXXXXX.log)

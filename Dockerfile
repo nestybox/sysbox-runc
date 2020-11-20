@@ -80,6 +80,12 @@ RUN echo 'deb http://download.opensuse.org/repositories/devel:/kubic:/libcontain
 RUN curl -o /usr/local/bin/umoci -fsSL https://github.com/opencontainers/umoci/releases/download/v0.4.5/umoci.amd64 \
     && chmod +x /usr/local/bin/umoci
 
+# install debug tools
+RUN go get github.com/go-delve/delve/cmd/dlv \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+    psmisc
+
 COPY script/tmpmount /
 WORKDIR /go/src/nestybox/sysbox-runc
 ENTRYPOINT ["/tmpmount"]

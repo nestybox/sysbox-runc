@@ -56,8 +56,9 @@ function teardown() {
 	requires cgroups_v1 root cgroupns
 	set_cgroups_path "$BUSYBOX_BUNDLE"
 	set_cgroup_mount_writable "$BUSYBOX_BUNDLE"
-	# enable cgroupns
-	update_config '.linux.namespaces += [{"type": "cgroup"}]'
+
+	# the sysbox container sample spec comes with cgroup ns enabled
+	# update_config '.linux.namespaces += [{"type": "cgroup"}]'
 
 	local subsystems="memory freezer"
 
@@ -88,7 +89,7 @@ EOF
 
 	for s in ${subsystems}; do
 		name=CGROUP_${s^^}
-		eval path=\$"${name}"/foo
+		eval path=\$"${name}"/syscont-cgroup-root/foo
 		# shellcheck disable=SC2154
 		[ -d "${path}" ] || fail "test failed to create memory sub-cgroup ($path not found)"
 	done

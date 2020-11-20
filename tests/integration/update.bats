@@ -58,7 +58,7 @@ function setup() {
 	yes)
 		MEM_LIMIT="memory.max"
 		SD_MEM_LIMIT="MemoryMax"
-		MEM_RESERVE="memory.low"
+		Mem_RESERVE="memory.low"
 		SD_MEM_RESERVE="MemoryLow"
 		MEM_SWAP="memory.swap.max"
 		SD_MEM_SWAP="MemorySwapMax"
@@ -88,11 +88,17 @@ function setup() {
 	check_systemd_value "TasksMax" 20
 
 	# update cpuset if supported (i.e. we're running on a multicore cpu)
+        #
+        # NOTE: with sysbox, we always create a parent and a child cgroup; the
+        # first is owned by the host, the later is delegated to the sys
+        # container. Because of this, cpuset updates on the parent fail with
+        # "Devicer or resource busy" because they can only be done when there are
+        # no child cgroups. Thus, we check for failure here.
+
 	cpu_count=$(grep -c '^processor' /proc/cpuinfo)
 	if [ "$cpu_count" -gt 1 ]; then
 		runc update test_update --cpuset-cpus "1"
-		[ "$status" -eq 0 ]
-		check_cgroup_value "cpuset.cpus" 1
+		[ "$status" -eq 1 ]
 	fi
 
 	# update memory limit
