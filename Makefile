@@ -162,6 +162,9 @@ localcross:
 _allpackages = $(shell $(GO) list ./... | grep -v vendor)
 allpackages = $(if $(__allpackages),,$(eval __allpackages := $$(_allpackages)))$(__allpackages)
 
+listpackages:
+	@echo $(allpackages)
+
 .PHONY: runc all recvtty static release dbuild lint man runcimage \
 	test localtest unittest localunittest integration localintegration \
 	rootlessintegration localrootlessintegration shell install install-bash \
