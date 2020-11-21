@@ -8,7 +8,12 @@ import (
 	"path/filepath"
 
 	"github.com/opencontainers/runc/libcontainer/configs"
+
 	"github.com/opencontainers/runtime-spec/specs-go"
+
+	"github.com/opencontainers/runc/libsysbox/sysbox"
+	pb "github.com/opencontainers/runc/libsysbox/sysbox_protobuf"
+
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )
@@ -58,6 +63,12 @@ func destroy(c *linuxContainer) error {
 		err = herr
 	}
 	c.state = &stoppedState{c: c}
+
+	// Unregister container from sysbox-fs (must be done after post-stop hooks).
+	if !sysbox.SendContainerUnregistration(&pb.ContainerData{Id: c.id}) {
+		return newSystemErrorWithCause(err, "unregistering from sysbox-fs")
+	}
+
 	return err
 }
 

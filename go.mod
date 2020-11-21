@@ -25,4 +25,5 @@ require (
 	github.com/vishvananda/netlink v1.1.0
 	github.com/willf/bitset v1.1.11
 	golang.org/x/sys v0.0.0-20201107080550-4d91cf3a1aaf
+	google.golang.org/grpc v1.33.2
 )

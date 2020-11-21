@@ -25,6 +25,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/intelrdt"
 	"github.com/opencontainers/runc/libcontainer/system"
 	"github.com/opencontainers/runc/libcontainer/utils"
+	"github.com/opencontainers/runc/libsysbox/sysbox"
 	"github.com/opencontainers/runtime-spec/specs-go"
 
 	"github.com/checkpoint-restore/go-criu/v4"
@@ -367,7 +368,25 @@ func (c *linuxContainer) start(process *Process) error {
 		return newSystemErrorWithCause(err, "starting container process")
 	}
 
+	// generate a timestamp indicating when the container was started
+	c.created = time.Now().UTC()
+
+	// sysbox-runc: send the creation-timestamp to sysbox-fs.
+	if !sysbox.SendContainerCreationTime(c.created) {
+		return newSystemErrorWithCause(err,
+			"Setting container creation time with sysbox-fs")
+	}
+
 	if process.Init {
+		c.state = &createdState{
+			c: c,
+		}
+		state, err := c.updateState(parent)
+		if err != nil {
+			return err
+		}
+		c.initProcessStartTime = state.InitProcessStartTime
+
 		if c.config.Hooks != nil {
 			s, err := c.currentOCIState()
 			if err != nil {
