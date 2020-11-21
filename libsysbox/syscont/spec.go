@@ -236,9 +236,9 @@ func cfgIDMappings(spec *specs.Spec) error {
 }
 
 // cfgCapabilities sets the capabilities for the process in the system container
-func cfgCapabilities(spec *specs.Spec) {
-	caps := spec.Process.Capabilities
-	uid := spec.Process.User.UID
+func cfgCapabilities(p *specs.Process) {
+	caps := p.Capabilities
+	uid := p.User.UID
 
 	// In a sys container, the root process has all capabilities
 	if uid == 0 {
@@ -509,8 +509,8 @@ func checkRootFilesys(rootPath string) error {
 	return nil
 }
 
-// specCheck performs some basic checks on the system container's spec
-func specCheck(spec *specs.Spec) error {
+// checkSpec performs some basic checks on the system container's spec
+func checkSpec(spec *specs.Spec) error {
 
 	if spec.Root == nil || spec.Linux == nil {
 		return fmt.Errorf("not a linux container spec")
@@ -527,11 +527,21 @@ func specCheck(spec *specs.Spec) error {
 	return nil
 }
 
+// Configure the container's process spec for system containers
+func ConvertProcessSpec(p *specs.Process) error {
+	cfgCapabilities(p)
+	return nil
+}
+
 // ConvertSpec converts the given container spec to a system container spec.
 func ConvertSpec(spec *specs.Spec) error {
 
-	if err := specCheck(spec); err != nil {
+	if err := checkSpec(spec); err != nil {
 		return fmt.Errorf("invalid or unsupported system container spec: %v", err)
+	}
+
+	if err := ConvertProcessSpec(spec.Process); err != nil {
+		return fmt.Errorf("failed to configure process spec: %v", err)
 	}
 
 	if err := cfgNamespaces(spec); err != nil {
@@ -542,7 +552,6 @@ func ConvertSpec(spec *specs.Spec) error {
 		return fmt.Errorf("invalid user/group ID config: %v", err)
 	}
 
-	cfgCapabilities(spec)
 	cfgMaskedPaths(spec)
 	cfgReadonlyPaths(spec)
 
