@@ -464,6 +464,30 @@ func doBindMounts(config *configs.Config, pipe io.ReadWriter) error {
 	return nil
 }
 
+func chownMounts(config *configs.Config, pipe io.ReadWriter, chownList []string) error {
+	chownReqs := []opReq{}
+
+	for _, path := range chownList {
+		req := opReq{
+			Op:     chown,
+			Rootfs: config.Rootfs,
+			Path:   path,
+			Uid:    config.UidMappings[0].HostID,
+			Gid:    config.GidMappings[0].HostID,
+		}
+
+		chownReqs = append(chownReqs, req)
+	}
+
+	if len(chownReqs) > 0 {
+		if err := syncParentDoOp(chownReqs, pipe); err != nil {
+			return newSystemErrorWithCause(err, "syncing with parent runc to chown mounts")
+		}
+	}
+
+	return nil
+}
+
 func getCgroupMounts(m *configs.Mount) ([]*configs.Mount, error) {
 	mounts, err := cgroups.GetCgroupMounts(false)
 	if err != nil {
@@ -930,16 +954,36 @@ func mountNewCgroup(m *configs.Mount) error {
 // sysbox-runc: doMounts sets up all of the container's mounts as specified in the given config.
 func doMounts(config *configs.Config, pipe io.ReadWriter) error {
 
+	chownList := []string{}
+
 	// Do non-bind mounts
 	for _, m := range config.Mounts {
 		if m.Device != "bind" {
 			if err := mountToRootfs(m, config.Rootfs, config.MountLabel, true, config.ShiftUids, pipe); err != nil {
 				return newSystemErrorWithCausef(err, "mounting %q to rootfs %q at %q", m.Source, config.Rootfs, m.Destination)
 			}
+
+			// Change ownership of the container's /proc to match the container's
+			// root user. This prevents /proc showing up as nobody:nogroup
+			// yet does not give any extra permissions to the container. It not only
+			// looks better, but helps prevents problems such as
+			// https://github.com/nestybox/sysbox/issues/130.
+			//
+			// Note: ideally we would do the same for "/sys", but we can't because
+			// changing ownership of any sysfs mountpoint causes the ownership
+			// change to propagate to all other sysfs mountpoints in the system.
+
+			if m.Device == "proc" {
+				chownList = append(chownList, "proc")
+			}
 		}
 	}
 
 	if err := doBindMounts(config, pipe); err != nil {
+		return err
+	}
+
+	if err := chownMounts(config, pipe, chownList); err != nil {
 		return err
 	}
 
