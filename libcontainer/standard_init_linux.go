@@ -36,19 +36,25 @@ const (
 	bind = iota
 	switchDockerDns
 	seccompFd
+	chown
 )
 
 type opReq struct {
-	Op opReqType `json:"type"`
+	Op     opReqType `json:"type"`
+	Rootfs string    `json:"rootfs"`
 
 	// bind
-	Rootfs string        `json:"rootfs"`
-	Mount  configs.Mount `json:"mount"`
-	Label  string        `json:"label"`
+	Mount configs.Mount `json:"mount"`
+	Label string        `json:"label"`
 
 	// switchDockerDns
 	OldDns string `json:"olddns"`
 	NewDns string `json:"newdns"`
+
+	// chown
+	Path string `json:"path"`
+	Uid  int    `json:"uid"`
+	Gid  int    `json:"gid"`
 }
 
 func (l *linuxStandardInit) getSessionRingParams() (string, uint32, uint32) {
