@@ -246,7 +246,6 @@ func (l *linuxRootfsInit) Init() error {
 	switch l.reqs[0].Op {
 
 	case bind:
-
 		// The mount requests assume that the process cwd is the rootfs directory
 		rootfs := l.reqs[0].Rootfs
 		if err := unix.Chdir(rootfs); err != nil {
@@ -288,6 +287,19 @@ func (l *linuxRootfsInit) Init() error {
 
 		if err := doDockerDnsSwitch(oldDns, newDns); err != nil {
 			return newSystemErrorWithCausef(err, "Docker DNS switch from %s to %s", oldDns, newDns)
+		}
+
+	case chown:
+		rootfs := l.reqs[0].Rootfs
+
+		for _, req := range l.reqs {
+			path := filepath.Join(rootfs, req.Path)
+			uid := req.Uid
+			gid := req.Gid
+
+			if err := unix.Chown(path, uid, gid); err != nil {
+				return newSystemErrorWithCausef(err, "failed to chown %s to %v:%v", path, uid, gid)
+			}
 		}
 
 	default:
