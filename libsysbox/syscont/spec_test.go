@@ -306,12 +306,6 @@ func TestCfgSystemd(t *testing.T) {
 			Type:        "bind",
 			Options:     []string{"ro", "rprivate"},
 		},
-		specs.Mount{
-			Source:      "/another/path",
-			Destination: "/tmp",
-			Type:        "bind",
-			Options:     []string{"rw", "rprivate", "noexec"},
-		},
 	}
 
 	// This call should remove the conflicting info above
@@ -335,12 +329,6 @@ func TestCfgSystemd(t *testing.T) {
 			Destination: "/run/lock",
 			Type:        "tmpfs",
 			Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "size=4m"},
-		},
-		specs.Mount{
-			Source:      "tmpfs",
-			Destination: "/tmp",
-			Type:        "tmpfs",
-			Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "size=64m"},
 		},
 	}
 
@@ -371,12 +359,6 @@ func TestCfgSystemdOverride(t *testing.T) {
 			Destination: "/run/lock",
 			Type:        "tmpfs",
 			Options:     []string{"rw", "nosuid", "noexec", "size=8m"},
-		},
-		specs.Mount{
-			Source:      "/yetanotherpath",
-			Destination: "/tmp",
-			Type:        "tmpfs",
-			Options:     []string{"rw", "nosuid", "noexec", "size=128m"},
 		},
 	}
 

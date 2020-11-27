@@ -209,12 +209,6 @@ var sysboxSystemdMounts = []specs.Mount{
 		Type:        "tmpfs",
 		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "size=4m"},
 	},
-	specs.Mount{
-		Destination: "/tmp",
-		Source:      "tmpfs",
-		Type:        "tmpfs",
-		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "size=64m"},
-	},
 }
 
 // sysbox's systemd env-vars requirements
