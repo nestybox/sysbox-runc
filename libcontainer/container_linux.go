@@ -1915,10 +1915,6 @@ func (c *linuxContainer) saveState(s *State) (retErr error) {
 	return os.Rename(tmpFile.Name(), stateFilePath)
 }
 
-func (c *linuxContainer) deleteState() error {
-	return os.Remove(filepath.Join(c.root, stateFilename))
-}
-
 func (c *linuxContainer) currentStatus() (Status, error) {
 	if err := c.refreshState(); err != nil {
 		return -1, err
