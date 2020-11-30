@@ -861,11 +861,7 @@ func (c *linuxContainer) checkCriuVersion(minVersion int) error {
 const descriptorsFilename = "descriptors.json"
 
 func (c *linuxContainer) addCriuDumpMount(req *criurpc.CriuReq, m *configs.Mount) {
-	mountDest := m.Destination
-	if strings.HasPrefix(mountDest, c.config.Rootfs) {
-		mountDest = mountDest[len(c.config.Rootfs):]
-	}
-
+	mountDest := strings.TrimPrefix(m.Destination, c.config.Rootfs)
 	extMnt := &criurpc.ExtMountMap{
 		Key: proto.String(mountDest),
 		Val: proto.String(mountDest),
@@ -1243,11 +1239,7 @@ func (c *linuxContainer) Checkpoint(criuOpts *CriuOpts) error {
 }
 
 func (c *linuxContainer) addCriuRestoreMount(req *criurpc.CriuReq, m *configs.Mount) {
-	mountDest := m.Destination
-	if strings.HasPrefix(mountDest, c.config.Rootfs) {
-		mountDest = mountDest[len(c.config.Rootfs):]
-	}
-
+	mountDest := strings.TrimPrefix(m.Destination, c.config.Rootfs)
 	extMnt := &criurpc.ExtMountMap{
 		Key: proto.String(mountDest),
 		Val: proto.String(m.Source),
