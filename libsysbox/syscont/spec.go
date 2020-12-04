@@ -563,10 +563,29 @@ func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, shiftUids bool) error 
 		_, isSpecialDir := specialDir[m.Destination]
 
 		if m.Type == "bind" && isSpecialDir {
+
+			// When using uid shifting, if the mount is on a special dir, and the source of
+			// that mount is a child dir of another bind-mount source, disallow it. For
+			// example, mounting /a/b/c->/var/lib/docker is not allowed if /, /a, or /a/b is
+			// also bind-mounted into the container. The reason is that this requires
+			// mounting shiftfs on the parent path, which means that the special mount would
+			// also be under shiftfs, and the latter is something we want to avoid (as k8s
+			// for example will fail when shiftfs is mounted on /var/lib/kubelet).
+
+			if shiftUids {
+				for _, om := range spec.Mounts {
+					if om.Source != m.Source && strings.HasPrefix(m.Source, om.Source) {
+						return fmt.Errorf("detected disallowed nested bind-mount sources (%s and %s); the latter is a mount over %s and thus can't be a subdir of the former",
+							om.Source, m.Source, m.Destination)
+					}
+				}
+			}
+
 			info := ipcLib.MountPrepInfo{
 				Source:    m.Source,
 				Exclusive: true,
 			}
+
 			prepList = append(prepList, info)
 			delete(specialDir, m.Destination)
 		}
