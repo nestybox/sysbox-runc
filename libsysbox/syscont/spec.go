@@ -638,10 +638,6 @@ func checkSpec(spec *specs.Spec) error {
 		return fmt.Errorf("not a linux container spec")
 	}
 
-	if spec.Root.Readonly {
-		return fmt.Errorf("root path must be read-write but it's set to read-only")
-	}
-
 	return nil
 }
 
