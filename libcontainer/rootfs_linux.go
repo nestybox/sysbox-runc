@@ -885,6 +885,37 @@ func remountReadonly(m *configs.Mount) error {
 	return fmt.Errorf("unable to mount %s as readonly max retries reached", dest)
 }
 
+// remountReadwrite will remount an existing mount point with read-write permissions.
+func remountReadwrite(m *configs.Mount) error {
+	var (
+		dest  = m.Destination
+		flags = m.Flags
+	)
+
+	for i := 0; i < 5; i++ {
+		// There is a special case in the kernel for
+		// MS_REMOUNT | MS_BIND, which allows us to change only the
+		// flags even as an unprivileged user (i.e. user namespace)
+		// assuming we don't drop any security related flags (nodev,
+		// nosuid, etc.). So, let's use that case so that we can do
+		// this re-mount without failing in a userns.
+		flags = (flags &^ unix.MS_RDONLY) | unix.MS_REMOUNT | unix.MS_BIND
+
+		if err := unix.Mount("", dest, "", uintptr(flags), ""); err != nil {
+			switch err {
+			case unix.EBUSY:
+				time.Sleep(100 * time.Millisecond)
+				continue
+			default:
+				return err
+			}
+		}
+		return nil
+	}
+
+	return fmt.Errorf("unable to mount %s as readwrite max retries reached", dest)
+}
+
 // maskPath masks the top of the specified path inside a container to avoid
 // security issues from processes reading information from non-namespace aware
 // mounts ( proc/kcore ).
@@ -1242,9 +1273,37 @@ func switchDockerDnsIP(config *configs.Config, pipe io.ReadWriter) error {
 
 	newData := strings.Replace(string(oldData), dockerDns, defRoute, -1)
 
+	// As we are about to write to resolv.conf, we should ensure that this one
+	// is writable, which is not necesarily the case as file could have been
+	// bind-mounted in RO mode (usually the case when 'readonly' spec attribute
+	// is present). In these scenarios we will first remount the resource as RW,
+	// and will remount it back to RO once the write operation is completed.
+	var resolvconfMount *configs.Mount
+	resolvcontDest := resolvconf[1:]
+	for _, m := range config.Mounts {
+		if m.Destination == resolvcontDest &&
+			m.Flags&unix.MS_RDONLY == unix.MS_RDONLY {
+			if err := remountReadwrite(m); err != nil {
+				return newSystemErrorWithCausef(err, "remounting %q as readwrite",
+					m.Destination)
+			}
+
+			resolvconfMount = m
+			break
+		}
+	}
+
 	err = ioutil.WriteFile(resolvconf, []byte(newData), 0644)
 	if err != nil {
 		return newSystemErrorWithCausef(err, "writing %s", resolvconf)
+	}
+
+	// If applicable, flip resolvconfMount back to RO mode.
+	if resolvconfMount != nil {
+		if err := remountReadonly(resolvconfMount); err != nil {
+			return newSystemErrorWithCausef(err, "remounting %q as readonly",
+				resolvconfMount.Destination)
+		}
 	}
 
 	// Enable routing of local-host addresses to ensure packets make it to the
