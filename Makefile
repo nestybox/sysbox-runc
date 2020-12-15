@@ -17,7 +17,7 @@ NBOX := /root/nestybox
 RUNC := $(NBOX)/sysbox-runc
 
 #PROJECT := nestybox/sysbox-runc
-BUILDTAGS ?= seccomp selinux apparmor
+BUILDTAGS ?= seccomp selinux
 COMMIT_NO := $(shell git rev-parse HEAD 2> /dev/null || true)
 COMMIT ?= $(if $(shell git status --porcelain --untracked-files=no),"$(COMMIT_NO)-dirty","$(COMMIT_NO)")
 
