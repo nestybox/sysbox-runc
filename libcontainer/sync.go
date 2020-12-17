@@ -11,7 +11,7 @@ import (
 
 type syncType string
 
-// Constants that are used for synchronisation between the parent and child
+// Constants that are used for synchronization between the parent and child
 // during container setup. They come in pairs (with procError being a generic
 // response which is followed by a &genericError).
 //
@@ -22,16 +22,20 @@ type syncType string
 // [send(info)] --> [recv(info)]
 //              <-- opDone
 //
+// procHooks    --> [run hooks]
+//              <-- procResume
+//
+// rootfsReady  --> [complete container registration]
+//              <-- rootfsReadyAck
+//
+// procReady    --> [final setup]
+//              <-- procRun
+//
 // procFd       -->
 //              <-- sendFd
 // [send(fd)]   --> [recv(fd)]
 //              <-- procFdDone
 //
-// procHooks    --> [run hooks]
-//              <-- procResume
-//
-// procReady    --> [final setup]
-//              <-- procRun
 
 const (
 	procError  syncType = "procError"
@@ -47,6 +51,9 @@ const (
 	procFd     syncType = "procFd"
 	sendFd     syncType = "sendFd"
 	procFdDone syncType = "procFdDone"
+
+	rootfsReady    syncType = "rootfsReady"
+	rootfsReadyAck syncType = "rootfsReadyAck"
 )
 
 type syncT struct {

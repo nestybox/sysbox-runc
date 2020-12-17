@@ -428,41 +428,6 @@ func (p *initProcess) start() (retErr error) {
 		}
 	}
 
-	// sysbox-runc: register the container with sysbox-fs (must be done after childPid is
-	// obtained but before prestart hooks so that sysbox-fs is ready to respond by the time
-	// the hooks run).
-	sysFs := p.container.sysFs
-	if sysFs.Enabled() {
-		c := p.container
-
-		procRoPaths := []string{}
-		for _, p := range c.config.ReadonlyPaths {
-			if strings.HasPrefix(p, "/proc") {
-				procRoPaths = append(procRoPaths, p)
-			}
-		}
-
-		procMaskPaths := []string{}
-		for _, p := range c.config.MaskPaths {
-			if strings.HasPrefix(p, "/proc") {
-				procMaskPaths = append(procMaskPaths, p)
-			}
-		}
-
-		info := &sysbox.FsRegInfo{
-			Hostname:      c.config.Hostname,
-			Pid:           childPid,
-			Uid:           c.config.UidMappings[0].HostID,
-			Gid:           c.config.GidMappings[0].HostID,
-			IdSize:        c.config.UidMappings[0].Size,
-			ProcRoPaths:   procRoPaths,
-			ProcMaskPaths: procMaskPaths,
-		}
-		if err := sysFs.Register(info); err != nil {
-			return newSystemErrorWithCause(err, "registering with sysbox-fs")
-		}
-	}
-
 	// Wait for our first child to exit
 	if err := p.waitForChildExit(childPid); err != nil {
 		return newSystemErrorWithCause(err, "waiting for our first child to exit")
@@ -547,6 +512,16 @@ func (p *initProcess) start() (retErr error) {
 			}
 			sentRun = true
 
+		case rootfsReady:
+			// Register container into sysbox-fs.
+			if err = p.register(childPid); err != nil {
+				return err
+			}
+			// Sync with child.
+			if err := writeSync(p.messageSockPair.parent, rootfsReadyAck); err != nil {
+				return newSystemErrorWithCause(err, "writing syncT 'rootfsReadyAck'")
+			}
+
 		case procHooks:
 			if p.intelRdtManager != nil {
 				if err := p.intelRdtManager.Set(p.config.Config); err != nil {
@@ -627,6 +602,50 @@ func (p *initProcess) start() (retErr error) {
 	if ierr != nil {
 		p.wait()
 		return ierr
+	}
+
+	return nil
+}
+
+// sysbox-runc: register the container with sysbox-fs. This must be done after
+// childPid is obtained and all container mounts are present, but before prestart
+// hooks so that sysbox-fs is ready to respond by the time the hooks run.
+func (p *initProcess) register(childPid int) error {
+
+	sysFs := p.container.sysFs
+	if !sysFs.Enabled() {
+		return nil
+	}
+
+	c := p.container
+
+	procRoPaths := []string{}
+	for _, p := range c.config.ReadonlyPaths {
+		if strings.HasPrefix(p, "/proc") {
+			procRoPaths = append(procRoPaths, p)
+		}
+	}
+
+	procMaskPaths := []string{}
+	for _, p := range c.config.MaskPaths {
+		if strings.HasPrefix(p, "/proc") {
+			procMaskPaths = append(procMaskPaths, p)
+		}
+	}
+
+	info := &sysbox.FsRegInfo{
+		Hostname:      c.config.Hostname,
+		Pid:           childPid,
+		Uid:           c.config.UidMappings[0].HostID,
+		Gid:           c.config.GidMappings[0].HostID,
+		IdSize:        c.config.UidMappings[0].Size,
+		ProcRoPaths:   procRoPaths,
+		ProcMaskPaths: procMaskPaths,
+	}
+
+	// Launch registration process.
+	if err := sysFs.Register(info); err != nil {
+		return newSystemErrorWithCause(err, "registering with sysbox-fs")
 	}
 
 	return nil
