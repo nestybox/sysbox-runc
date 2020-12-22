@@ -360,6 +360,9 @@ func (l *LinuxFactory) Load(id string) (Container, error) {
 	if l.NewIntelRdtManager != nil {
 		c.intelRdtManager = l.NewIntelRdtManager(&state.Config, id, state.IntelRdtPath)
 	}
+	if l.NewIntelRdtManager != nil {
+		c.intelRdtManager = l.NewIntelRdtManager(&state.Config, id, state.IntelRdtPath)
+	}
 	c.state = &loadedState{c: c}
 	if err := c.refreshState(); err != nil {
 		return nil, err
