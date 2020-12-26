@@ -22,6 +22,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"unsafe"
 
 	libutils "github.com/nestybox/sysbox-libs/utils"
 	"github.com/urfave/cli"
@@ -42,9 +43,18 @@ var uidShiftDistros = []string{"ubuntu"}
 // running containers inside a system container.
 func checkUnprivilegedUserns() error {
 
-	// Debian & Ubuntu
-	path := "/proc/sys/kernel/unprivileged_userns_clone"
-	if _, err := os.Stat(path); err == nil {
+	distro, err := libutils.GetDistro()
+	if err != nil {
+		return err
+	}
+
+	switch distro {
+
+	case "debian", "ubuntu":
+		path := "/proc/sys/kernel/unprivileged_userns_clone"
+		if _, err := os.Stat(path); err != nil {
+			return err
+		}
 
 		f, err := os.Open(path)
 		if err != nil {
@@ -59,16 +69,46 @@ func checkUnprivilegedUserns() error {
 		}
 
 		var val int
-		fmt.Sscanf(string(b), "%d", &val)
+		_, err = fmt.Sscanf(string(b), "%d", &val)
+		if err != nil {
+			return err
+		}
 
 		if val != 1 {
 			return fmt.Errorf("kernel is not configured to allow unprivileged users to create namespaces: %s: want 1, have %d", path, val)
 		}
+
+	case "fedora", "centos", "redhat":
+		path := "/proc/sys/user/max_user_namespaces"
+		if _, err := os.Stat(path); err != nil {
+			return err
+		}
+
+		f, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+
+		var b []byte = make([]byte, unsafe.Sizeof(int(0)))
+		_, err = f.Read(b)
+		if err != nil {
+			return err
+		}
+
+		var val int
+		_, err = fmt.Sscanf(string(b), "%d", &val)
+		if err != nil {
+			return err
+		}
+
+		if val == 0 {
+			return fmt.Errorf("kernel is not configured to allow unprivileged users to create namespaces: %s: want >= 1, have %d",
+				path, val)
+		}
 	}
 
 	// TODO: add other distros
-	// Fedora
-	// CentOS
 	// Arch
 	// Alpine
 	// Amazon
