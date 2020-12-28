@@ -8,8 +8,19 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/cobaugh/osrelease"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/urfave/cli"
 )
+
+type distro struct {
+	name      string
+	versionID string
+}
+
+var supportedDistros = []distro{
+	distro{"Ubuntu", "18.10"},
+}
 
 // checkUnprivilegedUserns checks if the kernel is configured to allow
 // unprivileged users to create namespaces. This is necessary for
@@ -50,8 +61,33 @@ func checkUnprivilegedUserns() error {
 	return nil
 }
 
+// checkSupportedDistro checks if the host has a Linux distro supported by Sysbox
+func checkSupportedDistro() error {
+	osrelease, err := osrelease.Read()
+	if err != nil {
+		return err
+	}
+
+	var entry distro
+	for _, entry = range supportedDistros {
+		if entry.name == osrelease["NAME"] && entry.versionID == osrelease["VERSION_ID"] {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("linux distro %s %s is not supported by sysbox; supported distros are %v",
+		osrelease["NAME"], osrelease["VERSION_ID"], supportedDistros)
+}
+
 // CheckHostConfig checks if the host is configured appropriately to run sysbox-runc
-func CheckHostConfig() error {
+func CheckHostConfig(context *cli.Context) error {
+
+	if !context.GlobalBool("no-distro-check") {
+		if err := checkSupportedDistro(); err != nil {
+			return fmt.Errorf("host is not configured properly: %v", err)
+		}
+	}
+
 	if err := checkUnprivilegedUserns(); err != nil {
 		return fmt.Errorf("host is not configured properly: %v", err)
 	}

@@ -59,7 +59,7 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 		if err := revisePidFile(context); err != nil {
 			return err
 		}
-		if err := sysbox.CheckHostConfig(); err != nil {
+		if err := sysbox.CheckHostConfig(context); err != nil {
 			return err
 		}
 		spec, err := setupSpec(context)

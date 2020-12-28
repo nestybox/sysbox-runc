@@ -11,6 +11,7 @@ import (
 
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/utils"
+	"github.com/opencontainers/runc/libsysbox/sysbox"
 	"github.com/opencontainers/runc/libsysbox/syscont"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -101,6 +102,9 @@ following will output a list of processes running in the container:
 			return err
 		}
 		if err := revisePidFile(context); err != nil {
+			return err
+		}
+		if err := sysbox.CheckHostConfig(context); err != nil {
 			return err
 		}
 		status, err := execProcess(context)
