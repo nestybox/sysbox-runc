@@ -2,25 +2,22 @@ package sysbox
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"syscall"
 
-	"github.com/cobaugh/osrelease"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"
+	"golang.org/x/sys/unix"
 )
 
-type distro struct {
-	name      string
-	versionID string
-}
-
-var supportedDistros = []distro{
-	distro{"Ubuntu", "18.10"},
-}
+// The kernel release is chosen based on whether it contains all kernel fixes required
+// to run sysbox. Refer to the sysbox github issues and search for "kernel".
+var minSupportedKernel = []int{4, 10} // 4.10
 
 // checkUnprivilegedUserns checks if the kernel is configured to allow
 // unprivileged users to create namespaces. This is necessary for
@@ -61,29 +58,56 @@ func checkUnprivilegedUserns() error {
 	return nil
 }
 
-// checkSupportedDistro checks if the host has a Linux distro supported by Sysbox
-func checkSupportedDistro() error {
-	osrelease, err := osrelease.Read()
+// GetKernelRelease returns the kernel release (e.g., "4.18")
+func GetKernelRelease() (string, error) {
+	var utsname unix.Utsname
+	if err := unix.Uname(&utsname); err != nil {
+		return "", fmt.Errorf("uname: %v", err)
+	}
+	n := bytes.IndexByte(utsname.Release[:], 0)
+	return string(utsname.Release[:n]), nil
+}
+
+// checkKernelRelease checks if the host has a Linux kernel supported by Sysbox.
+func checkKernelRelease() error {
+	kernelRel, err := GetKernelRelease()
 	if err != nil {
 		return err
 	}
 
-	var entry distro
-	for _, entry = range supportedDistros {
-		if entry.name == osrelease["NAME"] && entry.versionID == osrelease["VERSION_ID"] {
-			return nil
+	// compare the major.minor numbers only
+
+	splits := strings.SplitN(kernelRel, ".", -1)
+	if len(splits) < 2 {
+		return fmt.Errorf("failed to parse kernel release %v", kernelRel)
+	}
+
+	supported := true
+	for i := 0; i < 2; i++ {
+		num, err := strconv.Atoi(splits[0])
+		if err != nil {
+			return fmt.Errorf("failed to parse kernel release %v", kernelRel)
+		}
+		if num < minSupportedKernel[i] {
+			supported = false
 		}
 	}
 
-	return fmt.Errorf("linux distro %s %s is not supported by sysbox; supported distros are %v",
-		osrelease["NAME"], osrelease["VERSION_ID"], supportedDistros)
+	if !supported {
+		rel := []string{}
+		rel = append(rel, strconv.Itoa(minSupportedKernel[0]))
+		rel = append(rel, strconv.Itoa(minSupportedKernel[1]))
+		return fmt.Errorf("kernel release %v is not supported; need >= %v", kernelRel, strings.Join(rel, "."))
+	}
+
+	return nil
 }
 
 // CheckHostConfig checks if the host is configured appropriately to run sysbox-runc
 func CheckHostConfig(context *cli.Context) error {
 
-	if !context.GlobalBool("no-distro-check") {
-		if err := checkSupportedDistro(); err != nil {
+	if !context.GlobalBool("no-kernel-check") {
+		if err := checkKernelRelease(); err != nil {
 			return fmt.Errorf("host is not configured properly: %v", err)
 		}
 	}

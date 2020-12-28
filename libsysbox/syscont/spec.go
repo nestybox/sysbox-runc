@@ -3,7 +3,6 @@
 package syscont
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,7 +11,9 @@ import (
 	"syscall"
 
 	mapset "github.com/deckarep/golang-set"
+
 	"github.com/nestybox/sysbox-ipc/sysboxMgrGrpc"
+	"github.com/opencontainers/runc/libsysbox/sysbox"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
@@ -498,13 +499,12 @@ func cfgLibModMount(spec *specs.Spec, doFhsCheck bool) error {
 		}
 	}
 
-	var utsname unix.Utsname
-	if err := unix.Uname(&utsname); err != nil {
+	kernelRel, err := sysbox.GetKernelRelease()
+	if err != nil {
 		return err
 	}
 
-	n := bytes.IndexByte(utsname.Release[:], 0)
-	path := filepath.Join("/lib/modules/", string(utsname.Release[:n]))
+	path := filepath.Join("/lib/modules/", kernelRel)
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		logrus.Warnf("could not setup bind mount for %s: %v", path, err)
 		return nil
