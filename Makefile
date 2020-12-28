@@ -69,10 +69,10 @@ runcimage:
 
 # Note: sysbox-runc does not support rootless mode, so rootless integration tests are not invoked as part of test or localtest
 test:
-	make unittest integration integration-shiftuid
+	make unittest integration
 
 localtest:
-	make localunittest localintegration localintegration-shiftuid
+	make localunittest localintegration
 
 unittest: runcimage
 	$(CONTAINER_ENGINE) run $(CONTAINER_ENGINE_RUN_FLAGS) \
