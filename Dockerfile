@@ -33,6 +33,7 @@ RUN dpkg --add-architecture armel \
         libseccomp-dev:armhf \
         libseccomp-dev:ppc64el \
         libseccomp2 \
+        lsb-release \
         pkg-config \
         protobuf-c-compiler \
         protobuf-compiler \
@@ -88,7 +89,7 @@ RUN go get github.com/go-delve/delve/cmd/dlv \
     psmisc
 
 COPY script/tmpmount /
-WORKDIR /go/src/nestybox/sysbox-runc
+WORKDIR /root/nestybox/sysbox-runc
 ENTRYPOINT ["/tmpmount"]
 
 # setup a playground for us to spawn containers in
