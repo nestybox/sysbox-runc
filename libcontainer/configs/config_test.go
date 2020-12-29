@@ -12,6 +12,17 @@ import (
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
+var (
+	hookNameList = []configs.HookName{
+		configs.Prestart,
+		configs.CreateRuntime,
+		configs.CreateContainer,
+		configs.StartContainer,
+		configs.Poststart,
+		configs.Poststop,
+	}
+)
+
 func TestUnmarshalHooks(t *testing.T) {
 	timeout := time.Second
 
@@ -28,7 +39,7 @@ func TestUnmarshalHooks(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, hookName := range configs.HookNameList {
+	for _, hookName := range hookNameList {
 		hooks := configs.Hooks{}
 		err = hooks.UnmarshalJSON([]byte(fmt.Sprintf(`{"%s" :[%s]}`, hookName, hookJson)))
 		if err != nil {

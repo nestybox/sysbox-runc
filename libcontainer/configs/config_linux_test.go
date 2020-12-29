@@ -4,10 +4,6 @@ import (
 	"testing"
 )
 
-var (
-	HookNameList = []HookName{Prestart, CreateRuntime, CreateContainer, StartContainer, Poststart, Poststop}
-)
-
 func TestRemoveNamespace(t *testing.T) {
 	ns := Namespaces{
 		{Type: NEWNET},
