@@ -9,21 +9,21 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cobaugh/osrelease"
 	"github.com/urfave/cli"
 	"golang.org/x/sys/unix"
 )
 
-// The kernel release is chosen based on whether it contains all kernel fixes required
-// to run sysbox. Refer to the sysbox github issues and search for "kernel".
+// The min supported kernel release is chosen based on whether it contains all kernel
+// fixes required to run sysbox. Refer to the sysbox github issues and search for
+// "kernel".
 type kernelRelease struct{ major, minor int }
 
-var minKernel = kernelRelease{major: 4, minor: 10} // 4.10
+var minKernel = kernelRelease{4, 10}        // 4.10
+var minKernelUidShift = kernelRelease{5, 0} // 5.0 (see sysbox issues #160 and #180)
 
-// minKernelStr returns the minKernel as a string
-func MinKernelStr() string {
-	s := []string{strconv.Itoa(minKernel.major), strconv.Itoa(minKernel.minor)}
-	return strings.Join(s, ".")
-}
+// See sysbox issues #160 and #180
+var uidShiftDistros = []string{"Ubuntu"}
 
 // checkUnprivilegedUserns checks if the kernel is configured to allow
 // unprivileged users to create namespaces. This is necessary for
@@ -64,6 +64,29 @@ func checkUnprivilegedUserns() error {
 	return nil
 }
 
+// checkDistro checks if the host has a supported distro
+func checkDistro(shiftUids bool) error {
+
+	// there are currently no distro requirements when uid shifting is not used
+	if !shiftUids {
+		return nil
+	}
+
+	osrelease, err := osrelease.Read()
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range uidShiftDistros {
+		if entry == osrelease["NAME"] {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("%s is not supported when using uid shifting; supported distros are %v",
+		osrelease["NAME"], uidShiftDistros)
+}
+
 // GetKernelRelease returns the kernel release (e.g., "4.18")
 func GetKernelRelease() (string, error) {
 	var utsname unix.Utsname
@@ -74,52 +97,62 @@ func GetKernelRelease() (string, error) {
 	return string(utsname.Release[:n]), nil
 }
 
-// IsKernelSupported checks if the given kernel release is supported by sysbox.
-func IsKernelSupported(kernelRel string) (bool, error) {
+func checkKernel(uidShift bool) error {
+	rel, err := GetKernelRelease()
+	if err != nil {
+		return err
+	}
 
-	// compare the major.minor numbers only
-
-	splits := strings.SplitN(kernelRel, ".", -1)
+	splits := strings.SplitN(rel, ".", -1)
 	if len(splits) < 2 {
-		return false, fmt.Errorf("failed to parse kernel release %v", kernelRel)
+		return fmt.Errorf("failed to parse kernel release %v", rel)
 	}
 
 	major, err := strconv.Atoi(splits[0])
 	if err != nil {
-		return false, fmt.Errorf("failed to parse kernel release %v", kernelRel)
+		return fmt.Errorf("failed to parse kernel release %v", rel)
 	}
 
 	minor, err := strconv.Atoi(splits[1])
 	if err != nil {
-		return false, fmt.Errorf("failed to parse kernel release %v", kernelRel)
+		return fmt.Errorf("failed to parse kernel release %v", rel)
+	}
+
+	kmaj := minKernel.major
+	kmin := minKernel.minor
+
+	if uidShift {
+		kmaj = minKernelUidShift.major
+		kmin = minKernelUidShift.minor
 	}
 
 	supported := false
-	if major > minKernel.major {
+	if major > kmaj {
 		supported = true
-	} else if major == minKernel.major {
-		if minor >= minKernel.minor {
+	} else if major == kmaj {
+		if minor >= kmin {
 			supported = true
 		}
 	}
 
-	return supported, nil
+	if !supported {
+		s := []string{strconv.Itoa(kmaj), strconv.Itoa(kmin)}
+		kver := strings.Join(s, ".")
+		return fmt.Errorf("kernel release %v is not supported; need >= %v", rel, kver)
+	}
+
+	return nil
 }
 
 // CheckHostConfig checks if the host is configured appropriately to run sysbox-runc
-func CheckHostConfig(context *cli.Context) error {
+func CheckHostConfig(context *cli.Context, shiftUids bool) error {
 
 	if !context.GlobalBool("no-kernel-check") {
-		rel, err := GetKernelRelease()
-		if err != nil {
-			return err
+		if err := checkDistro(shiftUids); err != nil {
+			return fmt.Errorf("distro support check: %v", err)
 		}
-		ok, err := IsKernelSupported(rel)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return fmt.Errorf("kernel release %v is not supported; need >= %v", rel, MinKernelStr())
+		if err := checkKernel(shiftUids); err != nil {
+			return fmt.Errorf("kernel support check: %v", err)
 		}
 	}
 

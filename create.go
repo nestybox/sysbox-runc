@@ -67,9 +67,6 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 		if err = revisePidFile(context); err != nil {
 			return err
 		}
-		if err = sysbox.CheckHostConfig(context); err != nil {
-			return err
-		}
 
 		id := context.Args().First()
 		sysMgr := sysbox.NewMgr(id, !context.GlobalBool("no-sysbox-mgr"))
@@ -86,6 +83,11 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 		if err != nil {
 			return err
 		}
+
+		if err = sysbox.CheckHostConfig(context, shiftUids); err != nil {
+			return err
+		}
+
 		status, err = startContainer(context, spec, CT_ACT_CREATE, nil, shiftUids, sysMgr, sysFs)
 		if err != nil {
 			return err
