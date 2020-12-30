@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"syscall"
 	"unsafe"
 
 	"golang.org/x/sys/unix"
@@ -18,6 +19,7 @@ import (
 	"github.com/containerd/console"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
+	"github.com/opencontainers/runc/libcontainer/seccomp"
 	"github.com/opencontainers/runc/libcontainer/system"
 	"github.com/opencontainers/runc/libcontainer/user"
 	"github.com/opencontainers/runc/libcontainer/utils"
@@ -270,6 +272,28 @@ func syncParentDoOp(req *opReq, pipe io.ReadWriter) error {
 	if err := readSync(pipe, opDone); err != nil {
 		return err
 	}
+	return nil
+}
+
+// sysbox-runc:
+// syncParentSeccompFd sends a seccomp notification file-descriptor to the parent runc.
+func syncParentSeccompFd(fd int32, pipe *os.File) error {
+	if err := writeSync(pipe, procFd); err != nil {
+		return err
+	}
+	if err := readSync(pipe, sendFd); err != nil {
+		return err
+	}
+
+	// send fd using cmsg(3)
+	socket := int(pipe.Fd())
+	scmRights := syscall.UnixRights(int(fd))
+	syscall.Sendmsg(socket, nil, scmRights, nil, 0)
+
+	if err := readSync(pipe, procFdDone); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -570,5 +594,24 @@ func signalAllProcesses(m cgroups.Manager, s os.Signal) error {
 			}
 		}
 	}
+	return nil
+}
+
+// setupSyscallTraps sets up syscall trapping for the calling process, using seccomp.
+func setupSyscallTraps(config *initConfig, pipe *os.File) error {
+
+	// Load the seccomp notification filter here (for syscall trapping inside the container)
+	if len(config.Config.SeccompNotif.Syscalls) > 0 {
+
+		fd, err := seccomp.LoadSeccomp(config.Config.SeccompNotif)
+		if err != nil {
+			return newSystemErrorWithCause(err, "loading seccomp notification rules")
+		}
+
+		if err := syncParentSeccompFd(fd, pipe); err != nil {
+			return newSystemErrorWithCause(err, "syncing with parent runc to pass seccomp file-descriptor")
+		}
+	}
+
 	return nil
 }

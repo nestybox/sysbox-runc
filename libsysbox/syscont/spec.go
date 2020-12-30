@@ -606,6 +606,9 @@ func checkSpec(spec *specs.Spec) error {
 
 // cfgSeccomp configures the system container's seccomp settings.
 func cfgSeccomp(seccomp *specs.LinuxSeccomp) error {
+
+	// XXX: TODO: disallow / remove seccomp notification actions; those are controlled only by sysbox.
+
 	if seccomp == nil {
 		return nil
 	}

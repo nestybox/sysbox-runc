@@ -22,6 +22,11 @@ type syncType string
 // [send(info)] --> [recv(info)]
 //              <-- opDone
 //
+// procFd       -->
+//              <-- sendFd
+// [send(fd)]   --> [recv(fd)]
+//              <-- procFdDone
+//
 // procHooks    --> [run hooks]
 //              <-- procResume
 //
@@ -38,6 +43,10 @@ const (
 	reqOp      syncType = "reqOp"
 	sendOpInfo syncType = "sendOpInfo"
 	opDone     syncType = "opDone"
+
+	procFd     syncType = "procFd"
+	sendFd     syncType = "sendFd"
+	procFdDone syncType = "procFdDone"
 )
 
 type syncT struct {

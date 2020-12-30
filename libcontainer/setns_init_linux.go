@@ -64,26 +64,27 @@ func (l *linuxSetnsInit) Init() error {
 		return err
 	}
 	defer selinux.SetExecLabel("")
-	// Without NoNewPrivileges seccomp is a privileged operation, so we need to
-	// do this before dropping capabilities; otherwise do it as late as possible
-	// just before execve so as few syscalls take place after it as possible.
-	if l.config.Config.Seccomp != nil && !l.config.NoNewPrivileges {
-		if err := seccomp.InitSeccomp(l.config.Config.Seccomp); err != nil {
-			return err
-		}
-	}
+
 	if err := finalizeNamespace(l.config); err != nil {
 		return err
 	}
 	if err := apparmor.ApplyProfile(l.config.AppArmorProfile); err != nil {
 		return err
 	}
+
 	// Set seccomp as close to execve as possible, so as few syscalls take
 	// place afterward (reducing the amount of syscalls that users need to
 	// enable in their seccomp profiles).
+
+	// sysbox-runc: setup syscall trapping
+	if err := setupSyscallTraps(l.config, l.pipe); err != nil {
+		return err
+	}
+
+	// setup syscall filtering
 	if l.config.Config.Seccomp != nil && l.config.NoNewPrivileges {
-		if err := seccomp.InitSeccomp(l.config.Config.Seccomp); err != nil {
-			return newSystemErrorWithCause(err, "init seccomp")
+		if _, err := seccomp.LoadSeccomp(l.config.Config.Seccomp); err != nil {
+			return newSystemErrorWithCause(err, "load seccomp filters")
 		}
 	}
 	return system.Execv(l.config.Args[0], l.config.Args[0:], os.Environ())

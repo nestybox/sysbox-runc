@@ -11,11 +11,13 @@ require (
 	github.com/cyphar/filepath-securejoin v0.2.2
 	github.com/deckarep/golang-set v1.7.1
 	github.com/docker/go-units v0.4.0
+	github.com/ftrvxmtrx/fd v0.0.0-20150925145434-c6d800382fff
 	github.com/godbus/dbus/v5 v5.0.3
 	github.com/golang/protobuf v1.4.3
 	github.com/moby/sys/mountinfo v0.4.0
 	github.com/mrunalp/fileutils v0.5.0
 	github.com/nestybox/sysbox-ipc v0.0.0-00010101000000-000000000000
+	github.com/nestybox/sysbox-libs/libseccomp-golang v0.0.0-00010101000000-000000000000
 	github.com/opencontainers/runc v0.0.0-00010101000000-000000000000
 	github.com/opencontainers/runtime-spec v1.0.3-0.20200929063507-e6143ca7d51d
 	github.com/opencontainers/selinux v1.6.0
@@ -33,3 +35,5 @@ require (
 replace github.com/nestybox/sysbox-ipc => ../sysbox-ipc
 
 replace github.com/opencontainers/runc => ./
+
+replace github.com/nestybox/sysbox-libs/libseccomp-golang => ../sysbox-libs/libseccomp-golang

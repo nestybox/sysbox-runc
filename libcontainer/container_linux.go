@@ -619,6 +619,7 @@ func (c *linuxContainer) newSetnsProcess(p *Process, cmd *exec.Cmd, messageSockP
 		process:         p,
 		bootstrapData:   data,
 		initProcessPid:  state.InitProcessPid,
+		container:       c,
 	}, nil
 }
 
@@ -2251,17 +2252,12 @@ func writeIDMappings(path string, idMap []configs.IDMap) error {
 	return nil
 }
 
-// sysbox-runc: initHelper handles requests from the container's init process for helper
-// actions that can't be done by it (e.g., due to lack of permissions, etc.). Actions
-// include setting up uid(gid) mappings for the container's user-ns, marking shiftfs on
-// the container's rootfs or bind mount sources, or performing bind mounts in cases where
-// the container's init process has no permission to access to the source of the mount.
-//
-// The initHelper handler may perform the action directly in its context, or it may
-// dispatch a child helper to enter a namespace of the sys container to perform the action
-// (e.g., it's capable of entering the mount namespace of the container to setup the bind
-// mount). The child helper is dispatched via sysbox-runc's reexec mechanism.
-func (c *linuxContainer) initHelper(childPid int, req *opReq) error {
+// sysbox-runc: handleReqOp handles requests from the container's init process for actions
+// that can't be done by it (e.g., due to lack of permissions, etc.). Actions include
+// setting up uid(gid) mappings for the container's user-ns, performing bind mounts in
+// cases where the container's init process has no permission to access to the source of
+// the mount, and others. See opReq for the list of actions.
+func (c *linuxContainer) handleReqOp(childPid int, req *opReq) error {
 
 	switch req.Op {
 	case mapUid:
@@ -2274,7 +2270,7 @@ func (c *linuxContainer) initHelper(childPid int, req *opReq) error {
 			return newSystemErrorWithCause(err, "setting gid-mapping")
 		}
 	case bind:
-		return c.initHelperBind(childPid, req)
+		return c.handleBindOp(childPid, req)
 	default:
 		return newSystemError(fmt.Errorf("invalid opReq type %d", int(req.Op)))
 	}
@@ -2282,13 +2278,13 @@ func (c *linuxContainer) initHelper(childPid int, req *opReq) error {
 	return nil
 }
 
-// sysbox-runc: initHelperBind performs a bind mount on the system container's rootfs.  It
+// sysbox-runc: handleBindOp performs a bind mount on the system container's rootfs. It
 // does this by dispatching a child helper process that uses sysbox-runc's reexec mechanism
 // to enter the mount namespace of the sys container to perform the bind mount. By virtue
 // of only entering the mount namespace, the child helper can perform mounts inside the
 // sys container but bypass any permission restrictions that the container's init process
 // may have (e.g., as a result of user-ns uid(gid) mappings).
-func (c *linuxContainer) initHelperBind(childPid int, req *opReq) error {
+func (c *linuxContainer) handleBindOp(childPid int, req *opReq) error {
 
 	// create the socket pairs for communication with the child
 	parentMsgPipe, childMsgPipe, err := utils.NewSockPair("initMount")
@@ -2395,6 +2391,17 @@ func (c *linuxContainer) initHelperBind(childPid int, req *opReq) error {
 	}
 
 	cmd.Wait()
+	return nil
+}
+
+// Processes a seccomp notification file-descriptor for the sys container by passing it to
+// sysbox-fs to setup syscall trapping.
+func (c *linuxContainer) procSeccompFd(fd int32) error {
+	if c.sysFs.Enabled() {
+		if err := c.sysFs.SendSeccompFd(c.id, fd); err != nil {
+			return newSystemErrorWithCause(err, "sending seccomp fd to sysbox-fs")
+		}
+	}
 	return nil
 }
 
