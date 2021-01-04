@@ -199,9 +199,37 @@ func setupIO(process *libcontainer.Process, rootuid, rootgid int, createTTY, det
 	// when runc will detach the caller provides the stdio to runc via runc's 0,1,2
 	// and the container's process inherits runc's stdio.
 	if detach {
+
+		// sysbox-runc: in detach mode, ensure the ownership of stdio matches the
+		// container init process uid(gid). This is necessary because sysbox-runc
+		// allocates the container's uid(gid) when using uid-shifting, and that
+		// uid may not have permission to access stdio.
+		//
+		// However, this is not ideal, as we are changing the ownership of files
+		// which we don't really own. If that file is a pipe or FIFO (as when
+		// Docker/containerd launch the container), then this is probably fine
+		// since we are changing the ownership of the side of the pipe/FIFO that
+		// was assigned to the container's init process. But if that file is a
+		// regular file (e.g., when sysbox-runc is invoked from a shell and the
+		// output is redirected to a regular file (as done by bats in the test
+		// suite), then this may not be kosher (see Sysbox issue #707 for an
+		// example).
+
+		if err := unix.Fchown(int(os.Stdin.Fd()), rootuid, rootgid); err != nil {
+			return nil, fmt.Errorf("failed to chown stdin")
+		}
+
+		if err := unix.Fchown(int(os.Stdout.Fd()), rootuid, rootgid); err != nil {
+			return nil, fmt.Errorf("failed to chown stdout")
+		}
+		if err := unix.Fchown(int(os.Stderr.Fd()), rootuid, rootgid); err != nil {
+			return nil, fmt.Errorf("failed to chown stderr")
+		}
+
 		if err := inheritStdio(process); err != nil {
 			return nil, err
 		}
+
 		return &tty{}, nil
 	}
 	return setupProcessPipes(process, rootuid, rootgid)

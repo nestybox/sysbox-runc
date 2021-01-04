@@ -57,8 +57,11 @@ function teardown() {
 	set_cgroups_path "$BUSYBOX_BUNDLE"
 	set_cgroup_mount_writable "$BUSYBOX_BUNDLE"
 
-	# the sysbox container sample spec comes with cgroup ns enabled
+	# sysbox-runc: the container sample spec comes with cgroup ns enabled
 	# update_config '.linux.namespaces += [{"type": "cgroup"}]'
+
+	# sysbox-runc: this avoids the "__runc exec -d" below
+	update_config '.process.args = ["sleep", "1d"]'
 
 	local subsystems="memory freezer"
 
@@ -67,7 +70,8 @@ function teardown() {
 
 	testcontainer test_busybox running
 
-	__runc exec -d test_busybox sleep 1d
+	# Skip as it triggers issue #707
+	#__runc exec -d test_busybox sleep 1d
 
 	# find the pid of sleep
 	pid=$(__runc exec test_busybox ps -a | grep 1d | awk '{print $1}')
