@@ -102,6 +102,12 @@ where `<pid>` is the pid of the sysbox-runc process.
 
 See the [Sysbox User Guide](../docs/user-guide/deploy.md) for more info on this.
 
+## Other documentation
+
+* [cgroup v2](./docs/cgroup-v2.md)
+* [Changing systemd unit properties](./docs/systemd-properties.md)
+* [Terminals and standard IO](./docs/terminals.md)
+
 ## Libcontainer
 
 The libcontainer package in sysbox-runc is not meant to be usable as a
