@@ -38,7 +38,6 @@ function setup() {
 
 function teardown() {
 	teardown_busybox
-	teardown_running_container syscont
 }
 
 @test "runc run [bind mount]" {
@@ -47,7 +46,7 @@ function teardown() {
 
 	update_config ' .mounts |= . + [{"source": "/mnt/test-dir", "destination": "/mnt/test-dir", "options": ["bind"]}] | .process.args = ["ls", "/mnt/test-dir/"]'
 
-	runc run syscont
+	runc run test_busybox
 	[ "$status" -eq 0 ]
 	[[ "${lines[0]}" =~ 'test-file' ]]
 
@@ -58,7 +57,7 @@ function teardown() {
 	update_config ' .mounts += [{"source": "tmpfs", "destination": "/mnt", "type": "tmpfs", "options": ["ro", "nodev", "nosuid", "mode=755"]}]
 			| .process.args |= ["grep", "^tmpfs /mnt", "/proc/mounts"]'
 
-	runc run test_ro_tmpfs_mount
+	runc run test_busybox
 	[ "$status" -eq 0 ]
 	[[ "${lines[0]}" == *'ro,'* ]]
 }
@@ -74,7 +73,7 @@ function teardown() {
 
 	update_config ' .mounts |= . + [{"source": "bindSrc", "destination": "/tmp/bind", "options": ["bind"]}] | .process.args = ["ls", "/tmp/bind/"]'
 
-	runc run syscont
+	runc run test_busybox
 	[ "$status" -eq 0 ]
 	[[ "${lines[0]}" =~ 'test-file' ]]
 }
@@ -83,7 +82,7 @@ function teardown() {
 
 	update_config ' .mounts |= . + [{"source": ".", "destination": "/tmp/bind", "options": ["bind"]}] | .process.args = ["ls", "/tmp/bind/"]'
 
-	runc run syscont
+	runc run test_busybox
 
 	if [ -z "$SHIFT_UIDS" ]; then
 		[ "$status" -eq 0 ]
@@ -97,24 +96,24 @@ function teardown() {
 
 	update_config ' .mounts |= . + [{"source": "rootfs/root", "destination": "/tmp/bind", "options": ["bind"]}] | .process.args = ["/bin/sh"]'
 
-	runc run -d --console-socket "$CONSOLE_SOCKET" syscont
+	runc run -d --console-socket "$CONSOLE_SOCKET" test_busybox
 	[ "$status" -eq 0 ]
 
-	runc exec syscont touch /root/test-file.txt
+	runc exec test_busybox touch /root/test-file.txt
 	[ "$status" -eq 0 ]
 
-	runc exec syscont ls /root
-	[ "$status" -eq 0 ]
-	[[ "${lines[0]}" =~ test-file.txt ]]
-
-	runc exec syscont ls /tmp/bind
+	runc exec test_busybox ls /root
 	[ "$status" -eq 0 ]
 	[[ "${lines[0]}" =~ test-file.txt ]]
 
-	runc exec syscont rm /tmp/bind/test-file.txt
+	runc exec test_busybox ls /tmp/bind
+	[ "$status" -eq 0 ]
+	[[ "${lines[0]}" =~ test-file.txt ]]
+
+	runc exec test_busybox rm /tmp/bind/test-file.txt
 	[ "$status" -eq 0 ]
 
-	runc exec syscont ls /root
+	runc exec test_busybox ls /root
 	[ "$status" -eq 0 ]
 	[[ "${lines[0]}" =~ '' ]]
 }
@@ -122,13 +121,13 @@ function teardown() {
 @test "runc run [rootfs on tmpfs]" {
 	setup_busybox_tmpfs
 
-	runc run -d --console-socket "$CONSOLE_SOCKET" syscont
+	runc run -d --console-socket "$CONSOLE_SOCKET" test_busybox
 	[ "$status" -eq 0 ]
 
-	runc kill syscont
+	runc kill test_busybox
 	[ "$status" -eq 0 ]
 
-	cleanup_busybox_tmpfs syscont
+	cleanup_busybox_tmpfs test_busybox
 }
 
 @test "runc run [bind mount on tmpfs]" {
@@ -138,7 +137,7 @@ function teardown() {
 
 	update_config ' .mounts |= . + [{"source": "/tmp/busyboxtest/test-dir", "destination": "/tmp/bind", "options": ["bind"]}] | .process.args = ["ls", "/tmp/bind"]'
 
-	runc run syscont
+	runc run test_busybox
 	[ "$status" -eq 0 ]
 	[[ "${lines[0]}" =~ 'test-file' ]]
 
