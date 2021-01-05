@@ -44,7 +44,12 @@ function teardown() {
 	mkdir -p /mnt/test-dir
 	touch /mnt/test-dir/test-file
 
-	update_config ' .mounts |= . + [{"source": "/mnt/test-dir", "destination": "/mnt/test-dir", "options": ["bind"]}] | .process.args = ["ls", "/mnt/test-dir/"]'
+	update_config ' .mounts |= . + [{
+												 source: "/mnt/test-dir",
+												 destination: "/mnt/test-dir",
+												 options: ["bind"]
+											 }]
+						 | .process.args = ["ls", "/mnt/test-dir/"]'
 
 	runc run test_busybox
 	[ "$status" -eq 0 ]
@@ -54,8 +59,13 @@ function teardown() {
 }
 
 @test "runc run [ro tmpfs mount]" {
-	update_config ' .mounts += [{"source": "tmpfs", "destination": "/mnt", "type": "tmpfs", "options": ["ro", "nodev", "nosuid", "mode=755"]}]
-			| .process.args |= ["grep", "^tmpfs /mnt", "/proc/mounts"]'
+	update_config ' .mounts += [{
+											source: "tmpfs",
+											destination: "/mnt",
+											type: "tmpfs",
+											options: ["ro", "nodev", "nosuid", "mode=755"]
+										}]
+						  | .process.args |= ["grep", "^tmpfs /mnt", "/proc/mounts"]'
 
 	runc run test_busybox
 	[ "$status" -eq 0 ]
@@ -71,7 +81,12 @@ function teardown() {
 	run touch bindSrc/test-file
 	[ "$status" -eq 0 ]
 
-	update_config ' .mounts |= . + [{"source": "bindSrc", "destination": "/tmp/bind", "options": ["bind"]}] | .process.args = ["ls", "/tmp/bind/"]'
+	update_config ' .mounts |= . + [{
+												 source: "bindSrc",
+												 destination: "/tmp/bind",
+												 options: ["bind"]
+											  }]
+						 | .process.args = ["ls", "/tmp/bind/"]'
 
 	runc run test_busybox
 	[ "$status" -eq 0 ]
@@ -80,7 +95,12 @@ function teardown() {
 
 @test "runc run [bind mount directly above rootfs]" {
 
-	update_config ' .mounts |= . + [{"source": ".", "destination": "/tmp/bind", "options": ["bind"]}] | .process.args = ["ls", "/tmp/bind/"]'
+	update_config ' .mounts |= . + [{
+												 source: ".",
+												 destination: "/tmp/bind",
+												 options: ["bind"]
+											  }]
+						 | .process.args = ["ls", "/tmp/bind/"]'
 
 	runc run test_busybox
 
@@ -94,7 +114,12 @@ function teardown() {
 
 @test "runc run [bind mount below the rootfs]" {
 
-	update_config ' .mounts |= . + [{"source": "rootfs/root", "destination": "/tmp/bind", "options": ["bind"]}] | .process.args = ["/bin/sh"]'
+	update_config ' .mounts |= . + [{
+												 source: "rootfs/root",
+												 destination: "/tmp/bind",
+												 options: ["bind"]
+											 }]
+						 | .process.args = ["/bin/sh"]'
 
 	runc run -d --console-socket "$CONSOLE_SOCKET" test_busybox
 	[ "$status" -eq 0 ]
@@ -135,7 +160,12 @@ function teardown() {
 	mount -t tmpfs tmpfs /tmp/busyboxtest/test-dir
 	touch /tmp/busyboxtest/test-dir/test-file
 
-	update_config ' .mounts |= . + [{"source": "/tmp/busyboxtest/test-dir", "destination": "/tmp/bind", "options": ["bind"]}] | .process.args = ["ls", "/tmp/bind"]'
+	update_config ' .mounts |= . + [{
+												 source: "/tmp/busyboxtest/test-dir",
+												 destination: "/tmp/bind",
+												 options: ["bind"]
+											 }]
+						 | .process.args = ["ls", "/tmp/bind"]'
 
 	runc run test_busybox
 	[ "$status" -eq 0 ]
