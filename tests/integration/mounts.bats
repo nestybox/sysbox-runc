@@ -176,3 +176,24 @@ function teardown() {
 
 	rm -rf /tmp/busyboxtest
 }
+
+@test "runc run [tmpfs mount with absolute symlink]" {
+	# in container, /conf -> /real/conf
+	mkdir -p rootfs/real/conf
+
+	if [ -z "$SHIFT_UIDS" ]; then
+		chown -R "$UID_MAP":"$GID_MAP" rootfs/real/conf
+	fi
+
+	ln -s /real/conf rootfs/conf
+
+	update_config '  .mounts += [{
+					type: "tmpfs",
+					source: "tmpfs",
+					destination: "/conf/stack",
+					options: ["ro", "nodev", "nosuid"]
+				}]
+			| .process.args |= ["true"]'
+	runc run test_busybox
+	[ "$status" -eq 0 ]
+}
