@@ -15,11 +15,22 @@ function teardown() {
 @test "runc exec --user with no access to cwd" {
 	requires root
 
-	chown 42 rootfs/root
+	# sysbox-runc: containers always user the user-ns. If uid-shifting is not
+	# used, the rootfs ownership must be within the range of host uids assigned
+	# to the container.
+	local uid
+   if [ -z "$SHIFT_UIDS" ]; then
+		uid=$(($UID_MAP+42))
+	else
+		uid=42
+	fi
+
+	chown $uid rootfs/root
 	chmod 700 rootfs/root
 
 	update_config '	  .process.cwd = "/root"
 			| .process.user.uid = 42
+			| .process.user.gid = 42
 			| .process.args |= ["sleep", "1h"]'
 
 	runc run -d --console-socket "$CONSOLE_SOCKET" test_busybox
