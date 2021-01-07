@@ -2519,7 +2519,7 @@ func (c *linuxContainer) setupShiftfsMarks() error {
 func (c *linuxContainer) setupShiftfsMarkLocal() error {
 
 	allMounts := c.config.ShiftfsMounts
-	allMounts = append(allMounts, configs.ShiftfsMount{c.config.Rootfs, false})
+	allMounts = append(allMounts, configs.ShiftfsMount{Source: c.config.Rootfs, Readonly: false})
 
 	for _, m := range allMounts {
 		mounted, err := mount.MountedWithFs(m.Source, "shiftfs")
@@ -2540,7 +2540,7 @@ func (c *linuxContainer) setupShiftfsMarkLocal() error {
 func (c *linuxContainer) teardownShiftfsMarkLocal() error {
 
 	allMounts := c.config.ShiftfsMounts
-	allMounts = append(allMounts, configs.ShiftfsMount{c.config.Rootfs, false})
+	allMounts = append(allMounts, configs.ShiftfsMount{Source: c.config.Rootfs, Readonly: false})
 
 	for _, m := range allMounts {
 		mounted, err := mount.MountedWithFs(m.Source, "shiftfs")

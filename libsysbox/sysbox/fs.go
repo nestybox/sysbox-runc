@@ -122,18 +122,15 @@ func (fs *Fs) SendSeccompInit(pid int, id string, seccompFd int32) error {
 
 	conn, err := unixIpc.Connect(seccompTracerSockAddr)
 	if err != nil {
-		fmt.Errorf("Unable to establish connection with seccomp-tracer: %v\n", err)
-		return err
+		return fmt.Errorf("Unable to establish connection with seccomp-tracer: %v\n", err)
 	}
 
 	if err = unixIpc.SendSeccompInitMsg(conn, int32(pid), id, seccompFd); err != nil {
-		fmt.Errorf("Unable to send message to seccomp-tracer: %v\n", err)
-		return err
+		return fmt.Errorf("Unable to send message to seccomp-tracer: %v\n", err)
 	}
 
 	if err = unixIpc.RecvSeccompInitAckMsg(conn); err != nil {
-		fmt.Errorf("Unable to receive expected seccomp-notif-ack message: %v\n", err)
-		return err
+		return fmt.Errorf("Unable to receive expected seccomp-notif-ack message: %v\n", err)
 	}
 
 	return nil

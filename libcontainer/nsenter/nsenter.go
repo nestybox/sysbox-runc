@@ -10,4 +10,3 @@ void __attribute__((constructor)) init(void) {
 }
 */
 import "C"
-

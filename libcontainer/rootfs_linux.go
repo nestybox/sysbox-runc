@@ -435,7 +435,6 @@ func mountToRootfs(m *configs.Mount, rootfs, mountLabel string, enableCgroupns, 
 		}
 		return mountPropagate(m, mountLabel)
 	}
-	return nil
 }
 
 func doBindMounts(config *configs.Config, pipe io.ReadWriter) error {
