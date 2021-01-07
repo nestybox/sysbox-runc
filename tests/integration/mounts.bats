@@ -86,8 +86,8 @@ function teardown() {
 	runc run syscont
 
 	if [ -z "$SHIFT_UIDS" ]; then
-      [ "$status" -eq 0 ]
-      [[ "${lines[0]}" =~ 'config.json' ]]
+		[ "$status" -eq 0 ]
+		[[ "${lines[0]}" =~ 'config.json' ]]
 	else
 		[ "$status" -eq 1 ]
 	fi

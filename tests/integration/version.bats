@@ -3,11 +3,11 @@
 load helpers
 
 @test "runc version" {
-  skip "fails when git change is pending"
+	skip "fails when git change is pending"
 
-  runc -v
-  [ "$status" -eq 0 ]
-  [[ ${lines[0]} =~ runc\ version\ [0-9]+\.[0-9]+\.[0-9]+ ]]
-  [[ ${lines[1]} =~ commit:+ ]]
-  [[ ${lines[2]} =~ spec:\ [0-9]+\.[0-9]+\.[0-9]+ ]]
+	runc -v
+	[ "$status" -eq 0 ]
+	[[ ${lines[0]} =~ runc\ version\ [0-9]+\.[0-9]+\.[0-9]+ ]]
+	[[ ${lines[1]} =~ commit:+ ]]
+	[[ ${lines[2]} =~ spec:\ [0-9]+\.[0-9]+\.[0-9]+ ]]
 }

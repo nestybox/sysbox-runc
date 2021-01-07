@@ -204,7 +204,7 @@ EOF
 
 @test "runc create [terminal=false]" {
 
-   skip "Sysbox issue #707"
+	skip "Sysbox issue #707"
 
 	# Disable terminal creation.
 	# Replace sh script with sleep.
@@ -249,7 +249,7 @@ EOF
 
 @test "runc run -d [terminal=false]" {
 
-   skip "Sysbox issue #707"
+	skip "Sysbox issue #707"
 
 	# Disable terminal creation.
 	# Replace sh script with sleep.

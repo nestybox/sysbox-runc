@@ -3,98 +3,92 @@
 load helpers
 
 function setup() {
-  teardown_busybox
-  setup_busybox
+	teardown_busybox
+	setup_busybox
 }
 
 function teardown() {
-  teardown_busybox
+	teardown_busybox
 }
 
 # A sys container root process has full caps (regardless of the container spec)
 @test "syscont: root process caps" {
 
-  sed -i "/\"CAP_SYS_ADMIN\",/d"  ${BUSYBOX_BUNDLE}/config.json
-  sed -i "/\"CAP_NET_ADMIN\",/d"  ${BUSYBOX_BUNDLE}/config.json
+	sed -i "/\"CAP_SYS_ADMIN\",/d" ${BUSYBOX_BUNDLE}/config.json
+	sed -i "/\"CAP_NET_ADMIN\",/d" ${BUSYBOX_BUNDLE}/config.json
 
-  runc run -d --console-socket $CONSOLE_SOCKET test_busybox
-  [ "$status" -eq 0 ]
+	runc run -d --console-socket $CONSOLE_SOCKET test_busybox
+	[ "$status" -eq 0 ]
 
-  # Ensure init is a root process in this container
-  runc exec test_busybox grep Uid /proc/1/status
-  [ "$status" -eq 0 ]
+	# Ensure init is a root process in this container
+	runc exec test_busybox grep Uid /proc/1/status
+	[ "$status" -eq 0 ]
 
-  for i in `seq 2 5`
-  do
-    id=$(echo "$output" | awk -v var=$i '{print $var}')
-    [ "$id" -eq "0" ]
-  done
+	for i in $(seq 2 5); do
+		id=$(echo "$output" | awk -v var=$i '{print $var}')
+		[ "$id" -eq "0" ]
+	done
 
-  # Ensure init has all caps
-  for capType in CapInh CapPrm CapEff CapBnd CapAmb
-  do
-    runc exec test_busybox grep "$capType" /proc/1/status
-    [ "$status" -eq 0 ]
-    [[ "${output}" == *"0000003fffffffff"* ]]
-  done
+	# Ensure init has all caps
+	for capType in CapInh CapPrm CapEff CapBnd CapAmb; do
+		runc exec test_busybox grep "$capType" /proc/1/status
+		[ "$status" -eq 0 ]
+		[[ "${output}" == *"0000003fffffffff"* ]]
+	done
 }
 
 # A sys container root process has all caps when entered via exec
 @test "syscont: exec root process caps" {
 
-  sed -i "/\"CAP_SYS_ADMIN\",/d"  ${BUSYBOX_BUNDLE}/config.json
-  sed -i "/\"CAP_NET_ADMIN\",/d"  ${BUSYBOX_BUNDLE}/config.json
+	sed -i "/\"CAP_SYS_ADMIN\",/d" ${BUSYBOX_BUNDLE}/config.json
+	sed -i "/\"CAP_NET_ADMIN\",/d" ${BUSYBOX_BUNDLE}/config.json
 
-  runc run -d --console-socket $CONSOLE_SOCKET test_busybox
-  [ "$status" -eq 0 ]
+	runc run -d --console-socket $CONSOLE_SOCKET test_busybox
+	[ "$status" -eq 0 ]
 
-  for capType in CapInh CapPrm CapEff CapBnd CapAmb
-  do
-    runc exec test_busybox grep "$capType" /proc/self/status
-    [ "$status" -eq 0 ]
-    [[ "${output}" == *"0000003fffffffff"* ]]
-  done
+	for capType in CapInh CapPrm CapEff CapBnd CapAmb; do
+		runc exec test_busybox grep "$capType" /proc/self/status
+		[ "$status" -eq 0 ]
+		[[ "${output}" == *"0000003fffffffff"* ]]
+	done
 }
 
 # A sys container non-root init process caps are all cleared, except CapBnd
 @test "syscont: init non-root process caps" {
 
-  sed -i "s/\"uid\": 0/\"uid\": 1000/" ${BUSYBOX_BUNDLE}/config.json
-  sed -i "s/\"gid\": 0/\"gid\": 1000/" ${BUSYBOX_BUNDLE}/config.json
+	sed -i "s/\"uid\": 0/\"uid\": 1000/" ${BUSYBOX_BUNDLE}/config.json
+	sed -i "s/\"gid\": 0/\"gid\": 1000/" ${BUSYBOX_BUNDLE}/config.json
 
-  runc run -d --console-socket $CONSOLE_SOCKET test_busybox
-  [ "$status" -eq 0 ]
+	runc run -d --console-socket $CONSOLE_SOCKET test_busybox
+	[ "$status" -eq 0 ]
 
-  runc exec test_busybox grep CapBnd /proc/1/status
-  [ "$status" -eq 0 ]
-  [[ "${output}" == *"0000003fffffffff"* ]]
+	runc exec test_busybox grep CapBnd /proc/1/status
+	[ "$status" -eq 0 ]
+	[[ "${output}" == *"0000003fffffffff"* ]]
 
-  for capType in CapInh CapPrm CapEff CapAmb
-  do
-    runc exec test_busybox grep "$capType" /proc/1/status
-    [ "$status" -eq 0 ]
-    [[ "${output}" == *"0000000000000000"* ]]
-  done
+	for capType in CapInh CapPrm CapEff CapAmb; do
+		runc exec test_busybox grep "$capType" /proc/1/status
+		[ "$status" -eq 0 ]
+		[[ "${output}" == *"0000000000000000"* ]]
+	done
 }
 
 # A sys container non-root init process caps are all cleared when entered via exec (except CapBnd)
 @test "syscont: exec non-root process caps" {
 
-  runc run -d --console-socket $CONSOLE_SOCKET test_busybox
-  [ "$status" -eq 0 ]
+	runc run -d --console-socket $CONSOLE_SOCKET test_busybox
+	[ "$status" -eq 0 ]
 
-  for capType in CapInh CapPrm CapEff CapAmb
-  do
-    runc exec --user 1000:1000 test_busybox grep "$capType" /proc/self/status
-    [ "$status" -eq 0 ]
-    [[ "${output}" == *"0000000000000000"* ]]
-  done
+	for capType in CapInh CapPrm CapEff CapAmb; do
+		runc exec --user 1000:1000 test_busybox grep "$capType" /proc/self/status
+		[ "$status" -eq 0 ]
+		[[ "${output}" == *"0000000000000000"* ]]
+	done
 
-  runc exec --user 1000:1000 test_busybox grep CapBnd /proc/self/status
-  [ "$status" -eq 0 ]
-  [[ "${output}" == *"0000003fffffffff"* ]]
+	runc exec --user 1000:1000 test_busybox grep CapBnd /proc/self/status
+	[ "$status" -eq 0 ]
+	[[ "${output}" == *"0000003fffffffff"* ]]
 }
-
 
 # TODO: Verify sysbox-runc exec caps are set correctly when giving exec a process.json
 

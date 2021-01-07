@@ -53,7 +53,7 @@ function teardown() {
 }
 
 @test "runc run [device cgroup allow rw char device]" {
-   skip "Unsupported"
+	skip "Unsupported"
 
 	requires root
 
@@ -76,7 +76,7 @@ function teardown() {
 }
 
 @test "runc run [device cgroup allow rm block device]" {
-   skip "Unsupported"
+	skip "Unsupported"
 
 	requires root
 

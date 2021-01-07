@@ -10,11 +10,11 @@ function setup() {
 	mkdir rootfs/testdir
 	echo "Forbidden information!" >rootfs/testfile
 
-        # sysbox-runc
-        if [ -z "$SHIFT_UIDS" ]; then
-          chown "$UID_MAP":"$GID_MAP" rootfs/testdir
-          chown "$UID_MAP":"$GID_MAP" rootfs/testfile
-        fi
+	# sysbox-runc
+	if [ -z "$SHIFT_UIDS" ]; then
+		chown "$UID_MAP":"$GID_MAP" rootfs/testdir
+		chown "$UID_MAP":"$GID_MAP" rootfs/testfile
+	fi
 
 	# add extra masked paths
 	update_config '(.. | select(.maskedPaths? != null)) .maskedPaths += ["/testdir", "/testfile"]'
@@ -26,7 +26,7 @@ function teardown() {
 
 @test "mask paths [file]" {
 
-        skip "NEEDS FIX"
+	skip "NEEDS FIX"
 
 	# run busybox detached
 	runc run -d --console-socket "$CONSOLE_SOCKET" test_busybox
@@ -40,12 +40,12 @@ function teardown() {
 	[ "$status" -eq 1 ]
 	[[ "${output}" == *"Device or resource busy"* ]]
 
-        # TODO: this operation passes in sys containers, but problably should
-        # fail; we don't want to allow unmasking of a masked path.
+	# TODO: this operation passes in sys containers, but problably should
+	# fail; we don't want to allow unmasking of a masked path.
 
 	runc exec test_busybox umount /testfile
 	[ "$status" -eq 1 ]
-        [[ "${output}" == *"Device or resource busy"* ]]
+	[[ "${output}" == *"Device or resource busy"* ]]
 }
 
 @test "mask paths [directory]" {

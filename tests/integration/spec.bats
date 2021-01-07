@@ -5,9 +5,9 @@ load helpers
 function setup() {
 	setup_hello
 
-   # sysbox-runc: bundle must have same uid/gid as that passed to
-   # "runc spec" (see runc_spec())
-   chown -R "$UID_MAP":"$GID_MAP" "$HELLO_BUNDLE"
+	# sysbox-runc: bundle must have same uid/gid as that passed to
+	# "runc spec" (see runc_spec())
+	chown -R "$UID_MAP":"$GID_MAP" "$HELLO_BUNDLE"
 }
 
 function teardown() {
@@ -38,11 +38,11 @@ function teardown() {
 	SCHEMA='runtime-spec/schema/config-schema.json'
 	[ -e "$SCHEMA" ]
 
-   runc spec "$UID_MAP" "$GID_MAP" "$ID_MAP_SIZE"
-   [ -e config.json ]
+	runc spec "$UID_MAP" "$GID_MAP" "$ID_MAP_SIZE"
+	[ -e config.json ]
 
-   go get github.com/xeipuuv/gojsonschema
-   go build runtime-spec/schema/validate.go
+	go get github.com/xeipuuv/gojsonschema
+	go build runtime-spec/schema/validate.go
 
 	./validate "$SCHEMA" config.json
 }

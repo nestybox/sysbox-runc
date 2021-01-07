@@ -69,15 +69,15 @@ ID_MAP_SIZE=65536
 # }
 
 run_only_test() {
-  if [ "$BATS_TEST_DESCRIPTION" != "$1" ]; then
-    skip
-  fi
+	if [ "$BATS_TEST_DESCRIPTION" != "$1" ]; then
+		skip
+	fi
 }
 
 run_only_test_num() {
-  if [ "$BATS_TEST_NUMBER" -ne "$1" ]; then
-    skip
-  fi
+	if [ "$BATS_TEST_NUMBER" -ne "$1" ]; then
+		skip
+	fi
 }
 
 # Wrapper for runc.
@@ -110,8 +110,8 @@ function runc_spec() {
 		args+=("--bundle" "$bundle")
 	fi
 
-   # sysbox-runc: sys container spec takes id mappings
-   $RUNC spec "${args[@]}" --id-map "$UID_MAP $GID_MAP $ID_MAP_SIZE"
+	# sysbox-runc: sys container spec takes id mappings
+	$RUNC spec "${args[@]}" --id-map "$UID_MAP $GID_MAP $ID_MAP_SIZE"
 
 	# Always add additional mappings if we have idmaps.
 	if [[ "$ROOTLESS" -ne 0 ]] && [[ "$ROOTLESS_FEATURES" == *"idmap"* ]]; then
@@ -527,11 +527,11 @@ function setup_busybox() {
 	fi
 	tar --exclude './dev/*' -C "$BUSYBOX_BUNDLE"/rootfs -xf "$BUSYBOX_IMAGE"
 
-   # sysbox-runc: set bundle ownership to match system
-   # container's uid/gid map, except if using uid-shifting
-   if [ -z "$SHIFT_UIDS" ]; then
-      chown -R "$UID_MAP":"$GID_MAP" "$BUSYBOX_BUNDLE"
-   fi
+	# sysbox-runc: set bundle ownership to match system
+	# container's uid/gid map, except if using uid-shifting
+	if [ -z "$SHIFT_UIDS" ]; then
+		chown -R "$UID_MAP":"$GID_MAP" "$BUSYBOX_BUNDLE"
+	fi
 
 	cd "$BUSYBOX_BUNDLE"
 
@@ -544,11 +544,11 @@ function setup_hello() {
 	mkdir -p "$HELLO_BUNDLE"/rootfs
 	tar --exclude './dev/*' -C "$HELLO_BUNDLE"/rootfs -xf "$HELLO_IMAGE"
 
-   # sysbox-runc: set bundle ownership to match system
-   # container's uid/gid map, except if using uid-shifting
-   if [ -z "$SHIFT_UIDS" ]; then
-      chown -R "$UID_MAP":"$GID_MAP" "$HELLO_BUNDLE"
-   fi
+	# sysbox-runc: set bundle ownership to match system
+	# container's uid/gid map, except if using uid-shifting
+	if [ -z "$SHIFT_UIDS" ]; then
+		chown -R "$UID_MAP":"$GID_MAP" "$HELLO_BUNDLE"
+	fi
 
 	cd "$HELLO_BUNDLE"
 	runc_spec
