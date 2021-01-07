@@ -12,7 +12,7 @@ function teardown() {
 }
 
 @test "syscont: syscall: mount and umount" {
-	runc run -d --console-socket $CONSOLE_SOCKET test_busybox
+	runc run -d --console-socket "$CONSOLE_SOCKET" test_busybox
 	[ "$status" -eq 0 ]
 
 	runc exec test_busybox sh -c "mkdir /root/test"

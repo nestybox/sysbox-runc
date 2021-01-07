@@ -20,7 +20,7 @@ function teardown() {
 	# to the container.
 	local uid
 	if [ -z "$SHIFT_UIDS" ]; then
-		uid=$(($UID_MAP + 42))
+		uid=$((UID_MAP + 42))
 	else
 		uid=42
 	fi

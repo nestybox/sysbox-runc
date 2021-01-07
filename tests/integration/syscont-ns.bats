@@ -13,7 +13,7 @@ function teardown() {
 
 @test "syscont: uses all namespaces" {
 
-	runc run -d --console-socket $CONSOLE_SOCKET test_busybox
+	runc run -d --console-socket "$CONSOLE_SOCKET" test_busybox
 	[ "$status" -eq 0 ]
 
 	# For each ns, check that the sys container's init process is in a
@@ -24,13 +24,13 @@ function teardown() {
 		[ "$status" -eq 0 ]
 		test_ns=$(ls -l /proc/self/ns | grep -i "$nsType" | cut -d":" -f3)
 		[ "$status" -eq 0 ]
-		[ "$syscont_ns" != "test_ns" ]
+		[ "$syscont_ns" != "$test_ns" ]
 	done
 }
 
 @test "syscont: unshare" {
 
-	runc run -d --console-socket $CONSOLE_SOCKET test_busybox
+	runc run -d --console-socket "$CONSOLE_SOCKET" test_busybox
 	[ "$status" -eq 0 ]
 
 	# check that unshare(2) works inside a system container

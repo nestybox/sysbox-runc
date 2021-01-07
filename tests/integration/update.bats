@@ -58,7 +58,7 @@ function setup() {
 	yes)
 		MEM_LIMIT="memory.max"
 		SD_MEM_LIMIT="MemoryMax"
-		Mem_RESERVE="memory.low"
+		MEM_RESERVE="memory.low"
 		SD_MEM_RESERVE="MemoryLow"
 		MEM_SWAP="memory.swap.max"
 		SD_MEM_SWAP="MemorySwapMax"

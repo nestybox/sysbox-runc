@@ -12,7 +12,7 @@ function teardown() {
 }
 
 @test "syscont uid/gid mappings" {
-	runc run -d --console-socket $CONSOLE_SOCKET test_busybox
+	runc run -d --console-socket "$CONSOLE_SOCKET" test_busybox
 	[ "$status" -eq 0 ]
 
 	runc exec test_busybox cat /proc/1/uid_map

@@ -13,7 +13,7 @@ function teardown() {
 
 # Verify the cgroup mounts inside the sys container
 @test "syscont: cgroup mounts" {
-	runc run -d --console-socket $CONSOLE_SOCKET test_busybox
+	runc run -d --console-socket "$CONSOLE_SOCKET" test_busybox
 	[ "$status" -eq 0 ]
 
 	# verify /sys/fs/cgroup has root:root ownership
@@ -62,7 +62,7 @@ function teardown() {
 
 # Verify that sys container root can create cgroups
 @test "syscont: cgroup create" {
-	runc run -d --console-socket $CONSOLE_SOCKET test_busybox
+	runc run -d --console-socket "$CONSOLE_SOCKET" test_busybox
 	[ "$status" -eq 0 ]
 
 	cgList=$(runc exec test_busybox ls /sys/fs/cgroup)

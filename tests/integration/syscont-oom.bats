@@ -13,7 +13,7 @@ function teardown() {
 
 @test "syscont: default oom_score_adj" {
 
-	runc run -d --console-socket $CONSOLE_SOCKET test_busybox
+	runc run -d --console-socket "$CONSOLE_SOCKET" test_busybox
 	[ "$status" -eq 0 ]
 
 	# verify default setting
@@ -48,7 +48,7 @@ function teardown() {
 	CONFIG=$(jq '.process.oomScoreAdj = 100' config.json)
 	echo "${CONFIG}" >config.json
 
-	runc run -d --console-socket $CONSOLE_SOCKET test_busybox
+	runc run -d --console-socket "$CONSOLE_SOCKET" test_busybox
 	[ "$status" -eq 0 ]
 
 	# verify default setting
@@ -84,7 +84,7 @@ function teardown() {
 	echo 200 >/proc/self/oom_score_adj
 
 	# sys container should inherit test's OOM score
-	runc run -d --console-socket $CONSOLE_SOCKET test_busybox
+	runc run -d --console-socket "$CONSOLE_SOCKET" test_busybox
 	[ "$status" -eq 0 ]
 
 	runc exec test_busybox sh -c "cat /proc/1/oom_score_adj"
@@ -118,7 +118,7 @@ function teardown() {
 	CONFIG=$(jq '.process.oomScoreAdj = 300' config.json)
 	echo "${CONFIG}" >config.json
 
-	runc run -d --console-socket $CONSOLE_SOCKET test_busybox
+	runc run -d --console-socket "$CONSOLE_SOCKET" test_busybox
 	[ "$status" -eq 0 ]
 
 	# exec process inherits container's configure oom score adjustment
