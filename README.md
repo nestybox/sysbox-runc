@@ -14,7 +14,8 @@ further info.
 
 sysbox-runc is a fork of the excellent [OCI runc](https://github.com/opencontainers/runc),
 modified for running system containers. It was forked in early 2019 and has undergone
-significant changes since then.
+significant changes since then. It's regularly updated to track the latest changes
+in the OCI runc.
 
 sysbox-runc is mostly (but not 100%) compatible with the OCI runtime specification (more on this
 [here](../docs/user-guide/design.md#sysbox-oci-compatibility)).
