@@ -242,6 +242,7 @@ func (c *linuxContainer) Set(config configs.Config) error {
 		return newGenericError(errors.New("container not running"), ContainerNotRunning)
 	}
 	if err := c.cgroupManager.Set(&config); err != nil {
+		logrus.Warnf("Setting cgroup configs failed due to error: %v", err)
 		// Set configs back
 		if err2 := c.cgroupManager.Set(c.config); err2 != nil {
 			logrus.Warnf("Setting back cgroup configs failed due to error: %v, your state.json and actual configs might be inconsistent.", err2)
