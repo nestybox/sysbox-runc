@@ -19,15 +19,23 @@ import (
 )
 
 type legacyManager struct {
-	mu      sync.Mutex
-	cgroups *configs.Cgroup
-	paths   map[string]string
+	mu                 sync.Mutex
+	cgroups            *configs.Cgroup
+	paths              map[string]string
+	childCgroupCreated bool
 }
 
 func NewLegacyManager(cg *configs.Cgroup, paths map[string]string) cgroups.Manager {
+
+	childCgroupCreated := false
+	if paths != nil {
+		childCgroupCreated = true
+	}
+
 	return &legacyManager{
-		cgroups: cg,
-		paths:   paths,
+		cgroups:            cg,
+		paths:              paths,
+		childCgroupCreated: childCgroupCreated,
 	}
 }
 
@@ -143,11 +151,27 @@ func (m *legacyManager) Apply(pid int) error {
 		properties = append(properties, newProp("PIDs", []uint32{uint32(pid)}))
 	}
 
-	// Check if we can delegate. This is only supported on systemd versions 218 and above.
-	if !strings.HasSuffix(unitName, ".slice") {
-		// Assume scopes always support delegation.
-		properties = append(properties, newProp("Delegate", true))
+	// sysbox-runc requires service or scope units for the container, as otherwise delegation won't work.
+	if strings.HasSuffix(unitName, ".slice") {
+		return fmt.Errorf("container cgroup is on systemd slice unit %s; sysbox-runc requires it to be on systemd service or scope units in order for cgroup delegation to work", unitName)
 	}
+
+	// NOTE: sysbox-runc requires cgroup delegation, which is supported on systemd versions >= 218.
+	dbusConnection, err := getDbusConnection(false)
+	if err != nil {
+		return err
+	}
+
+	sdVer, err := systemdVersion(dbusConnection)
+	if err != nil {
+		return fmt.Errorf("could not determine systemd version: %s", err)
+	}
+
+	if sdVer < 218 {
+		return fmt.Errorf("systemd version is < 218; sysbox-runc requires version >= 218 for cgroup delegation.")
+	}
+
+	properties = append(properties, newProp("Delegate", true))
 
 	// Always enable accounting, this gets us the same behaviour as the fs implementation,
 	// plus the kernel has some problems with joining the memory cgroup at a later time.
@@ -160,10 +184,6 @@ func (m *legacyManager) Apply(pid int) error {
 	properties = append(properties,
 		newProp("DefaultDependencies", false))
 
-	dbusConnection, err := getDbusConnection(false)
-	if err != nil {
-		return err
-	}
 	resourcesProperties, err := genV1ResourcesProperties(c, dbusConnection)
 	if err != nil {
 		return err
@@ -453,16 +473,49 @@ func (m *legacyManager) Exists() bool {
 }
 
 func (m *legacyManager) CreateChildCgroup(container *configs.Config) error {
-	// sysbox-runc: implement this function
-	return fmt.Errorf("Systemd not supported")
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// The child cgroups will not be visible to systemd (due to delegation); thus
+	// we create them directly on the filesystem using the fs cgroup manager.
+	childMgr := fs.NewManager(m.cgroups, m.paths, false)
+
+	if err := childMgr.CreateChildCgroup(container); err != nil {
+		return fmt.Errorf("failed to create child cgroup: %s", err)
+	}
+
+	m.childCgroupCreated = true
+	return nil
 }
 
 func (m *legacyManager) ApplyChildCgroup(pid int) error {
-	// sysbox-runc: implement this function
-	return fmt.Errorf("Systemd not supported")
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.cgroups == nil {
+		return nil
+	}
+
+	if !m.childCgroupCreated {
+		return fmt.Errorf("can't place process in child cgroup because child cgroup has not been created")
+	}
+
+	if m.paths == nil {
+		return errors.New("can't place pid in delegated cgroup unless it was placed in container cgroup first")
+	}
+
+	childMgr := fs.NewManager(m.cgroups, m.paths, false)
+	if err := childMgr.ApplyChildCgroup(pid); err != nil {
+		return fmt.Errorf("failed to apply child cgroup: %s", err)
+	}
+
+	return nil
 }
 
 func (m *legacyManager) GetChildCgroupPaths() map[string]string {
-	// sysbox-runc: implement this function
-	return nil
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	childMgr := fs.NewManager(m.cgroups, m.paths, false)
+	return childMgr.GetChildCgroupPaths()
 }
