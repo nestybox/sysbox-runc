@@ -606,8 +606,9 @@ func (c *linuxContainer) newSetnsProcess(p *Process, cmd *exec.Cmd, messageSockP
 	if err != nil {
 		return nil, err
 	}
-	// sysbox-runc: setns processes enter the child cgroup (i.e., the system container's
-	// cgroup root)
+	// sysbox-runc: setns processes enter the child cgroup (i.e., the system
+	// container's cgroup root); this way they can't change the cgroup resources
+	// assigned to the system container itself.
 	return &setnsProcess{
 		cmd:             cmd,
 		cgroupPaths:     c.cgroupManager.GetChildCgroupPaths(),

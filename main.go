@@ -98,6 +98,10 @@ func main() {
 			Usage:  "enable memory-profiling data collectionprofile data is stored in the cwd of the process invoking sysbox-runc.",
 			Hidden: true,
 		},
+		cli.BoolFlag{
+			Name:  "systemd-cgroup",
+			Usage: "enable systemd cgroup support, expects cgroupsPath to be of form \"slice:prefix:name\" for e.g. \"system.slice:runc:434234\"",
+		},
 	}
 
 	app.Commands = []cli.Command{

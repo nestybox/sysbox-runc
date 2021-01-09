@@ -6,6 +6,14 @@ import (
 	"github.com/opencontainers/runc/libcontainer/configs"
 )
 
+// syscontCgroupRoot is the name of the host's cgroup subtree that is exposed /
+// delegated inside the system container. This subtree lives under the cgroup
+// hierarchy associated with the container itself. For example:
+//
+// /sys/fs/cgroup/<cgroup-controller>/docker/<container-id>/syscont-group-root
+
+var SyscontCgroupRoot string = "syscont-cgroup-root"
+
 type Manager interface {
 	// Applies cgroup configuration to the process with the specified pid
 	Apply(pid int) error
@@ -32,21 +40,6 @@ type Manager interface {
 	// Sets the cgroup as configured.
 	Set(container *configs.Config) error
 
-	// sysbox-runc: creates a child cgroup for the system container's cgroup root;
-	// we don't need a corresponding destroy method because the existing Destroy()
-	// method will destroy the child cgroup.
-	CreateChildCgroup(container *configs.Config) error
-
-	// sysbox-runc: applies child cgroup configuration to the process with the specified
-	// pid. Must be called after Apply() has been called because Apply() configures
-	// internal state in the cgroup manager that ApplyChildCgroup() does not. This
-	// awkwardness could be avoided if this interface had a separate Create() method as
-	// currently Apply() serves as both create and apply.
-	ApplyChildCgroup(pid int) error
-
-	// sysbox-runc: same as GetPaths(), but returns child cgroup paths
-	GetChildCgroupPaths() map[string]string
-
 	// GetPaths returns cgroup path(s) to save in a state file in order to restore later.
 	//
 	// For cgroup v1, a key is cgroup subsystem name, and the value is the path
@@ -63,4 +56,20 @@ type Manager interface {
 
 	// Whether the cgroup path exists or not
 	Exists() bool
+
+	// sysbox-runc: creates a child cgroup that will serve as the cgroup root
+	// exposed inside the system container. We don't need a corresponding
+	// destroy method because the existing Destroy() method will destroy the
+	// child cgroup.
+	CreateChildCgroup(container *configs.Config) error
+
+	// sysbox-runc: applies child cgroup configuration to the process with the specified
+	// pid. Must be called after Apply() has been called because Apply() configures
+	// internal state in the cgroup manager that ApplyChildCgroup() does not. This
+	// awkwardness could be avoided if this interface had a separate Create() method as
+	// currently Apply() serves as both create and apply.
+	ApplyChildCgroup(pid int) error
+
+	// sysbox-runc: same as GetPaths(), but returns child cgroup paths
+	GetChildCgroupPaths() map[string]string
 }
