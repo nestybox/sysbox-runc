@@ -162,11 +162,7 @@ func (m *legacyManager) Apply(pid int) error {
 		return err
 	}
 
-	sdVer, err := systemdVersion(dbusConnection)
-	if err != nil {
-		return fmt.Errorf("could not determine systemd version: %s", err)
-	}
-
+	sdVer := systemdVersion(dbusConnection)
 	if sdVer < 218 {
 		return fmt.Errorf("systemd version is < 218; sysbox-runc requires version >= 218 for cgroup delegation.")
 	}
