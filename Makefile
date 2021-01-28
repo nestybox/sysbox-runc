@@ -30,7 +30,7 @@ LIBSECCOMP_SRC := $(shell find $(LIBSECCOMP_DIR) 2>&1 | grep -E '.*\.(go)')
 
 SHIFTFS_MODULE_PRESENT = $(shell lsmod | grep shiftfs)
 
-LDFLAGS := '-X main.version=${VERSION} -X main.commitId=${COMMIT_ID} \
+LDFLAGS := '-X main.version=${VERSION} -X main.commitId=${COMMIT} \
 		-X "main.builtAt=${BUILT_AT}" -X main.builtBy=${BUILT_BY}'
 
 # Identify kernel-headers path if not previously defined. Notice that this logic is already
@@ -60,11 +60,11 @@ ifeq ($(shell $(GO) env GOOS),linux)
 	endif
 endif
 GO_BUILD := $(GO) build $(GO_BUILDMODE) $(EXTRA_FLAGS) -tags "$(BUILDTAGS)" \
-	-ldflags "$(LDFLAGS) $(EXTRA_LDFLAGS)"
+	-ldflags $(LDFLAGS) $(EXTRA_LDFLAGS)
 GO_BUILD_STATIC := CGO_ENABLED=1 $(GO) build $(EXTRA_FLAGS) -tags "$(BUILDTAGS) netgo osusergo" \
-	-ldflags "-w -extldflags -static $(LDFLAGS) $(EXTRA_LDFLAGS)"
+	-ldflags "-w -extldflags -static" $(LDFLAGS) $(EXTRA_LDFLAGS)
 GO_BUILD_DEBUG := $(GO) build --buildmode=exe $(EXTRA_FLAGS) -tags "$(BUILDTAGS)" \
-	-ldflags "$(LDFLAGS) $(EXTRA_LDFLAGS)" -gcflags="all=-N -l"
+	-ldflags $(LDFLAGS) $(EXTRA_LDFLAGS) -gcflags="all=-N -l"
 
 RUN_TEST_CONT := $(CONTAINER_ENGINE) run ${DOCKER_RUN_PROXY} \
 		-t --privileged --rm \

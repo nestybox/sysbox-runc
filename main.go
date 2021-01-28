@@ -26,7 +26,7 @@ const (
 
 Nestybox's system container runtime.
 
-Info: https://github.com/nestybox/sysbox-external
+Info: https://github.com/nestybox/sysbox
 `
 )
 
