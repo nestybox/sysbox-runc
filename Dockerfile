@@ -67,9 +67,7 @@ RUN go get github.com/go-delve/delve/cmd/dlv \
     && apt-get install -y --no-install-recommends \
     psmisc
 
-COPY script/tmpmount /
 WORKDIR /root/nestybox/sysbox-runc
-ENTRYPOINT ["/tmpmount"]
 
 # setup a playground for us to spawn containers in
 COPY tests/integration/multi-arch.bash tests/integration/
