@@ -288,7 +288,7 @@ func mountCgroupV1(m *configs.Mount, rootfs, mountLabel string, enableCgroupns, 
 }
 
 func mountCgroupV2(m *configs.Mount, rootfs, mountLabel string, enableCgroupns bool) error {
-	cgroupPath, err := securejoin.SecureJoin(rootfs, m.Destination)
+	cgroupPath, err := securejoin.SecureJoin(".", m.Destination)
 	if err != nil {
 		return err
 	}
@@ -372,7 +372,7 @@ func mountToRootfs(m *configs.Mount, rootfs, mountLabel string, enableCgroupns, 
 		tmpDir := ""
 		// dest might be an absolute symlink, so it needs
 		// to be resolved under rootfs.
-		dest, err := securejoin.SecureJoin(rootfs, m.Destination)
+		dest, err := securejoin.SecureJoin(".", m.Destination)
 		if err != nil {
 			return err
 		}
