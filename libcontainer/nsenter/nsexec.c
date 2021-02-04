@@ -36,7 +36,7 @@ enum sync_t {
 	SYNC_USERMAP_ACK = 0x41,	/* Mapping finished by the parent. */
 	SYNC_RECVPID_PLS = 0x42,	/* Tell parent we're sending the PID. */
 	SYNC_RECVPID_ACK = 0x43,	/* PID was correctly received by parent. */
-	SYNC_GRANDCHILD = 0x44,	/* The grandchild is ready to run. */
+	SYNC_GRANDCHILD = 0x44,	   /* The grandchild is ready to run. */
 	SYNC_CHILD_READY = 0x45,	/* The child or grandchild is ready to return. */
 };
 
@@ -622,41 +622,29 @@ void join_namespaces(char *nslist)
 }
 
 /* sysbox-runc */
-void mountShiftfsOnBindSources(char *mntlist) {
+int mount_shiftfs_on_bind_sources(char *mntlist) {
 	char *saveptr = NULL;
 	char *mntpath = strtok_r(mntlist, ",", &saveptr);
 
 	if (!mntpath || !strlen(mntpath) || !strlen(mntlist))
-		return;
+		return 0;
 
 	do {
 		if (mount(mntpath, mntpath, "shiftfs", 0, "") < 0) {
-			bail("failed to mount shiftfs on %s", mntpath);
+			return -1;
 		}
 	} while ((mntpath = strtok_r(NULL, ",", &saveptr)) != NULL);
+
+	return 0;
 }
 
 /* sysbox-runc */
-void prepRootfs(struct nlconfig_t *config) {
-
-	if (mount("", "/", "", (unsigned long)(config->rootfs_prop), "") < 0)
-		bail("failed to set rootfs mount propagation");
-
-	if (config->make_parent_priv) {
-		if (mount("", config->parent_mount, "", MS_PRIVATE, "") < 0)
-			bail("failed to set rootfs parent mount propagation to private");
-	}
-
+int mount_shiftfs(struct nlconfig_t *config) {
 	// Note: by design cwd = rootfs
-	if (mount(".", ".", "bind", MS_BIND|MS_REC, "") < 0)
-		bail("failed to create bind-to-self mount on rootfs.");
+	if (mount(".", ".", "shiftfs", 0, "") < 0)
+		return -1;
 
-	if (config->use_shiftfs) {
-		if (mount(".", ".", "shiftfs", 0, "") < 0)
-			bail("failed to mount shiftfs on rootfs.");
-
-		mountShiftfsOnBindSources(config->shiftfs_mounts);
-	}
+	return mount_shiftfs_on_bind_sources(config->shiftfs_mounts);
 }
 
 /* Defined in cloned_binary.c. */
@@ -849,35 +837,36 @@ void nsexec(void)
 						bail("failed to sync with child: write(SYNC_USERMAP_ACK)");
 					}
 					break;
+
 				case SYNC_RECVPID_PLS:{
-						first_child = child;
+					first_child = child;
 
-						/* Get the init_func pid. */
-						if (read(syncfd, &child, sizeof(child)) != sizeof(child)) {
-							kill(first_child, SIGKILL);
-							bail("failed to sync with child: read(childpid)");
-						}
-
-						/* Send ACK. */
-						s = SYNC_RECVPID_ACK;
-						if (write(syncfd, &s, sizeof(s)) != sizeof(s)) {
-							kill(first_child, SIGKILL);
-							kill(child, SIGKILL);
-							bail("failed to sync with child: write(SYNC_RECVPID_ACK)");
-						}
-
-						/* Send the init_func pid back to our parent.
-						 *
-						 * Send the init_func pid and the pid of the first child back to our parent.
-						 * We need to send both back because we can't reap the first child we created (CLONE_PARENT).
-						 * It becomes the responsibility of our parent to reap the first child.
-						 */
-						len = dprintf(pipenum, "{\"pid\": %d, \"pid_first\": %d}\n", child, first_child);
-						if (len < 0) {
-							kill(child, SIGKILL);
-							bail("unable to generate JSON for child pid");
-						}
+					/* Get the init_func pid. */
+					if (read(syncfd, &child, sizeof(child)) != sizeof(child)) {
+						kill(first_child, SIGKILL);
+						bail("failed to sync with child: read(childpid)");
 					}
+
+					/* Send ACK. */
+					s = SYNC_RECVPID_ACK;
+					if (write(syncfd, &s, sizeof(s)) != sizeof(s)) {
+						kill(first_child, SIGKILL);
+						kill(child, SIGKILL);
+						bail("failed to sync with child: write(SYNC_RECVPID_ACK)");
+					}
+
+					/* Send the init_func pid back to our parent.
+					 *
+					 * Send the init_func pid and the pid of the first child back to our parent.
+					 * We need to send both back because we can't reap the first child we created (CLONE_PARENT).
+					 * It becomes the responsibility of our parent to reap the first child.
+					 */
+					len = dprintf(pipenum, "{\"pid\": %d, \"pid_first\": %d}\n", child, first_child);
+					if (len < 0) {
+						kill(child, SIGKILL);
+						bail("unable to generate JSON for child pid");
+					}
+				}
 					break;
 				case SYNC_CHILD_READY:
 					ready = true;
@@ -915,7 +904,7 @@ void nsexec(void)
 			}
 
 			exit(0);
-		}
+	}
 
 		/*
 		 * Stage 1: We're in the first child process. Our job is to join any
@@ -930,6 +919,8 @@ void nsexec(void)
 			pid_t child;
 			enum sync_t s;
          bool new_userns = false;
+			bool make_parent_priv_done = false;
+			bool shiftfs_mounts_done = false;
 
 			/* We're in a child and thus need to tell the parent if we die. */
 			syncfd = sync_child_pipe[0];
@@ -985,18 +976,38 @@ void nsexec(void)
 				config.cloneflags &= ~CLONE_NEWNS;
 			}
 
-			// sysbox-runc: prepare the container's rootfs prep and setup
+			// sysbox-runc: prepare the container's rootfs and setup
 			// shiftfs mounts if asked to do so.
 			//
-			// Note: in the OCI runc this is all done in rootfs_linux.go,
-			// but for sysbox-runc we need to do it here because when
-			// using shiftfs it must be done *before* uid(gid) mappings
-			// for the container's user-ns are set, as otherwise we may
-			// loose permission to perform the mounts (i.e., the bind
-			// mount sources may not longer be accessible once the
-			// user-ns mappings are configured).
-			if (config.prep_rootfs && config.use_shiftfs) {
-				prepRootfs(&config);
+			// Note: in the OCI runc this is all done in rootfs_linux.go, but for
+			// sysbox-runc we need to do it here when using shiftfs. That's because
+			// it must be done after we are in the user-ns and mount-ns, but
+			// *before* uid(gid) mappings for the container's user-ns are set, as
+			// otherwise we may loose permission to perform the mounts (i.e., the
+			// bind mount sources may not longer be accessible once the user-ns
+			// mappings are configured).
+
+			if (config.prep_rootfs) {
+				if (mount("", "/", "", (unsigned long)(config.rootfs_prop), "") < 0)
+					bail("failed to set rootfs mount propagation");
+
+				// This can fail if we don't have search permission into the parent
+				// mount path; if it fails, we will retry after userns uid-mapping.
+				if (config.make_parent_priv) {
+					if (mount("", config.parent_mount, "", MS_PRIVATE, "") == 0)
+						make_parent_priv_done = true;
+				}
+
+				if (!config.make_parent_priv || make_parent_priv_done) {
+					// Note: by design cwd = rootfs
+					if (mount(".", ".", "bind", MS_BIND|MS_REC, "") < 0)
+						bail("failed to create bind-to-self mount on rootfs.");
+
+					if (config.use_shiftfs) {
+						if (mount_shiftfs(&config) == 0)
+							shiftfs_mounts_done = true;
+					}
+				}
 			}
 
 			/*
@@ -1035,12 +1046,23 @@ void nsexec(void)
 
 			/* sysbox-runc:
 			 *
-			 * If we are not using uid-shifting, the rootfs prep must
-			 * occur *after* uid-mappings are set. Otherwise we get
-			 * permission denied when doing the mounts.
+			 * If we did not succeed on making the parent mount private before,
+			 * let's try again *after* uid-mappings are set (as we may now have
+			 * permission to do so).
 			 */
-			if (config.prep_rootfs && !config.use_shiftfs) {
-				prepRootfs(&config);
+
+			if (config.make_parent_priv && !make_parent_priv_done) {
+				if (mount("", config.parent_mount, "", MS_PRIVATE, "") < 0)
+					bail("failed to set rootfs parent mount propagation to private");
+
+				if (mount(".", ".", "bind", MS_BIND|MS_REC, "") < 0)
+					bail("failed to create bind-to-self mount on rootfs.");
+			}
+
+			if (config.use_shiftfs && !shiftfs_mounts_done) {
+				if (mount_shiftfs(&config) < 0) {
+					bail("failed to setup shiftfs mounts");
+				}
 			}
 
 			/*
