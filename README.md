@@ -20,6 +20,8 @@ in the OCI runc.
 sysbox-runc is mostly (but not 100%) compatible with the OCI runtime specification (more on this
 [here](../docs/user-guide/design.md#sysbox-oci-compatibility)).
 
+** A HUGE DEBT OF GRATITUDE TO THE OCI RUNC DEVELOPERS & MAINTAINERS, WITHOUT WHOM SYSBOX-RUNC WOULD NOT BE POSSIBLE. **
+
 ## Building
 
 sysbox-runc is built as part of the Sysbox build process. Refer to the Sysbox
