@@ -294,7 +294,9 @@ func syncParentSeccompFd(fd int32, pipe *os.File) error {
 	// send fd using cmsg(3)
 	socket := int(pipe.Fd())
 	scmRights := syscall.UnixRights(int(fd))
-	syscall.Sendmsg(socket, nil, scmRights, nil, 0)
+	if err := syscall.Sendmsg(socket, nil, scmRights, nil, 0); err != nil {
+		return err
+	}
 
 	if err := readSync(pipe, procFdDone); err != nil {
 		return err
