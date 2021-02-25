@@ -513,8 +513,8 @@ func (p *initProcess) start() (retErr error) {
 			sentRun = true
 
 		case rootfsReady:
-			// Register container into sysbox-fs.
-			if err = p.register(childPid); err != nil {
+			// Register container with sysbox-fs.
+			if err = p.registerWithSysboxfs(childPid); err != nil {
 				return err
 			}
 			// Sync with child.
@@ -610,7 +610,7 @@ func (p *initProcess) start() (retErr error) {
 // sysbox-runc: register the container with sysbox-fs. This must be done after
 // childPid is obtained and all container mounts are present, but before prestart
 // hooks so that sysbox-fs is ready to respond by the time the hooks run.
-func (p *initProcess) register(childPid int) error {
+func (p *initProcess) registerWithSysboxfs(childPid int) error {
 
 	sysFs := p.container.sysFs
 	if !sysFs.Enabled() {
