@@ -566,7 +566,7 @@ func startContainer(context *cli.Context,
 
 	r := &runner{
 		enableSubreaper: !context.Bool("no-subreaper"),
-		shouldDestroy:   true,
+		shouldDestroy:   !context.Bool("keep"),
 		container:       container,
 		listenFDs:       listenFDs,
 		notifySocket:    notifySocket,
