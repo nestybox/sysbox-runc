@@ -641,6 +641,18 @@ func checkSpec(spec *specs.Spec) error {
 	return nil
 }
 
+func cfgOomScoreAdj(spec *specs.Spec) {
+
+	// For sys containers we don't allow -1000 for the OOM score value, as this
+	// is not supported from within a user-ns.
+
+	if spec.Process.OOMScoreAdj != nil {
+		if *spec.Process.OOMScoreAdj < -999 {
+			*spec.Process.OOMScoreAdj = -999
+		}
+	}
+}
+
 // cfgSeccomp configures the system container's seccomp settings.
 func cfgSeccomp(seccomp *specs.LinuxSeccomp) error {
 
@@ -879,6 +891,7 @@ func ConvertSpec(context *cli.Context, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs, spe
 
 	cfgMaskedPaths(spec)
 	cfgReadonlyPaths(spec)
+	cfgOomScoreAdj(spec)
 
 	if err := cfgSeccomp(spec.Linux.Seccomp); err != nil {
 		return false, fmt.Errorf("failed to configure seccomp: %v", err)

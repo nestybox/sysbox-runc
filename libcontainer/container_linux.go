@@ -3,6 +3,7 @@
 package libcontainer
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -2165,20 +2166,35 @@ func (c *linuxContainer) bootstrapData(cloneFlags uintptr, nsMaps map[configs.Na
 		// (so as to allow child processes to set -999 if desired).  By passing it here, we
 		// honor the OCI spec: "If oomScoreAdj is not set, the runtime MUST NOT change the
 		// value of oom_score_adj."
+		var err error
+
 		f, err := os.Open("/proc/self/oom_score_adj")
 		if err != nil {
 			return nil, err
 		}
 		defer f.Close()
 
-		buf := make([]byte, 8)
-		if _, err := f.Read(buf); err != nil {
+		str, err := bufio.NewReader(f).ReadString('\n')
+		if err != nil {
 			return nil, err
+		}
+
+		str = strings.Trim(str, "\n")
+
+		selfOomScoreAdj, err := strconv.Atoi(str)
+		if err != nil {
+			return nil, err
+		}
+
+		// For sys containers we don't allow -1000 for the OOM score value, as this
+		// is not supported from within a user-ns.
+		if selfOomScoreAdj < -999 {
+			selfOomScoreAdj = -999
 		}
 
 		r.AddData(&Bytemsg{
 			Type:  OomScoreAdjAttr,
-			Value: buf,
+			Value: []byte(strconv.Itoa(selfOomScoreAdj)),
 		})
 	}
 
