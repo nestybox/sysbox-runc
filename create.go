@@ -95,7 +95,7 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 
 		// pre-register with sysFs
 		if sysFs.Enabled() {
-			if err = sysFs.PreRegister(); err != nil {
+			if err = sysFs.PreRegister(spec.Linux.Namespaces); err != nil {
 				return err
 			}
 			defer func() {
