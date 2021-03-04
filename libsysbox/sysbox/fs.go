@@ -24,6 +24,7 @@ import (
 
 	"github.com/nestybox/sysbox-ipc/sysboxFsGrpc"
 	unixIpc "github.com/nestybox/sysbox-ipc/unix"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
 
 // FsRegInfo contains info about a sys container registered with sysbox-fs
@@ -55,13 +56,21 @@ func (fs *Fs) Enabled() bool {
 }
 
 // Pre-registers container with sysbox-fs.
-func (fs *Fs) PreRegister() error {
+func (fs *Fs) PreRegister(linuxNamespaces []specs.LinuxNamespace) error {
 	if fs.Reg {
 		return fmt.Errorf("container %v already registered", fs.Id)
 	}
 
 	data := &sysboxFsGrpc.ContainerData{
 		Id: fs.Id,
+	}
+
+	// If the new container is entering an existing user-ns (e.g., as in K8s
+	// pods), pass the userns info to sysbox-fs.
+	for _, ns := range linuxNamespaces {
+		if ns.Type == specs.UserNamespace && ns.Path != "" {
+			data.Userns = ns.Path
+		}
 	}
 
 	if err := sysboxFsGrpc.SendContainerPreRegistration(data); err != nil {
