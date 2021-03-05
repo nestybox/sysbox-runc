@@ -491,11 +491,27 @@ func cfgMounts(spec *specs.Spec, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs, shiftUids
 	return nil
 }
 
-// cfgSysboxMounts adds sysbox generic mounts to the sys container's spec.
+// cfgSysboxMounts adds Sysbox required mounts to the sys container's spec; if the spec
+// has conflicting mounts, these are replaced with Sysbox's mounts.
 func cfgSysboxMounts(spec *specs.Spec) {
+
+	// Disallow mounts under the container's /sys/fs/cgroup/* (i.e., Sysbox sets those up)
+	var cgroupMounts = []specs.Mount{
+		specs.Mount{
+			Destination: "/sys/fs/cgroup/",
+		},
+	}
+
+	spec.Mounts = utils.MountSliceRemove(spec.Mounts, cgroupMounts, func(m1, m2 specs.Mount) bool {
+		return strings.HasPrefix(m1.Destination, m2.Destination)
+	})
+
+	// Remove other conflicting mounts
 	spec.Mounts = utils.MountSliceRemove(spec.Mounts, sysboxMounts, func(m1, m2 specs.Mount) bool {
 		return m1.Destination == m2.Destination
 	})
+
+	// Add sysbox mounts
 	spec.Mounts = append(spec.Mounts, sysboxMounts...)
 }
 
