@@ -32,7 +32,7 @@ LIBSECCOMP_SRC := $(shell find $(LIBSECCOMP_DIR) 2>&1 | grep -E '.*\.(go)')
 
 SHIFTFS_MODULE_PRESENT = $(shell lsmod | grep shiftfs)
 
-LDFLAGS := '-X "main.platform=${PLATFORM}" -X main.version=${VERSION} \
+LDFLAGS := '-X "main.edition=${EDITION}" -X main.version=${VERSION} \
 		-X main.commitId=$(COMMIT) -X "main.builtAt=$(BUILT_AT)" \
 		-X "main.builtBy=$(BUILT_BY)"'
 
