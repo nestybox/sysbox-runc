@@ -19,7 +19,7 @@ RUNC := $(NBOX)/sysbox-runc
 #PROJECT := nestybox/sysbox-runc
 BUILDTAGS ?= seccomp
 COMMIT_NO := $(shell git rev-parse HEAD 2> /dev/null || true)
-COMMIT ?= $(if $(shell git status --porcelain --untracked-files=no),"$(COMMIT_NO)-dirty","$(COMMIT_NO)")
+COMMIT ?= $(if $(shell git status --porcelain --untracked-files=no),$(COMMIT_NO)-dirty,$(COMMIT_NO))
 BUILT_AT := $(shell date)
 BUILT_BY := $(shell git config user.name)
 
@@ -32,8 +32,9 @@ LIBSECCOMP_SRC := $(shell find $(LIBSECCOMP_DIR) 2>&1 | grep -E '.*\.(go)')
 
 SHIFTFS_MODULE_PRESENT = $(shell lsmod | grep shiftfs)
 
-LDFLAGS := '-X main.version=${VERSION} -X main.commitId=$(COMMIT) \
-		-X "main.builtAt=$(BUILT_AT)" -X "main.builtBy=$(BUILT_BY)"'
+LDFLAGS := '-X "main.platform=${PLATFORM}" -X main.version=${VERSION} \
+		-X main.commitId=$(COMMIT) -X "main.builtAt=$(BUILT_AT)" \
+		-X "main.builtBy=$(BUILT_BY)"'
 
 # Identify kernel-headers path if not previously defined. Notice that this logic is already
 # present in Sysbox's Makefile; we are duplicating it here to keep sysbox-runc as independent
