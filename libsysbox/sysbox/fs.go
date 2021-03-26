@@ -65,11 +65,13 @@ func (fs *Fs) PreRegister(linuxNamespaces []specs.LinuxNamespace) error {
 		Id: fs.Id,
 	}
 
-	// If the new container is entering an existing user-ns (e.g., as in K8s
-	// pods), pass the userns info to sysbox-fs.
+	// If the new container is entering an existing net-ns, pass the ns info to
+	// sysbox-fs; containers which share the same net-ns see a common view of
+	// the resources emulated by sysbox-fs (e.g., as in Kubernetes pods or
+	// "docker run --net=container:<id> some-image").
 	for _, ns := range linuxNamespaces {
-		if ns.Type == specs.UserNamespace && ns.Path != "" {
-			data.Userns = ns.Path
+		if ns.Type == specs.NetworkNamespace && ns.Path != "" {
+			data.Netns = ns.Path
 		}
 	}
 
