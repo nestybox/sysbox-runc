@@ -32,6 +32,7 @@ import (
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
+	"golang.org/x/sys/unix"
 )
 
 // Exported
@@ -652,6 +653,24 @@ func checkSpec(spec *specs.Spec) error {
 
 	if spec.Root == nil || spec.Linux == nil {
 		return fmt.Errorf("not a linux container spec")
+	}
+
+	// Ensure the container's network ns is not shared with the host
+	for _, ns := range spec.Linux.Namespaces {
+		if ns.Type == specs.NetworkNamespace && ns.Path != "" {
+			var st1, st2 unix.Stat_t
+
+			if err := unix.Stat("/proc/self/ns/net", &st1); err != nil {
+				return fmt.Errorf("unable to stat sysbox's network namespace: %s", err)
+			}
+			if err := unix.Stat(ns.Path, &st2); err != nil {
+				return fmt.Errorf("unable to stat %q: %s", ns.Path, err)
+			}
+
+			if (st1.Dev == st2.Dev) && (st1.Ino == st2.Ino) {
+				return fmt.Errorf("sysbox containers can't share a network namespace with the host (because they use the linux user-namespace for isolation)")
+			}
+		}
 	}
 
 	return nil
