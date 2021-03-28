@@ -309,9 +309,10 @@ var linuxCaps = []string{
 
 // cfgNamespaces checks that the namespace config has the minimum set
 // of namespaces required and adds any missing namespaces to it
-func cfgNamespaces(spec *specs.Spec) error {
+func cfgNamespaces(sysMgr *sysbox.Mgr, spec *specs.Spec) error {
 
-	// user-ns and cgroup-ns are not required; but we will add them to the spec.
+	// user-ns and cgroup-ns are not required per the OCI spec, but we will add
+	// them to the system container spec.
 	var allNs = []string{"pid", "ipc", "uts", "mount", "network", "user", "cgroup"}
 	var reqNs = []string{"pid", "ipc", "uts", "mount", "network"}
 
@@ -343,6 +344,20 @@ func cfgNamespaces(spec *specs.Spec) error {
 		}
 		spec.Linux.Namespaces = append(spec.Linux.Namespaces, newns)
 		logrus.Debugf("added namespace %s to spec", ns)
+	}
+
+	// Check if we have a sysbox-mgr override for the container's user-ns
+	if sysMgr.Config.Userns != "" {
+		updatedNs := []specs.LinuxNamespace{}
+
+		for _, ns := range spec.Linux.Namespaces {
+			if ns.Type == specs.UserNamespace {
+				ns.Path = sysMgr.Config.Userns
+			}
+			updatedNs = append(updatedNs, ns)
+		}
+
+		spec.Linux.Namespaces = updatedNs
 	}
 
 	return nil
@@ -417,11 +432,24 @@ func validateIDMappings(spec *specs.Spec) error {
 
 // cfgIDMappings checks if the uid/gid mappings are present and valid; if they are not
 // present, it allocates them. Note that we don't disallow mappings that map to the host
-// root UID (i.e., identity-mappings); some runc tests use such mappings.
+// root Uid (i.e., identity-mappings); some runc tests use such mappings.
 func cfgIDMappings(sysMgr *sysbox.Mgr, spec *specs.Spec) error {
+
+	// Honor user-ns Uid mapping spec overrides from sysbox-mgr
+	if len(sysMgr.Config.UidMappings) > 0 {
+		spec.Linux.UIDMappings = sysMgr.Config.UidMappings
+	}
+
+	// Honor user-ns Gid mapping spec overrides from sysbox-mgr
+	if len(sysMgr.Config.GidMappings) > 0 {
+		spec.Linux.GIDMappings = sysMgr.Config.GidMappings
+	}
+
+	// If no mappings are present, let's allocate some
 	if len(spec.Linux.UIDMappings) == 0 && len(spec.Linux.GIDMappings) == 0 {
 		return allocIDMappings(sysMgr, spec)
 	}
+
 	return validateIDMappings(spec)
 }
 
@@ -906,7 +934,7 @@ func ConvertSpec(context *cli.Context, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs, spe
 		return false, fmt.Errorf("invalid or unsupported container spec: %v", err)
 	}
 
-	if err := cfgNamespaces(spec); err != nil {
+	if err := cfgNamespaces(sysMgr, spec); err != nil {
 		return false, fmt.Errorf("invalid namespace config: %v", err)
 	}
 
