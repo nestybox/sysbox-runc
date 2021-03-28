@@ -426,7 +426,37 @@ func (c *linuxContainer) start(process *Process) error {
 				return err
 			}
 		}
+
+		// sysbox-runc: send an update to sysbox-mgr with the container's config
+		if c.sysMgr.Enabled() {
+			userns := state.NamespacePaths[configs.NEWUSER]
+			netns := state.NamespacePaths[configs.NEWNET]
+
+			// Cast IDMap to LinuxIDMapping
+			cast := func(m configs.IDMap) specs.LinuxIDMapping {
+				return specs.LinuxIDMapping{
+					ContainerID: uint32(m.ContainerID),
+					HostID:      uint32(m.HostID),
+					Size:        uint32(m.Size),
+				}
+			}
+
+			uidMappings := []specs.LinuxIDMapping{}
+			for _, m := range state.BaseState.Config.UidMappings {
+				uidMappings = append(uidMappings, cast(m))
+			}
+
+			gidMappings := []specs.LinuxIDMapping{}
+			for _, m := range state.BaseState.Config.GidMappings {
+				gidMappings = append(gidMappings, cast(m))
+			}
+
+			if err := c.sysMgr.Update(userns, netns, uidMappings, gidMappings); err != nil {
+				return newSystemErrorWithCause(err, "sending creation timestamp to sysbox-fs")
+			}
+		}
 	}
+
 	return nil
 }
 

@@ -7,8 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/opencontainers/runc/libsysbox/sysbox"
-	"github.com/opencontainers/runc/libsysbox/syscont"
 	"github.com/opencontainers/runtime-spec/specs-go"
 
 	"github.com/sirupsen/logrus"
@@ -65,24 +63,19 @@ func fatal(err error) {
 }
 
 // setupSpec performs initial setup based on the cli.Context for the container
-func setupSpec(context *cli.Context, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs) (*specs.Spec, bool, error) {
+func setupSpec(context *cli.Context) (*specs.Spec, error) {
 	bundle := context.String("bundle")
 	if bundle != "" {
 		if err := os.Chdir(bundle); err != nil {
-			return nil, false, err
+			return nil, err
 		}
 	}
 	spec, err := loadSpec(specConfig)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
-	shiftUids, err := syscont.ConvertSpec(context, sysMgr, sysFs, spec)
-	if err != nil {
-		return nil, false, fmt.Errorf("error in the container spec: %v", err)
-	}
-
-	return spec, shiftUids, nil
+	return spec, nil
 }
 
 func revisePidFile(context *cli.Context) error {

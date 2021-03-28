@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/opencontainers/runc/libsysbox/sysbox"
+	"github.com/opencontainers/runc/libsysbox/syscont"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"
 )
@@ -68,13 +70,18 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 			return err
 		}
 
+		spec, err = setupSpec(context)
+		if err != nil {
+			return err
+		}
+
 		id := context.Args().First()
 		sysMgr := sysbox.NewMgr(id, !context.GlobalBool("no-sysbox-mgr"))
 		sysFs := sysbox.NewFs(id, !context.GlobalBool("no-sysbox-fs"))
 
 		// register with sysMgr
 		if sysMgr.Enabled() {
-			if err = sysMgr.Register(); err != nil {
+			if err = sysMgr.Register(spec); err != nil {
 				return err
 			}
 			defer func() {
@@ -84,9 +91,9 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 			}()
 		}
 
-		spec, shiftUids, err = setupSpec(context, sysMgr, sysFs)
+		shiftUids, err = syscont.ConvertSpec(context, sysMgr, sysFs, spec)
 		if err != nil {
-			return err
+			return fmt.Errorf("error in the container spec: %v", err)
 		}
 
 		if err = sysbox.CheckHostConfig(context, shiftUids); err != nil {

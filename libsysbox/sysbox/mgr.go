@@ -29,8 +29,8 @@ import (
 
 type Mgr struct {
 	Active bool
-	Id     string // container-id
-	Config *ipcLib.MgrConfig
+	Id     string                  // container-id
+	Config *ipcLib.ContainerConfig // sysbox-mgr mandated container config
 }
 
 func NewMgr(id string, enable bool) *Mgr {
@@ -46,12 +46,50 @@ func (mgr *Mgr) Enabled() bool {
 
 // Register registers the container with sysbox-mgr. If successful, returns
 // configuration tokens for sysbox-runc.
-func (mgr *Mgr) Register() error {
-	config, err := sysboxMgrGrpc.Register(mgr.Id)
+func (mgr *Mgr) Register(spec *specs.Spec) error {
+	var userns string
+	var netns string
+
+	for _, ns := range spec.Linux.Namespaces {
+		if ns.Type == specs.UserNamespace && ns.Path != "" {
+			userns = ns.Path
+		}
+		if ns.Type == specs.NetworkNamespace && ns.Path != "" {
+			netns = ns.Path
+		}
+	}
+
+	regInfo := &ipcLib.RegistrationInfo{
+		Id:          mgr.Id,
+		Userns:      userns,
+		Netns:       netns,
+		UidMappings: spec.Linux.UIDMappings,
+		GidMappings: spec.Linux.GIDMappings,
+	}
+
+	config, err := sysboxMgrGrpc.Register(regInfo)
 	if err != nil {
 		return fmt.Errorf("failed to register with sysbox-mgr: %v", err)
 	}
+
 	mgr.Config = config
+
+	return nil
+}
+
+func (mgr *Mgr) Update(userns, netns string, uidMappings, gidMappings []specs.LinuxIDMapping) error {
+
+	updateInfo := &ipcLib.UpdateInfo{
+		Id:          mgr.Id,
+		Userns:      userns,
+		Netns:       netns,
+		UidMappings: uidMappings,
+		GidMappings: gidMappings,
+	}
+
+	if err := sysboxMgrGrpc.Update(updateInfo); err != nil {
+		return fmt.Errorf("failed to update container info with sysbox-mgr: %v", err)
+	}
 	return nil
 }
 

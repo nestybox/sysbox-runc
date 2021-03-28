@@ -3,11 +3,13 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/system"
 	"github.com/opencontainers/runc/libsysbox/sysbox"
+	"github.com/opencontainers/runc/libsysbox/syscont"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
@@ -110,13 +112,18 @@ using the sysbox-runc checkpoint command.`,
 			logrus.Warn("sysbox-runc restore is untested")
 		}
 
+		spec, err = setupSpec(context)
+		if err != nil {
+			return err
+		}
+
 		id := context.Args().First()
 		sysMgr := sysbox.NewMgr(id, !context.GlobalBool("no-sysbox-mgr"))
 		sysFs := sysbox.NewFs(id, !context.GlobalBool("no-sysbox-fs"))
 
 		// register with sysMgr (registration with sysFs occurs later (within libcontainer))
 		if sysMgr.Enabled() {
-			if err = sysMgr.Register(); err != nil {
+			if err = sysMgr.Register(spec); err != nil {
 				return err
 			}
 			defer func() {
@@ -126,10 +133,11 @@ using the sysbox-runc checkpoint command.`,
 			}()
 		}
 
-		spec, shiftUids, err = setupSpec(context, sysMgr, sysFs)
+		shiftUids, err = syscont.ConvertSpec(context, sysMgr, sysFs, spec)
 		if err != nil {
-			return err
+			return fmt.Errorf("error in the container spec: %v", err)
 		}
+
 		options := criuOptions(context)
 		if err = setEmptyNsMask(context, options); err != nil {
 			return err
