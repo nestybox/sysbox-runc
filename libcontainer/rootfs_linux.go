@@ -223,7 +223,7 @@ func prepareBindDest(m *configs.Mount, rootfs string, absDestPath bool) (err err
 	return nil
 }
 
-func mountCgroupV1(m *configs.Mount, rootfs, mountLabel string, enableCgroupns, shiftfs bool, pipe io.ReadWriter) error {
+func mountCgroupV1(m *configs.Mount, rootfs, mountLabel string, enableCgroupns bool, pipe io.ReadWriter) error {
 	binds, err := getCgroupMounts(m)
 	if err != nil {
 		return err
@@ -244,7 +244,7 @@ func mountCgroupV1(m *configs.Mount, rootfs, mountLabel string, enableCgroupns, 
 		PropagationFlags: m.PropagationFlags,
 	}
 
-	if err := mountToRootfs(tmpfs, rootfs, mountLabel, enableCgroupns, shiftfs, pipe); err != nil {
+	if err := mountToRootfs(tmpfs, rootfs, mountLabel, enableCgroupns, pipe); err != nil {
 		return err
 	}
 	for _, b := range binds {
@@ -269,7 +269,7 @@ func mountCgroupV1(m *configs.Mount, rootfs, mountLabel string, enableCgroupns, 
 				return err
 			}
 		} else {
-			if err := mountToRootfs(b, rootfs, mountLabel, enableCgroupns, shiftfs, pipe); err != nil {
+			if err := mountToRootfs(b, rootfs, mountLabel, enableCgroupns, pipe); err != nil {
 				return err
 			}
 		}
@@ -331,7 +331,7 @@ func mkdirall(path string, mode os.FileMode) error {
 	return nil
 }
 
-func mountToRootfs(m *configs.Mount, rootfs, mountLabel string, enableCgroupns, shiftfs bool, pipe io.ReadWriter) error {
+func mountToRootfs(m *configs.Mount, rootfs, mountLabel string, enableCgroupns bool, pipe io.ReadWriter) error {
 	var (
 		dest = m.Destination
 	)
@@ -431,7 +431,7 @@ func mountToRootfs(m *configs.Mount, rootfs, mountLabel string, enableCgroupns, 
 		if cgroups.IsCgroup2UnifiedMode() {
 			return mountCgroupV2(m, rootfs, mountLabel, enableCgroupns)
 		}
-		return mountCgroupV1(m, rootfs, mountLabel, enableCgroupns, shiftfs, pipe)
+		return mountCgroupV1(m, rootfs, mountLabel, enableCgroupns, pipe)
 	default:
 		// ensure that the destination of the mount is resolved of symlinks at mount time because
 		// any previous mounts can invalidate the next mount's destination.
@@ -1076,7 +1076,7 @@ func doMounts(config *configs.Config, pipe io.ReadWriter) error {
 	// Do non-bind mounts
 	for _, m := range config.Mounts {
 		if m.Device != "bind" {
-			if err := mountToRootfs(m, config.Rootfs, config.MountLabel, true, config.ShiftUids, pipe); err != nil {
+			if err := mountToRootfs(m, config.Rootfs, config.MountLabel, true, pipe); err != nil {
 				return newSystemErrorWithCausef(err, "mounting %q to rootfs %q at %q", m.Source, config.Rootfs, m.Destination)
 			}
 
@@ -1120,9 +1120,9 @@ func validateCwd(rootfs string) error {
 	return nil
 }
 
-// sysbox-runc: allowShiftfsBindSource checks if the source dir of a bind mount is allowed
-// when using shiftfs.
-func allowShiftfsBindSource(source, rootfs string) error {
+// sysbox-runc: allowShiftfsBindSource checks if Sysbox is capable of mounting shiftfs
+// over the source dir of a bind mount.
+func allowShiftfsBindSource(config *configs.Config, source string) error {
 
 	// We do not allow bind mounts whose source is directly above the container's rootfs
 	// (e.g., if the rootfs is at /a/b/c/d, we don't allow bind sources at /, /a, /a/b, or
@@ -1130,8 +1130,9 @@ func allowShiftfsBindSource(source, rootfs string) error {
 	// such bind mounts is that when using uid-shifting we need to mount shiftfs on the
 	// rootfs as well as the bind sources. If we where to allow bind sources directly above
 	// rootfs, we would end with shiftfs-on-shiftfs which is not supported.
-	if strings.Contains(rootfs, source) {
-		return fmt.Errorf("bind mount with source at %s is above the container's rootfs at %s; this is not supported when using uid-shifting", source, rootfs)
+	if strings.Contains(config.Rootfs, source) {
+		return fmt.Errorf("bind mount with source at %s is above the container's rootfs at %s;"+
+			" this is not supported when using uid-shifting", source, config.Rootfs)
 	}
 
 	return nil
@@ -1175,8 +1176,8 @@ func needUidShiftOnBindSrc(mount *configs.Mount, config *configs.Config) (bool, 
 		return false, nil
 	}
 
-	// If the bind source has uid:gid ownership matching the container's root, shiftfs is
-	// not needed
+	// If the bind source has uid:gid ownership matching the container's user-ns
+	// host uid:gid, shiftfs is not needed
 	var hostUid, hostGid uint32
 	for _, mapping := range config.UidMappings {
 		if mapping.ContainerID == 0 {

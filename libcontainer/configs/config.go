@@ -216,8 +216,11 @@ type Config struct {
 	// When RootlessCgroups is set, cgroups errors are ignored.
 	RootlessCgroups bool `json:"rootless_cgroups,omitempty"`
 
-	// ShiftUids indicates if the container uses uid/gid shifting via the shiftfs kernel module.
-	ShiftUids bool `json:"shift_uids,omitempty"`
+	// UidShiftSupported indicates if the host supports uid shifting (e.g., via the shiftfs kernel module).
+	UidShiftSupported bool `json:"uid_shift_supported,omitempty"`
+
+	// UidShiftRootfs indicates if uid shifting is needed for the container's rootfs
+	UidShiftRootfs bool `json:"uid_shift_rootfs,omitempty"`
 
 	// ShiftfsMounts is a list of directories on which shiftfs needs to be mounted
 	ShiftfsMounts []ShiftfsMount `json:"shiftfs_mounts,omitempty"`

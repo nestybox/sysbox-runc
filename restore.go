@@ -98,10 +98,11 @@ using the sysbox-runc checkpoint command.`,
 	},
 	Action: func(context *cli.Context) error {
 		var (
-			err       error
-			spec      *specs.Spec
-			shiftUids bool
-			status    int
+			err               error
+			spec              *specs.Spec
+			uidShiftSupported bool
+			uidShiftRootfs    bool
+			status            int
 		)
 
 		if err = checkArgs(context, 1, exactArgs); err != nil {
@@ -133,7 +134,7 @@ using the sysbox-runc checkpoint command.`,
 			}()
 		}
 
-		shiftUids, err = syscont.ConvertSpec(context, sysMgr, sysFs, spec)
+		uidShiftSupported, uidShiftRootfs, err = syscont.ConvertSpec(context, sysMgr, sysFs, spec)
 		if err != nil {
 			return fmt.Errorf("error in the container spec: %v", err)
 		}
@@ -142,7 +143,7 @@ using the sysbox-runc checkpoint command.`,
 		if err = setEmptyNsMask(context, options); err != nil {
 			return err
 		}
-		status, err = startContainer(context, spec, CT_ACT_RESTORE, options, shiftUids, sysMgr, sysFs)
+		status, err = startContainer(context, spec, CT_ACT_RESTORE, options, uidShiftSupported, uidShiftRootfs, sysMgr, sysFs)
 		if err != nil {
 			sysFs.Unregister()
 			return err

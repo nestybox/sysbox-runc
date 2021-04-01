@@ -57,10 +57,11 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 	},
 	Action: func(context *cli.Context) error {
 		var (
-			err       error
-			spec      *specs.Spec
-			shiftUids bool
-			status    int
+			err               error
+			spec              *specs.Spec
+			uidShiftSupported bool
+			uidShiftRootfs    bool
+			status            int
 		)
 
 		if err = checkArgs(context, 1, exactArgs); err != nil {
@@ -72,6 +73,10 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 
 		spec, err = setupSpec(context)
 		if err != nil {
+			return err
+		}
+
+		if err = sysbox.CheckHostConfig(context, spec); err != nil {
 			return err
 		}
 
@@ -91,13 +96,9 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 			}()
 		}
 
-		shiftUids, err = syscont.ConvertSpec(context, sysMgr, sysFs, spec)
+		uidShiftSupported, uidShiftRootfs, err = syscont.ConvertSpec(context, sysMgr, sysFs, spec)
 		if err != nil {
 			return fmt.Errorf("error in the container spec: %v", err)
-		}
-
-		if err = sysbox.CheckHostConfig(context, shiftUids); err != nil {
-			return err
 		}
 
 		// pre-register with sysFs
@@ -112,7 +113,7 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 			}()
 		}
 
-		status, err = startContainer(context, spec, CT_ACT_CREATE, nil, shiftUids, sysMgr, sysFs)
+		status, err = startContainer(context, spec, CT_ACT_CREATE, nil, uidShiftSupported, uidShiftRootfs, sysMgr, sysFs)
 		if err != nil {
 			return err
 		}

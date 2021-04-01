@@ -748,13 +748,11 @@ func (p *initProcess) setupDevSubdir() error {
 	}
 
 	// The dir owner must match the container's root user uid & gid
-	if !p.config.Config.ShiftUids {
-		if p.config.Config.UidMappings != nil && p.config.Config.GidMappings != nil {
-			uid := p.config.Config.UidMappings[0].HostID
-			gid := p.config.Config.GidMappings[0].HostID
-			if err := os.Chown(devSubdir, uid, gid); err != nil {
-				return newSystemErrorWithCause(err, "chown dev subdir under rootfs")
-			}
+	if p.config.Config.UidMappings != nil && p.config.Config.GidMappings != nil {
+		uid := p.config.Config.UidMappings[0].HostID
+		gid := p.config.Config.GidMappings[0].HostID
+		if err := os.Chown(devSubdir, uid, gid); err != nil {
+			return newSystemErrorWithCause(err, "chown dev subdir under rootfs")
 		}
 	}
 

@@ -20,10 +20,8 @@ package syscont
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 
 	mapset "github.com/deckarep/golang-set"
 	ipcLib "github.com/nestybox/sysbox-ipc/sysboxMgrLib"
@@ -497,7 +495,7 @@ func cfgReadonlyPaths(spec *specs.Spec) {
 }
 
 // cfgMounts configures the system container mounts
-func cfgMounts(spec *specs.Spec, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs, shiftUids bool) error {
+func cfgMounts(spec *specs.Spec, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs, uidShiftRootfs bool) error {
 
 	cfgSysboxMounts(spec)
 
@@ -506,7 +504,7 @@ func cfgMounts(spec *specs.Spec, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs, shiftUids
 	}
 
 	if sysMgr.Enabled() {
-		if err := sysMgrSetupMounts(sysMgr, spec, shiftUids); err != nil {
+		if err := sysMgrSetupMounts(sysMgr, spec, uidShiftRootfs); err != nil {
 			return err
 		}
 	}
@@ -585,10 +583,10 @@ func cfgSystemdMounts(spec *specs.Spec) {
 	spec.Mounts = append(spec.Mounts, sysboxSystemdMounts...)
 }
 
-// sysMgrSetupMounts requests the sysbox-mgr to setup special sys container mounts
-func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, shiftUids bool) error {
+// sysMgrSetupMounts requests the sysbox-mgr to setup special sys container mounts.
+func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, uidShiftRootfs bool) error {
 
-	// These directories in the sys container are bind-mounted to host dirs managed by sysbox-mgr
+	// These directories in the sys container are bind-mounted from host dirs managed by sysbox-mgr
 	specialDir := map[string]ipcLib.MntKind{
 		"/var/lib/docker":  ipcLib.MntVarLibDocker,
 		"/var/lib/kubelet": ipcLib.MntVarLibKubelet,
@@ -598,8 +596,9 @@ func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, shiftUids bool) error 
 	uid := spec.Linux.UIDMappings[0].HostID
 	gid := spec.Linux.GIDMappings[0].HostID
 
-	// If the spec has a bind-mount over one of the special dirs, ask the sysbox-mgr to
-	// prepare the mount source
+	// If the spec has a bind-mount over one of the special dirs, ask the
+	// sysbox-mgr to prepare the mount source (e.g., chown files to match the
+	// container host uid & gid).
 	prepList := []ipcLib.MountPrepInfo{}
 
 	for i := len(spec.Mounts) - 1; i >= 0; i-- {
@@ -608,24 +607,6 @@ func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, shiftUids bool) error 
 		_, isSpecialDir := specialDir[m.Destination]
 
 		if m.Type == "bind" && isSpecialDir {
-
-			// When using uid shifting, if the mount is on a special dir, and the source of
-			// that mount is a child dir of another bind-mount source, disallow it. For
-			// example, mounting /a/b/c->/var/lib/docker is not allowed if /, /a, or /a/b is
-			// also bind-mounted into the container. The reason is that this requires
-			// mounting shiftfs on the parent path, which means that the special mount would
-			// also be under shiftfs, and the latter is something we want to avoid (as k8s
-			// for example will fail when shiftfs is mounted on /var/lib/kubelet).
-
-			if shiftUids {
-				for _, om := range spec.Mounts {
-					if om.Source != m.Source && strings.HasPrefix(m.Source, om.Source) {
-						return fmt.Errorf("detected disallowed nested bind-mount sources (%s and %s); the latter is a mount over %s and thus can't be a subdir of the former",
-							om.Source, m.Source, m.Destination)
-					}
-				}
-			}
-
 			info := ipcLib.MountPrepInfo{
 				Source:    m.Source,
 				Exclusive: true,
@@ -637,13 +618,13 @@ func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, shiftUids bool) error 
 	}
 
 	if len(prepList) > 0 {
-		if err := mgr.PrepMounts(uid, gid, shiftUids, prepList); err != nil {
+		if err := mgr.PrepMounts(uid, gid, uidShiftRootfs, prepList); err != nil {
 			return err
 		}
 	}
 
-	// Otherwise, add the special dir to the list of mounts that we
-	// will request sysbox-mgr to setup
+	// Otherwise, add the special dir to the list of mounts that we will request
+	// sysbox-mgr to setup
 	reqList := []ipcLib.MountReqInfo{}
 	for dest, kind := range specialDir {
 		info := ipcLib.MountReqInfo{
@@ -660,12 +641,12 @@ func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, shiftUids bool) error 
 		return err
 	}
 
-	m, err := mgr.ReqMounts(rootPath, uid, gid, shiftUids, reqList)
+	m, err := mgr.ReqMounts(rootPath, uid, gid, uidShiftRootfs, reqList)
 	if err != nil {
 		return err
 	}
 
-	// If the sysbox-mgr mounts conflict with any in the spec (i.e.,
+	// If any sysbox-mgr mounts conflict with any in the spec (i.e.,
 	// same dest), prioritize the spec ones
 	mounts := utils.MountSliceRemove(m, spec.Mounts, func(m1, m2 specs.Mount) bool {
 		return m1.Destination == m2.Destination
@@ -839,53 +820,6 @@ func cfgAppArmor(p *specs.Process) error {
 	return nil
 }
 
-// needUidShiftOnRootfs checks if uid/gid shifting is required to run the system container.
-func needUidShiftOnRootfs(spec *specs.Spec) (bool, error) {
-	var hostUidMap, hostGidMap uint32
-
-	// the uid map is assumed to be present
-	for _, mapping := range spec.Linux.UIDMappings {
-		if mapping.ContainerID == 0 {
-			hostUidMap = mapping.HostID
-		}
-	}
-
-	// the gid map is assumed to be present
-	for _, mapping := range spec.Linux.GIDMappings {
-		if mapping.ContainerID == 0 {
-			hostGidMap = mapping.HostID
-		}
-	}
-
-	// find the rootfs owner
-	rootfs := spec.Root.Path
-
-	fi, err := os.Stat(rootfs)
-	if err != nil {
-		return false, err
-	}
-
-	st, ok := fi.Sys().(*syscall.Stat_t)
-	if !ok {
-		return false, fmt.Errorf("failed to convert to syscall.Stat_t")
-	}
-
-	rootfsUid := st.Uid
-	rootfsGid := st.Gid
-
-	// Use shifting when the rootfs is owned by true root, the containers uid/gid root
-	// mapping don't match the container's rootfs owner, and the host ID for the uid and
-	// gid mappings is the same.
-
-	if rootfsUid == 0 && rootfsGid == 0 &&
-		hostUidMap != rootfsUid && hostGidMap != rootfsGid &&
-		hostUidMap == hostGidMap {
-		return true, nil
-	}
-
-	return false, nil
-}
-
 // Configure environment variables required for systemd
 func cfgSystemdEnv(p *specs.Process) {
 
@@ -928,28 +862,28 @@ func ConvertProcessSpec(p *specs.Process) error {
 }
 
 // ConvertSpec converts the given container spec to a system container spec.
-func ConvertSpec(context *cli.Context, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs, spec *specs.Spec) (bool, error) {
+func ConvertSpec(context *cli.Context, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs, spec *specs.Spec) (bool, bool, error) {
 
 	if err := checkSpec(spec); err != nil {
-		return false, fmt.Errorf("invalid or unsupported container spec: %v", err)
+		return false, false, fmt.Errorf("invalid or unsupported container spec: %v", err)
 	}
 
 	if err := cfgNamespaces(sysMgr, spec); err != nil {
-		return false, fmt.Errorf("invalid namespace config: %v", err)
+		return false, false, fmt.Errorf("invalid namespace config: %v", err)
 	}
 
 	if err := cfgIDMappings(sysMgr, spec); err != nil {
-		return false, fmt.Errorf("invalid user/group ID config: %v", err)
+		return false, false, fmt.Errorf("invalid user/group ID config: %v", err)
 	}
 
-	// Must be done after cfgIDMappings()
-	shiftUids, err := needUidShiftOnRootfs(spec)
+	// Must do this after cfgIDMappings()
+	uidShiftSupported, uidShiftRootfs, err := sysbox.CheckUidShifting(spec)
 	if err != nil {
-		return false, fmt.Errorf("error while checking for uid-shifting need: %v", err)
+		return false, false, err
 	}
 
-	if err := cfgMounts(spec, sysMgr, sysFs, shiftUids); err != nil {
-		return false, fmt.Errorf("invalid mount config: %v", err)
+	if err := cfgMounts(spec, sysMgr, sysFs, uidShiftRootfs); err != nil {
+		return false, false, fmt.Errorf("invalid mount config: %v", err)
 	}
 
 	cfgMaskedPaths(spec)
@@ -957,12 +891,12 @@ func ConvertSpec(context *cli.Context, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs, spe
 	cfgOomScoreAdj(spec)
 
 	if err := cfgSeccomp(spec.Linux.Seccomp); err != nil {
-		return false, fmt.Errorf("failed to configure seccomp: %v", err)
+		return false, false, fmt.Errorf("failed to configure seccomp: %v", err)
 	}
 
 	if err := ConvertProcessSpec(spec.Process); err != nil {
-		return false, fmt.Errorf("failed to configure process spec: %v", err)
+		return false, false, fmt.Errorf("failed to configure process spec: %v", err)
 	}
 
-	return shiftUids, nil
+	return uidShiftSupported, uidShiftRootfs, nil
 }

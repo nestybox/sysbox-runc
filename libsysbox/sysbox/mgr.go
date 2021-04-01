@@ -128,8 +128,8 @@ func (mgr *Mgr) ReqMounts(rootfs string, uid, gid uint32, shiftUids bool, reqLis
 }
 
 // ReqShiftfsMark sends a request to sysbox-mgr to mark shiftfs on the given dirs; all paths must be absolute.
-func (mgr *Mgr) ReqShiftfsMark(rootfs string, mounts []configs.ShiftfsMount) error {
-	if err := sysboxMgrGrpc.ReqShiftfsMark(mgr.Id, rootfs, mounts); err != nil {
+func (mgr *Mgr) ReqShiftfsMark(mounts []configs.ShiftfsMount) error {
+	if err := sysboxMgrGrpc.ReqShiftfsMark(mgr.Id, mounts); err != nil {
 		return fmt.Errorf("failed to request shiftfs marking to sysbox-mgr: %v", err)
 	}
 	return nil

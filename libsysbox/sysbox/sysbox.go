@@ -22,21 +22,20 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"syscall"
 	"unsafe"
 
 	libutils "github.com/nestybox/sysbox-libs/utils"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"
 )
 
 // The min supported kernel release is chosen based on whether it contains all kernel
-// fixes required to run sysbox. Refer to the sysbox github issues and search for
-// "kernel".
+// fixes required to run sysbox. Refer to the Sysbox distro compatibility doc.
 type kernelRelease struct{ major, minor int }
 
-var minKernel = kernelRelease{4, 10} // 4.10 (see issue #89)
-
-// uid shifting requires shiftfs, currenlty present in Ubuntu only.
-var uidShiftDistros = []string{"ubuntu"}
+var minKernel = kernelRelease{5, 5}       // 5.5
+var minKernelUbuntu = kernelRelease{5, 0} // 5.0
 
 func readFileInt(path string) (int, error) {
 
@@ -101,30 +100,8 @@ func checkUnprivilegedUserns() error {
 	return nil
 }
 
-// checkDistro checks if the host has a supported distro
-func checkDistro(shiftUids bool) error {
-
-	// there are currently no distro requirements when uid shifting is not used
-	if !shiftUids {
-		return nil
-	}
-
-	osrelease, err := libutils.GetDistro()
-	if err != nil {
-		return err
-	}
-
-	for _, entry := range uidShiftDistros {
-		if entry == osrelease {
-			return nil
-		}
-	}
-
-	return fmt.Errorf("%s is not supported when using uid shifting; supported distros are %v",
-		osrelease, uidShiftDistros)
-}
-
-func checkKernel(uidShift bool) error {
+func checkKernelVersion(distro string) error {
+	var kmaj, kmin int
 
 	rel, err := libutils.GetKernelRelease()
 	if err != nil {
@@ -146,8 +123,13 @@ func checkKernel(uidShift bool) error {
 		return fmt.Errorf("failed to parse kernel release %v", rel)
 	}
 
-	kmaj := minKernel.major
-	kmin := minKernel.minor
+	if distro == "ubuntu" {
+		kmaj = minKernelUbuntu.major
+		kmin = minKernelUbuntu.minor
+	} else {
+		kmaj = minKernel.major
+		kmin = minKernel.minor
+	}
 
 	supported := false
 	if major > kmaj {
@@ -161,26 +143,115 @@ func checkKernel(uidShift bool) error {
 	if !supported {
 		s := []string{strconv.Itoa(kmaj), strconv.Itoa(kmin)}
 		kver := strings.Join(s, ".")
-		return fmt.Errorf("kernel release %v is not supported; need >= %v", rel, kver)
+		return fmt.Errorf("%s kernel release %v is not supported; need >= %v", distro, rel, kver)
 	}
 
 	return nil
 }
 
-// CheckHostConfig checks if the host is configured appropriately to run sysbox-runc
-func CheckHostConfig(context *cli.Context, shiftUids bool) error {
+// needUidShiftOnRootfs checks if uid/gid shifting is required on the container's rootfs.
+func needUidShiftOnRootfs(spec *specs.Spec) (bool, error) {
+	var hostUidMap, hostGidMap uint32
+
+	// the uid map is assumed to be present
+	for _, mapping := range spec.Linux.UIDMappings {
+		if mapping.ContainerID == 0 {
+			hostUidMap = mapping.HostID
+		}
+	}
+
+	// the gid map is assumed to be present
+	for _, mapping := range spec.Linux.GIDMappings {
+		if mapping.ContainerID == 0 {
+			hostGidMap = mapping.HostID
+		}
+	}
+
+	// find the rootfs owner
+	rootfs := spec.Root.Path
+
+	fi, err := os.Stat(rootfs)
+	if err != nil {
+		return false, err
+	}
+
+	st, ok := fi.Sys().(*syscall.Stat_t)
+	if !ok {
+		return false, fmt.Errorf("failed to convert to syscall.Stat_t")
+	}
+
+	rootfsUid := st.Uid
+	rootfsGid := st.Gid
+
+	// Use shifting when the rootfs is owned by true root and the containers uid/gid root
+	// mapping don't match the container's rootfs owner.
+	if rootfsUid == 0 && rootfsGid == 0 &&
+		hostUidMap != rootfsUid && hostGidMap != rootfsGid {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func hostSupportsUidShifting() bool {
+
+	// For now Sysbox requires the kernel shiftfs module for UID shifting
+	// (present by default in recent Ubuntu desktop & server editions).
+	//
+	// TODO: now that ID-mapped mounts have been added to the 5.12 Linux kernel,
+	// we should leverage that functionality for uid-shifting when possible. This
+	// would void the need for shiftfs and thus increase the number of distros
+	// supported by Sysbox.
+
+	if err := KernelModSupported("shiftfs"); err == nil {
+		return true
+	}
+
+	return false
+}
+
+// checkUidShifting checks if the host supports uid shifting.
+// The first return value indicates if the host supports
+// uid shifting, and the second indicates if uid shifting is
+// required for the container's rootfs. If uid shifting is not
+// supported but is required for this container, the function
+// returns an error.
+func CheckUidShifting(spec *specs.Spec) (bool, bool, error) {
+
+	uidShiftSupported := hostSupportsUidShifting()
+
+	uidShiftRootfs, err := needUidShiftOnRootfs(spec)
+	if err != nil {
+		return false, false, fmt.Errorf("failed to check uid shifting requirement on rootfs: %s", err)
+	}
+
+	if !uidShiftSupported && uidShiftRootfs {
+		return false, false, fmt.Errorf("this container requires user-ID shifting but the kernel does not support it."+
+			" Upgrade your kernel to include the shiftfs module, or alternatively enable Linux user-namespace"+
+			" support in the the container manager (e.g., Docker userns-remap, CRI-O userns annotation, etc)."+
+			" Refer to the Sysbox troubleshooting guide for more info", err)
+	}
+
+	return uidShiftSupported, uidShiftRootfs, nil
+}
+
+// CheckHostConfig checks if the host is configured appropriately to run a
+// container with sysbox
+func CheckHostConfig(context *cli.Context, spec *specs.Spec) error {
+
+	distro, err := libutils.GetDistro()
+	if err != nil {
+		return err
+	}
 
 	if !context.GlobalBool("no-kernel-check") {
-		if err := checkDistro(shiftUids); err != nil {
-			return fmt.Errorf("distro support check: %v", err)
-		}
-		if err := checkKernel(shiftUids); err != nil {
-			return fmt.Errorf("kernel support check: %v", err)
+		if err := checkKernelVersion(distro); err != nil {
+			return fmt.Errorf("kernel version check failed: %v", err)
 		}
 	}
 
 	if err := checkUnprivilegedUserns(); err != nil {
-		return fmt.Errorf("host is not configured properly: %v", err)
+		return err
 	}
 
 	return nil

@@ -23,12 +23,11 @@ const (
 
 	// sysbox-runc
 	PrepRootfsAttr     uint16 = 27290
-	UseShiftfsAttr     uint16 = 27291
-	MakeParentPrivAttr uint16 = 27292
-	RootfsPropAttr     uint16 = 27293
-	RootfsAttr         uint16 = 27294
-	ParentMountAttr    uint16 = 27295
-	ShiftfsMountsAttr  uint16 = 27296
+	MakeParentPrivAttr uint16 = 27291
+	RootfsPropAttr     uint16 = 27292
+	RootfsAttr         uint16 = 27293
+	ParentMountAttr    uint16 = 27294
+	ShiftfsMountsAttr  uint16 = 27295
 )
 
 type Int32msg struct {
