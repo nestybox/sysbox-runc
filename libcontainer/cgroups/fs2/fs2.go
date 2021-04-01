@@ -143,6 +143,10 @@ func (m *manager) GetStats() (*cgroups.Stats, error) {
 			errs = append(errs, err)
 		}
 	}
+	// rdma (since kernel 4.11)
+	if err := fscommon.RdmaGetStats(m.dirPath, st); err != nil && !os.IsNotExist(err) {
+		errs = append(errs, err)
+	}
 	if len(errs) > 0 && !m.rootless {
 		return st, errors.Errorf("error while statting cgroup v2: %+v", errs)
 	}
@@ -202,6 +206,10 @@ func (m *manager) Set(container *configs.Config) error {
 	}
 	// hugetlb (since kernel 5.6)
 	if err := setHugeTlb(m.dirPath, container.Cgroups); err != nil {
+		return err
+	}
+	// rdma (since kernel 4.11)
+	if err := fscommon.RdmaSet(m.dirPath, r); err != nil {
 		return err
 	}
 	// freezer (since kernel 5.2, pseudo-controller)
