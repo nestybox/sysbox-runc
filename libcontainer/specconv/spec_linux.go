@@ -193,15 +193,16 @@ var AllowedDevices = []*devices.Device{
 }
 
 type CreateOpts struct {
-	CgroupName       string
-	UseSystemdCgroup bool
-	NoPivotRoot      bool
-	NoNewKeyring     bool
-	Spec             *specs.Spec
-	RootlessEUID     bool
-	RootlessCgroups  bool
-	ShiftUids        bool
-	SwitchDockerDns  bool
+	CgroupName        string
+	UseSystemdCgroup  bool
+	NoPivotRoot       bool
+	NoNewKeyring      bool
+	Spec              *specs.Spec
+	RootlessEUID      bool
+	RootlessCgroups   bool
+	UidShiftSupported bool
+	UidShiftRootfs    bool
+	SwitchDockerDns   bool
 }
 
 // CreateLibcontainerConfig creates a new libcontainer configuration from a
@@ -229,16 +230,17 @@ func CreateLibcontainerConfig(opts *CreateOpts) (*configs.Config, error) {
 		labels = append(labels, k+"="+v)
 	}
 	config := &configs.Config{
-		Rootfs:          rootfsPath,
-		NoPivotRoot:     opts.NoPivotRoot,
-		Readonlyfs:      spec.Root.Readonly,
-		Hostname:        spec.Hostname,
-		Labels:          append(labels, "bundle="+cwd),
-		NoNewKeyring:    opts.NoNewKeyring,
-		RootlessEUID:    opts.RootlessEUID,
-		RootlessCgroups: opts.RootlessCgroups,
-		ShiftUids:       opts.ShiftUids,
-		SwitchDockerDns: opts.SwitchDockerDns,
+		Rootfs:            rootfsPath,
+		NoPivotRoot:       opts.NoPivotRoot,
+		Readonlyfs:        spec.Root.Readonly,
+		Hostname:          spec.Hostname,
+		Labels:            append(labels, "bundle="+cwd),
+		NoNewKeyring:      opts.NoNewKeyring,
+		RootlessEUID:      opts.RootlessEUID,
+		RootlessCgroups:   opts.RootlessCgroups,
+		UidShiftSupported: opts.UidShiftSupported,
+		UidShiftRootfs:    opts.UidShiftRootfs,
+		SwitchDockerDns:   opts.SwitchDockerDns,
 	}
 
 	for _, m := range spec.Mounts {

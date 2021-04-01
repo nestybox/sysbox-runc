@@ -69,11 +69,12 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 	},
 	Action: func(context *cli.Context) error {
 		var (
-			err       error
-			spec      *specs.Spec
-			shiftUids bool
-			status    int
-			profiler  interface{ Stop() }
+			err               error
+			spec              *specs.Spec
+			uidShiftSupported bool
+			uidShiftRootfs    bool
+			status            int
+			profiler          interface{ Stop() }
 		)
 
 		// Enable profiler if requested to do so
@@ -101,6 +102,10 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 			return err
 		}
 
+		if err = sysbox.CheckHostConfig(context, spec); err != nil {
+			return err
+		}
+
 		id := context.Args().First()
 		sysMgr := sysbox.NewMgr(id, !context.GlobalBool("no-sysbox-mgr"))
 		sysFs := sysbox.NewFs(id, !context.GlobalBool("no-sysbox-fs"))
@@ -117,13 +122,9 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 			}()
 		}
 
-		shiftUids, err = syscont.ConvertSpec(context, sysMgr, sysFs, spec)
+		uidShiftSupported, uidShiftRootfs, err = syscont.ConvertSpec(context, sysMgr, sysFs, spec)
 		if err != nil {
 			return fmt.Errorf("error in the container spec: %v", err)
-		}
-
-		if err = sysbox.CheckHostConfig(context, shiftUids); err != nil {
-			return err
 		}
 
 		// pre-register with sysFs
@@ -138,7 +139,7 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 			}()
 		}
 
-		status, err = startContainer(context, spec, CT_ACT_RUN, nil, shiftUids, sysMgr, sysFs)
+		status, err = startContainer(context, spec, CT_ACT_RUN, nil, uidShiftSupported, uidShiftRootfs, sysMgr, sysFs)
 		if err == nil {
 
 			// note: defer func() to stop profiler won't execute on os.Exit(); must explicitly stop it.

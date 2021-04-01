@@ -91,7 +91,6 @@ struct nlconfig_t {
 
 	/* sysbox-runc: rootfs prep */
 	uint8_t prep_rootfs; /* boolean */
-	uint8_t use_shiftfs; /* boolean */
 	uint8_t make_parent_priv; /* boolean */
 	uint32_t rootfs_prop;
 	char *rootfs;
@@ -126,12 +125,11 @@ static int logfd = -1;
 #define UIDMAPPATH_ATTR	   27288
 #define GIDMAPPATH_ATTR	   27289
 #define PREP_ROOTFS_ATTR   27290
-#define USE_SHIFTFS_ATTR   27291
-#define MAKE_PARENT_PRIV_ATTR 27292
-#define ROOTFS_PROP_ATTR   27293
-#define ROOTFS_ATTR        27294
-#define PARENT_MOUNT_ATTR  27295
-#define SHIFTFS_MOUNTS_ATTR 27296
+#define MAKE_PARENT_PRIV_ATTR 27291
+#define ROOTFS_PROP_ATTR   27292
+#define ROOTFS_ATTR        27293
+#define PARENT_MOUNT_ATTR  27294
+#define SHIFTFS_MOUNTS_ATTR 27295
 
 /*
  * Use the raw syscall for versions of glibc which don't include a function for
@@ -520,9 +518,6 @@ static void nl_parse(int fd, struct nlconfig_t *config)
 	   case PREP_ROOTFS_ATTR:
 			config->prep_rootfs = readint8(current);
 			break;
-	   case USE_SHIFTFS_ATTR:
-			config->use_shiftfs = readint8(current);
-			break;
 	   case MAKE_PARENT_PRIV_ATTR:
 			config->make_parent_priv = readint8(current);
 			break;
@@ -622,29 +617,32 @@ void join_namespaces(char *nslist)
 }
 
 /* sysbox-runc */
-int mount_shiftfs_on_bind_sources(char *mntlist) {
+int mount_shiftfs(struct nlconfig_t *config) {
 	char *saveptr = NULL;
+	char *mntlist = config->shiftfs_mounts;
 	char *mntpath = strtok_r(mntlist, ",", &saveptr);
 
 	if (!mntpath || !strlen(mntpath) || !strlen(mntlist))
 		return 0;
 
 	do {
-		if (mount(mntpath, mntpath, "shiftfs", 0, "") < 0) {
-			return -1;
+		// For shiftfs mounts over the container's rootfs, we use "." (cwd)
+		// instead of the mount path because the container may no longer have
+		// search permissions into the full path of the rootfs (i.e., may have
+		// lost permissions when it entered the user-ns). Note that by design, the
+		// nsenter process' cwd is the container's rootfs.
+
+		if (strcmp(mntpath, config->rootfs) == 0) {
+			if (mount(".", ".", "shiftfs", 0, "") < 0)
+				return -1;
+		} else {
+			if (mount(mntpath, mntpath, "shiftfs", 0, "") < 0)
+				return -1;
 		}
+
 	} while ((mntpath = strtok_r(NULL, ",", &saveptr)) != NULL);
 
 	return 0;
-}
-
-/* sysbox-runc */
-int mount_shiftfs(struct nlconfig_t *config) {
-	// Note: by design cwd = rootfs
-	if (mount(".", ".", "shiftfs", 0, "") < 0)
-		return -1;
-
-	return mount_shiftfs_on_bind_sources(config->shiftfs_mounts);
 }
 
 /* Defined in cloned_binary.c. */
@@ -1003,10 +1001,8 @@ void nsexec(void)
 					if (mount(".", ".", "bind", MS_BIND|MS_REC, "") < 0)
 						bail("failed to create bind-to-self mount on rootfs.");
 
-					if (config.use_shiftfs) {
-						if (mount_shiftfs(&config) == 0)
-							shiftfs_mounts_done = true;
-					}
+					if (mount_shiftfs(&config) == 0)
+						shiftfs_mounts_done = true;
 				}
 			}
 
@@ -1059,7 +1055,7 @@ void nsexec(void)
 					bail("failed to create bind-to-self mount on rootfs.");
 			}
 
-			if (config.use_shiftfs && !shiftfs_mounts_done) {
+			if (config.prep_rootfs && !shiftfs_mounts_done) {
 				if (mount_shiftfs(&config) < 0) {
 					bail("failed to setup shiftfs mounts");
 				}

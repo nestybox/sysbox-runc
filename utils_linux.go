@@ -268,7 +268,12 @@ func sysMgrGetFsState(mgr *sysbox.Mgr, config *configs.Config) error {
 	return nil
 }
 
-func createContainer(context *cli.Context, id string, spec *specs.Spec, shiftUids, switchDockerDns bool, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs) (libcontainer.Container, error) {
+func createContainer(context *cli.Context,
+	id string,
+	spec *specs.Spec,
+	uidShiftSupported, uidShiftRootfs, switchDockerDns bool,
+	sysMgr *sysbox.Mgr,
+	sysFs *sysbox.Fs) (libcontainer.Container, error) {
 
 	rootlessCg, err := shouldUseRootlessCgroupManager(context)
 	if err != nil {
@@ -276,15 +281,16 @@ func createContainer(context *cli.Context, id string, spec *specs.Spec, shiftUid
 	}
 
 	config, err := specconv.CreateLibcontainerConfig(&specconv.CreateOpts{
-		CgroupName:       id,
-		UseSystemdCgroup: context.GlobalBool("systemd-cgroup"),
-		NoPivotRoot:      context.Bool("no-pivot"),
-		NoNewKeyring:     context.Bool("no-new-keyring"),
-		Spec:             spec,
-		RootlessEUID:     os.Geteuid() != 0,
-		RootlessCgroups:  rootlessCg,
-		ShiftUids:        shiftUids,
-		SwitchDockerDns:  switchDockerDns,
+		CgroupName:        id,
+		UseSystemdCgroup:  context.GlobalBool("systemd-cgroup"),
+		NoPivotRoot:       context.Bool("no-pivot"),
+		NoNewKeyring:      context.Bool("no-new-keyring"),
+		Spec:              spec,
+		RootlessEUID:      os.Geteuid() != 0,
+		RootlessCgroups:   rootlessCg,
+		UidShiftSupported: uidShiftSupported,
+		UidShiftRootfs:    uidShiftRootfs,
+		SwitchDockerDns:   switchDockerDns,
 	})
 	if err != nil {
 		return nil, err
@@ -472,15 +478,13 @@ const (
 	CT_ACT_RESTORE
 )
 
-func startContainer(context *cli.Context, spec *specs.Spec, action CtAct, criuOpts *libcontainer.CriuOpts, shiftUids bool, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs) (int, error) {
-
-	if shiftUids {
-		if err := sysbox.KernelModSupported("shiftfs"); err != nil {
-			return -1, fmt.Errorf("container requires user-ID shifting but error was found: %v."+
-				" Update your kernel to include shiftfs module or enable Docker with userns-remap."+
-				" Refer to the Sysbox troubleshooting guide for more info", err)
-		}
-	}
+func startContainer(context *cli.Context,
+	spec *specs.Spec,
+	action CtAct,
+	criuOpts *libcontainer.CriuOpts,
+	uidShiftSupported, uidShiftRootfs bool,
+	sysMgr *sysbox.Mgr,
+	sysFs *sysbox.Fs) (int, error) {
 
 	id := context.Args().First()
 	if id == "" {
@@ -503,7 +507,7 @@ func startContainer(context *cli.Context, spec *specs.Spec, action CtAct, criuOp
 		}
 	}
 
-	container, err := createContainer(context, id, spec, shiftUids, switchDockerDns, sysMgr, sysFs)
+	container, err := createContainer(context, id, spec, uidShiftSupported, uidShiftRootfs, switchDockerDns, sysMgr, sysFs)
 	if err != nil {
 		return -1, err
 	}
