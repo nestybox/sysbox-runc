@@ -111,8 +111,8 @@ func (mgr *Mgr) ReqSubid(size uint32) (uint32, uint32, error) {
 }
 
 // PrepMounts sends a request to sysbox-mgr for prepare the given  container mounts; all paths must be absolute.
-func (mgr *Mgr) PrepMounts(uid, gid uint32, shiftUids bool, prepList []ipcLib.MountPrepInfo) error {
-	if err := sysboxMgrGrpc.PrepMounts(mgr.Id, uid, gid, shiftUids, prepList); err != nil {
+func (mgr *Mgr) PrepMounts(uid, gid uint32, prepList []ipcLib.MountPrepInfo) error {
+	if err := sysboxMgrGrpc.PrepMounts(mgr.Id, uid, gid, prepList); err != nil {
 		return fmt.Errorf("failed to request mount source preps from sysbox-mgr: %v", err)
 	}
 	return nil
