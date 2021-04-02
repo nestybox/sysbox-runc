@@ -618,7 +618,7 @@ func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, uidShiftRootfs bool) e
 	}
 
 	if len(prepList) > 0 {
-		if err := mgr.PrepMounts(uid, gid, uidShiftRootfs, prepList); err != nil {
+		if err := mgr.PrepMounts(uid, gid, prepList); err != nil {
 			return err
 		}
 	}
