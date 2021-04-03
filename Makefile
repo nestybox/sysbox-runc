@@ -143,7 +143,7 @@ localintegration-shiftuid: all
 ifeq ($(SHIFTFS_MODULE_PRESENT),)
 	@printf "\n** Skipped 'localintegration-shiftuid' target due to missing 'shiftfs' module **\n\n"
 else
-	SHIFT_UIDS=true bats -t tests/integration${TESTPATH}
+	SHIFT_ROOTFS_UIDS=true bats -t tests/integration${TESTPATH}
 endif
 
 shell: runcimage

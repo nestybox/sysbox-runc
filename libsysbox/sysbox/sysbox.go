@@ -226,10 +226,10 @@ func CheckUidShifting(spec *specs.Spec) (bool, bool, error) {
 	}
 
 	if !uidShiftSupported && uidShiftRootfs {
-		return false, false, fmt.Errorf("this container requires user-ID shifting but the kernel does not support it."+
-			" Upgrade your kernel to include the shiftfs module, or alternatively enable Linux user-namespace"+
-			" support in the the container manager (e.g., Docker userns-remap, CRI-O userns annotation, etc)."+
-			" Refer to the Sysbox troubleshooting guide for more info", err)
+		return false, false, fmt.Errorf("this container requires user-ID shifting but the kernel does not support it." +
+			" Upgrade your kernel to include the shiftfs module, or alternatively enable Linux user-namespace" +
+			" support in the the container manager (e.g., Docker userns-remap, CRI-O userns annotation, etc)." +
+			" Refer to the Sysbox troubleshooting guide for more info.")
 	}
 
 	return uidShiftSupported, uidShiftRootfs, nil
