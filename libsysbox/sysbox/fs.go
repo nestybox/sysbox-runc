@@ -41,6 +41,7 @@ type FsRegInfo struct {
 type Fs struct {
 	Active bool
 	Id     string // container-id
+	PreReg bool   // indicates if the container was pre-registered with sysbox-fs
 	Reg    bool   // indicates if sys container was registered with sysbox-fs
 }
 
@@ -57,8 +58,8 @@ func (fs *Fs) Enabled() bool {
 
 // Pre-registers container with sysbox-fs.
 func (fs *Fs) PreRegister(linuxNamespaces []specs.LinuxNamespace) error {
-	if fs.Reg {
-		return fmt.Errorf("container %v already registered", fs.Id)
+	if fs.PreReg {
+		return fmt.Errorf("container %v already pre-registered", fs.Id)
 	}
 
 	data := &sysboxFsGrpc.ContainerData{
@@ -79,11 +80,18 @@ func (fs *Fs) PreRegister(linuxNamespaces []specs.LinuxNamespace) error {
 		return fmt.Errorf("failed to pre-register with sysbox-fs: %v", err)
 	}
 
+	fs.PreReg = true
+
 	return nil
 }
 
 // Registers container with sysbox-fs.
 func (fs *Fs) Register(info *FsRegInfo) error {
+
+	if !fs.PreReg {
+		return fmt.Errorf("container %v was not pre-registered", fs.Id)
+	}
+
 	if fs.Reg {
 		return fmt.Errorf("container %v already registered", fs.Id)
 	}
@@ -149,13 +157,14 @@ func (fs *Fs) SendSeccompInit(pid int, id string, seccompFd int32) error {
 
 // Unregisters the container with sysbox-fs
 func (fs *Fs) Unregister() error {
-	if fs.Reg {
+	if fs.PreReg || fs.Reg {
 		data := &sysboxFsGrpc.ContainerData{
 			Id: fs.Id,
 		}
 		if err := sysboxFsGrpc.SendContainerUnregistration(data); err != nil {
 			return fmt.Errorf("failed to unregister with sysbox-fs: %v", err)
 		}
+		fs.PreReg = false
 		fs.Reg = false
 	}
 	return nil
