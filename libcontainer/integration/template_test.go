@@ -104,7 +104,8 @@ func newTemplateConfig(p *tParam) *configs.Config {
 			"/sys/firmware",
 		},
 		ReadonlyPaths: []string{
-			"/proc/sys", "/proc/sysrq-trigger", "/proc/irq", "/proc/bus",
+			// sysbox-runc: /proc/sys is never read-only in sysbox containers
+			"/proc/sysrq-trigger", "/proc/irq", "/proc/bus",
 		},
 		Devices:  specconv.AllowedDevices,
 		Hostname: "integration",

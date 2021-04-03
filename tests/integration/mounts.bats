@@ -11,7 +11,7 @@ function setup_busybox_tmpfs() {
 
 	# sysbox-runc: set bundle ownership to match system
 	# container's uid(gid) map, except if using uid-shifting
-	if [ -z "$SHIFT_UIDS" ]; then
+	if [ -z "$SHIFT_ROOTFS_UIDS" ]; then
 		chown -R "$UID_MAP":"$GID_MAP" /tmp/busyboxtest
 	fi
 
@@ -104,7 +104,7 @@ function teardown() {
 
 	runc run test_busybox
 
-	if [ -z "$SHIFT_UIDS" ]; then
+	if [ -z "$SHIFT_ROOTFS_UIDS" ]; then
 		[ "$status" -eq 0 ]
 		[[ "${lines[0]}" =~ config.json ]]
 	else
@@ -181,7 +181,7 @@ function teardown() {
 	# in container, /conf -> /real/conf
 	mkdir -p rootfs/real/conf
 
-	if [ -z "$SHIFT_UIDS" ]; then
+	if [ -z "$SHIFT_ROOTFS_UIDS" ]; then
 		chown -R "$UID_MAP":"$GID_MAP" rootfs/real/conf
 	fi
 

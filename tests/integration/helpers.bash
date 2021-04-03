@@ -529,7 +529,7 @@ function setup_busybox() {
 
 	# sysbox-runc: set bundle ownership to match system
 	# container's uid/gid map, except if using uid-shifting
-	if [ -z "$SHIFT_UIDS" ]; then
+	if [ -z "$SHIFT_ROOTFS_UIDS" ]; then
 		chown -R "$UID_MAP":"$GID_MAP" "$BUSYBOX_BUNDLE"
 	fi
 
@@ -546,7 +546,7 @@ function setup_hello() {
 
 	# sysbox-runc: set bundle ownership to match system
 	# container's uid/gid map, except if using uid-shifting
-	if [ -z "$SHIFT_UIDS" ]; then
+	if [ -z "$SHIFT_ROOTFS_UIDS" ]; then
 		chown -R "$UID_MAP":"$GID_MAP" "$HELLO_BUNDLE"
 	fi
 

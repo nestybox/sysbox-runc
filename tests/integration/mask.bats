@@ -11,7 +11,7 @@ function setup() {
 	echo "Forbidden information!" >rootfs/testfile
 
 	# sysbox-runc
-	if [ -z "$SHIFT_UIDS" ]; then
+	if [ -z "$SHIFT_ROOTFS_UIDS" ]; then
 		chown "$UID_MAP":"$GID_MAP" rootfs/testdir
 		chown "$UID_MAP":"$GID_MAP" rootfs/testfile
 	fi

@@ -345,17 +345,19 @@ func cfgNamespaces(sysMgr *sysbox.Mgr, spec *specs.Spec) error {
 	}
 
 	// Check if we have a sysbox-mgr override for the container's user-ns
-	if sysMgr.Config.Userns != "" {
-		updatedNs := []specs.LinuxNamespace{}
+	if sysMgr.Enabled() {
+		if sysMgr.Config != nil && sysMgr.Config.Userns != "" {
+			updatedNs := []specs.LinuxNamespace{}
 
-		for _, ns := range spec.Linux.Namespaces {
-			if ns.Type == specs.UserNamespace {
-				ns.Path = sysMgr.Config.Userns
+			for _, ns := range spec.Linux.Namespaces {
+				if ns.Type == specs.UserNamespace {
+					ns.Path = sysMgr.Config.Userns
+				}
+				updatedNs = append(updatedNs, ns)
 			}
-			updatedNs = append(updatedNs, ns)
-		}
 
-		spec.Linux.Namespaces = updatedNs
+			spec.Linux.Namespaces = updatedNs
+		}
 	}
 
 	return nil
@@ -433,14 +435,14 @@ func validateIDMappings(spec *specs.Spec) error {
 // root Uid (i.e., identity-mappings); some runc tests use such mappings.
 func cfgIDMappings(sysMgr *sysbox.Mgr, spec *specs.Spec) error {
 
-	// Honor user-ns Uid mapping spec overrides from sysbox-mgr
-	if len(sysMgr.Config.UidMappings) > 0 {
-		spec.Linux.UIDMappings = sysMgr.Config.UidMappings
-	}
-
-	// Honor user-ns Gid mapping spec overrides from sysbox-mgr
-	if len(sysMgr.Config.GidMappings) > 0 {
-		spec.Linux.GIDMappings = sysMgr.Config.GidMappings
+	// Honor user-ns uid & gid mapping spec overrides from sysbox-mgr
+	if sysMgr.Enabled() && sysMgr.Config != nil {
+		if len(sysMgr.Config.UidMappings) > 0 {
+			spec.Linux.UIDMappings = sysMgr.Config.UidMappings
+		}
+		if len(sysMgr.Config.GidMappings) > 0 {
+			spec.Linux.GIDMappings = sysMgr.Config.GidMappings
+		}
 	}
 
 	// If no mappings are present, let's allocate some

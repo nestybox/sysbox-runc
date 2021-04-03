@@ -990,6 +990,7 @@ func TestPassExtraFiles(t *testing.T) {
 }
 
 func TestSysctl(t *testing.T) {
+
 	if testing.Short() {
 		return
 	}
@@ -1016,6 +1017,7 @@ func TestSysctl(t *testing.T) {
 		Stdout: &stdout,
 		Init:   true,
 	}
+
 	err = container.Run(&pconfig)
 	ok(t, err)
 
