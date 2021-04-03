@@ -2502,40 +2502,44 @@ func (c *linuxContainer) setupShiftfsMarks() error {
 	}
 
 	// Determine if other host directories mounted into the container's rootfs
-	// need uid shifting.
-	for _, m := range config.Mounts {
-		if m.Device == "bind" {
-			needShiftfs, err := needUidShiftOnBindSrc(m, config)
-			if err != nil {
-				return newSystemErrorWithCause(err, "checking uid shifting on bind source")
-			}
+	// need uid shifting. Sysbox config option BindMountuidshift disables this
+	// behavior.
 
-			if !needShiftfs {
-				continue
-			}
+	if c.sysMgr.Config.BindMountUidShift {
+		for _, m := range config.Mounts {
+			if m.Device == "bind" {
+				needShiftfs, err := needUidShiftOnBindSrc(m, config)
+				if err != nil {
+					return newSystemErrorWithCause(err, "checking uid shifting on bind source")
+				}
 
-			// shiftfs mounts must be on directories (not on files)
-			var dir string
-			if !m.BindSrcInfo.IsDir {
-				dir = filepath.Dir(m.Source)
-			} else {
-				dir = m.Source
-			}
+				if !needShiftfs {
+					continue
+				}
 
-			if err := allowShiftfsBindSource(config, dir); err != nil {
-				return newSystemErrorWithCause(err, "validating bind source")
-			}
+				// shiftfs mounts must be on directories (not on files)
+				var dir string
+				if !m.BindSrcInfo.IsDir {
+					dir = filepath.Dir(m.Source)
+				} else {
+					dir = m.Source
+				}
 
-			if err := skipShiftfsBindSource(dir); err != nil {
-				continue
-			}
+				if err := allowShiftfsBindSource(config, dir); err != nil {
+					return newSystemErrorWithCause(err, "validating bind source")
+				}
 
-			sm := configs.ShiftfsMount{
-				Source:   dir,
-				Readonly: m.Flags&unix.MS_RDONLY == unix.MS_RDONLY,
-			}
+				if err := skipShiftfsBindSource(dir); err != nil {
+					continue
+				}
 
-			shiftfsMounts = append(shiftfsMounts, sm)
+				sm := configs.ShiftfsMount{
+					Source:   dir,
+					Readonly: m.Flags&unix.MS_RDONLY == unix.MS_RDONLY,
+				}
+
+				shiftfsMounts = append(shiftfsMounts, sm)
+			}
 		}
 	}
 
