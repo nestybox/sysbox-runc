@@ -346,7 +346,7 @@ func cfgNamespaces(sysMgr *sysbox.Mgr, spec *specs.Spec) error {
 
 	// Check if we have a sysbox-mgr override for the container's user-ns
 	if sysMgr.Enabled() {
-		if sysMgr.Config != nil && sysMgr.Config.Userns != "" {
+		if sysMgr.Config.Userns != "" {
 			updatedNs := []specs.LinuxNamespace{}
 
 			for _, ns := range spec.Linux.Namespaces {
@@ -436,7 +436,7 @@ func validateIDMappings(spec *specs.Spec) error {
 func cfgIDMappings(sysMgr *sysbox.Mgr, spec *specs.Spec) error {
 
 	// Honor user-ns uid & gid mapping spec overrides from sysbox-mgr
-	if sysMgr.Enabled() && sysMgr.Config != nil {
+	if sysMgr.Enabled() {
 		if len(sysMgr.Config.UidMappings) > 0 {
 			spec.Linux.UIDMappings = sysMgr.Config.UidMappings
 		}
