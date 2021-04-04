@@ -371,3 +371,152 @@ func TestCfgSystemdOverride(t *testing.T) {
 		t.Errorf("cfgSystemd() failed: spec.Mounts: want %v, got %v", wantMounts, spec.Mounts)
 	}
 }
+
+func TestValidateIDMappings(t *testing.T) {
+	var err error
+
+	spec := new(specs.Spec)
+	spec.Linux = new(specs.Linux)
+
+	// Test empty user-ns ID mappings
+	spec.Linux.UIDMappings = []specs.LinuxIDMapping{}
+	spec.Linux.GIDMappings = []specs.LinuxIDMapping{}
+
+	err = validateIDMappings(spec)
+	if err == nil {
+		t.Errorf("validateIDMappings(): expected failure due to empty mappings, but it passed")
+	}
+
+	// Test non-contiguous container ID mappings
+	spec.Linux.UIDMappings = []specs.LinuxIDMapping{
+		{ContainerID: 0, HostID: 1000000, Size: 1},
+		{ContainerID: 2, HostID: 1000001, Size: 65535},
+	}
+
+	spec.Linux.GIDMappings = spec.Linux.UIDMappings
+
+	err = validateIDMappings(spec)
+	if err == nil {
+		t.Errorf("validateIDMappings(): expected failure due to non-contiguous container ID mappings, but it passed")
+	}
+
+	// Test non-contiguous host ID mappings
+	spec.Linux.UIDMappings = []specs.LinuxIDMapping{
+		{ContainerID: 0, HostID: 1000000, Size: 1},
+		{ContainerID: 1, HostID: 1000002, Size: 65535},
+	}
+
+	spec.Linux.GIDMappings = spec.Linux.UIDMappings
+
+	err = validateIDMappings(spec)
+	if err == nil {
+		t.Errorf("validateIDMappings(): expected failure due to non-contiguous host ID mappings, but it passed")
+	}
+
+	// Test mappings with container ID range starting above 0
+	spec.Linux.UIDMappings = []specs.LinuxIDMapping{
+		{ContainerID: 1, HostID: 1000000, Size: 65536},
+	}
+
+	spec.Linux.GIDMappings = spec.Linux.UIDMappings
+
+	err = validateIDMappings(spec)
+	if err == nil {
+		t.Errorf("validateIDMappings(): expected failure due to container ID range starting above 0, but it passed")
+	}
+
+	// Test mappings with ID range below IdRangeMin
+	spec.Linux.UIDMappings = []specs.LinuxIDMapping{
+		{ContainerID: 0, HostID: 1000000, Size: IdRangeMin - 1},
+	}
+
+	spec.Linux.GIDMappings = spec.Linux.UIDMappings
+
+	err = validateIDMappings(spec)
+	if err == nil {
+		t.Errorf("validateIDMappings(): expected failure due to ID range size < %d, but it passed", IdRangeMin)
+	}
+
+	// Test non-matching uid & gid mappings
+	spec.Linux.UIDMappings = []specs.LinuxIDMapping{
+		{ContainerID: 0, HostID: 1000000, Size: 65536},
+	}
+
+	spec.Linux.GIDMappings = []specs.LinuxIDMapping{
+		{ContainerID: 0, HostID: 2000000, Size: 65536},
+	}
+
+	err = validateIDMappings(spec)
+	if err == nil {
+		t.Errorf("validateIDMappings(): expected failure due to non-matching uid & gid mappings, but it passed")
+	}
+
+	// Test mapping to host UID 0
+	spec.Linux.UIDMappings = []specs.LinuxIDMapping{
+		{ContainerID: 0, HostID: 0, Size: 65536},
+	}
+
+	spec.Linux.GIDMappings = []specs.LinuxIDMapping{
+		{ContainerID: 0, HostID: 2000000, Size: 65536},
+	}
+
+	err = validateIDMappings(spec)
+	if err == nil {
+		t.Errorf("validateIDMappings(): expected failure due to uid mapping to host ID 0, but it passed")
+	}
+
+	// Test mapping to host GID 0
+	spec.Linux.UIDMappings = []specs.LinuxIDMapping{
+		{ContainerID: 0, HostID: 1000000, Size: 65536},
+	}
+
+	spec.Linux.GIDMappings = []specs.LinuxIDMapping{
+		{ContainerID: 0, HostID: 0, Size: 65536},
+	}
+
+	err = validateIDMappings(spec)
+	if err == nil {
+		t.Errorf("validateIDMappings(): expected failure due to gid mapping to host ID 0, but it passed")
+	}
+
+	// Test valid single entry mapping
+	spec.Linux.UIDMappings = []specs.LinuxIDMapping{
+		{ContainerID: 0, HostID: 1000000, Size: 65536},
+	}
+
+	spec.Linux.GIDMappings = spec.Linux.UIDMappings
+
+	err = validateIDMappings(spec)
+	if err != nil {
+		t.Errorf("validateIDMappings(): expected pass but it failed; mapping = %v", spec.Linux.UIDMappings)
+	}
+
+	// Test valid multi-entry mapping is accepted and merged into a single entry mapping
+	spec.Linux.UIDMappings = []specs.LinuxIDMapping{
+		{ContainerID: 0, HostID: 1000000, Size: 1},
+		{ContainerID: 1, HostID: 1000001, Size: 9},
+		{ContainerID: 10, HostID: 1000010, Size: 65526},
+	}
+
+	spec.Linux.GIDMappings = spec.Linux.UIDMappings
+	origMapping := spec.Linux.UIDMappings
+
+	err = validateIDMappings(spec)
+	if err != nil {
+		t.Errorf("validateIDMappings(): expected pass but it failed; mapping = %v", origMapping)
+	}
+
+	want := []specs.LinuxIDMapping{
+		{ContainerID: 0, HostID: 1000000, Size: 65536},
+	}
+
+	if !equalIDMappings(want, spec.Linux.UIDMappings) {
+		t.Errorf("validateIDMappings(): uid mappings are not correct; want %v, got %v",
+			want, spec.Linux.UIDMappings)
+	}
+
+	if !equalIDMappings(want, spec.Linux.GIDMappings) {
+		t.Errorf("validateIDMappings(): gid mappings are not correct; want %v, got %v",
+			want, spec.Linux.GIDMappings)
+	}
+}

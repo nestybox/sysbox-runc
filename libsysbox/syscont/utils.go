@@ -17,6 +17,7 @@
 package syscont
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -100,4 +101,56 @@ func sortMounts(spec *specs.Spec) {
 		return false
 	})
 
+}
+
+// sortIDMappings sorts the given ID mappings by container ID (in increasing
+// order). If byHostID is true, then the mappings are sorted by host ID instead
+// (in increasing order).
+func sortIDMappings(idMappings []specs.LinuxIDMapping, byHostID bool) {
+
+	if byHostID {
+		sort.Slice(idMappings, func(i, j int) bool {
+			return idMappings[i].HostID < idMappings[j].HostID
+		})
+	} else {
+		sort.Slice(idMappings, func(i, j int) bool {
+			return idMappings[i].ContainerID < idMappings[j].ContainerID
+		})
+	}
+}
+
+// mergeIDMappings coallesces the given user-ns ID mappings into a single continuous range.
+// If this can't be done (because either the container IDs or host IDs are non-contiguous,
+// an error is returned).
+func mergeIDMappings(idMappings []specs.LinuxIDMapping) ([]specs.LinuxIDMapping, error) {
+
+	idMappingLen := len(idMappings)
+
+	if idMappingLen < 2 {
+		return idMappings, nil
+	}
+
+	sortIDMappings(idMappings, false)
+
+	mergedMapping := specs.LinuxIDMapping{
+		ContainerID: idMappings[0].ContainerID,
+		HostID:      idMappings[0].HostID,
+		Size:        idMappings[0].Size,
+	}
+
+	for i := 1; i < idMappingLen; i++ {
+		curr := idMappings[i]
+		prev := idMappings[i-1]
+
+		if curr.ContainerID != (prev.ContainerID + prev.Size) {
+			return nil, fmt.Errorf("container ID mappings are non-contiguous: %+v", idMappings)
+		}
+		if curr.HostID != (prev.HostID + prev.Size) {
+			return nil, fmt.Errorf("host ID mappings are non-contiguous: %+v", idMappings)
+		}
+
+		mergedMapping.Size += curr.Size
+	}
+
+	return []specs.LinuxIDMapping{mergedMapping}, nil
 }
