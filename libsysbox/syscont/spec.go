@@ -397,45 +397,69 @@ func allocIDMappings(sysMgr *sysbox.Mgr, spec *specs.Spec) error {
 }
 
 // validateIDMappings checks if the spec's user namespace uid and gid mappings meet
-// sysbox-runc requirements
+// sysbox-runc requirements.
 func validateIDMappings(spec *specs.Spec) error {
+	var err error
 
-	if len(spec.Linux.UIDMappings) != 1 {
-		return fmt.Errorf("sysbox-runc requires user namespace uid mapping array have one element; found %v",
-			spec.Linux.UIDMappings)
+	if len(spec.Linux.UIDMappings) == 0 || len(spec.Linux.GIDMappings) == 0 {
+		return fmt.Errorf("detected missing user-ns UID and/or GID mappings")
 	}
 
-	if len(spec.Linux.GIDMappings) != 1 {
-		return fmt.Errorf("sysbox-runc requires user namespace gid mapping array have one element; found %v",
-			spec.Linux.GIDMappings)
+	// Sysbox requires that the container uid & gid mappings map a continuous
+	// range of container IDs to host IDs. This is a requirement implicitly
+	// imposed by Sysbox's usage of shiftfs. The call to mergeIDmappings ensures
+	// this is the case and returns a single ID mapping range in case the
+	// container's spec gave us a continuous mapping in multiple continuous
+	// sub-ranges.
+
+	spec.Linux.UIDMappings, err = mergeIDMappings(spec.Linux.UIDMappings)
+	if err != nil {
+		return err
+	}
+
+	spec.Linux.GIDMappings, err = mergeIDMappings(spec.Linux.GIDMappings)
+	if err != nil {
+		return err
 	}
 
 	uidMap := spec.Linux.UIDMappings[0]
+	gidMap := spec.Linux.GIDMappings[0]
+
 	if uidMap.ContainerID != 0 || uidMap.Size < IdRangeMin {
-		return fmt.Errorf("sysbox-runc requires uid mapping specify a container with at least %d uids starting at uid 0; found %v",
+		return fmt.Errorf("uid mapping range must specify a container with at least %d uids starting at uid 0; found %v",
 			IdRangeMin, uidMap)
 	}
 
-	gidMap := spec.Linux.GIDMappings[0]
 	if gidMap.ContainerID != 0 || gidMap.Size < IdRangeMin {
-		return fmt.Errorf("sysbox-runc requires gid mapping specify a container with at least %d gids starting at gid 0; found %v",
+		return fmt.Errorf("gid mapping range must specify a container with at least %d gids starting at gid 0; found %v",
 			IdRangeMin, gidMap)
 	}
 
 	if uidMap.HostID != gidMap.HostID {
-		return fmt.Errorf("sysbox-runc requires matching uid & gid mappings; found uid = %v, gid = %d",
+		return fmt.Errorf("detecting non-matching uid & gid mappings; found uid = %v, gid = %d",
 			uidMap, gidMap)
+	}
+
+	if uidMap.HostID == 0 {
+		return fmt.Errorf("detected user-ns uid mapping to host ID 0 (%v); this breaks container isolation",
+			uidMap)
+	}
+
+	if gidMap.HostID == 0 {
+		return fmt.Errorf("detected user-ns gid mapping to host ID 0 (%v); this breaks container isolation",
+			uidMap)
 	}
 
 	return nil
 }
 
 // cfgIDMappings checks if the uid/gid mappings are present and valid; if they are not
-// present, it allocates them. Note that we don't disallow mappings that map to the host
-// root Uid (i.e., identity-mappings); some runc tests use such mappings.
+// present, it allocates them.
 func cfgIDMappings(sysMgr *sysbox.Mgr, spec *specs.Spec) error {
 
-	// Honor user-ns uid & gid mapping spec overrides from sysbox-mgr
+	// Honor user-ns uid & gid mapping spec overrides from sysbox-mgr; this occur
+	// when a container shares the same userns and netns of another container (i.e.,
+	// they must also share the mappings).
 	if sysMgr.Enabled() {
 		if len(sysMgr.Config.UidMappings) > 0 {
 			spec.Linux.UIDMappings = sysMgr.Config.UidMappings
@@ -445,7 +469,7 @@ func cfgIDMappings(sysMgr *sysbox.Mgr, spec *specs.Spec) error {
 		}
 	}
 
-	// If no mappings are present, let's allocate some
+	// If no mappings are present, let's allocate some.
 	if len(spec.Linux.UIDMappings) == 0 && len(spec.Linux.GIDMappings) == 0 {
 		return allocIDMappings(sysMgr, spec)
 	}
