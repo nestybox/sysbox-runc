@@ -185,7 +185,12 @@ var sysboxFsMounts = []specs.Mount{
 	//
 	// sysfs mounts
 	//
-
+	specs.Mount{
+		Destination: "/sys/devices/virtual/dmi/id/product_uuid",
+		Source:      filepath.Join(SysboxFsDir, "/sys/devices/virtual/dmi/id/product_uuid"),
+		Type:        "bind",
+		Options:     []string{"rbind", "rprivate"},
+	},
 	specs.Mount{
 		Destination: "/sys/module/nf_conntrack/parameters/hashsize",
 		Source:      filepath.Join(SysboxFsDir, "sys/module/nf_conntrack/parameters/hashsize"),
