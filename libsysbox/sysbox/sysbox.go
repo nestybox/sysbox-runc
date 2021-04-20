@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"syscall"
@@ -259,6 +260,9 @@ func CheckHostConfig(context *cli.Context, spec *specs.Spec) error {
 
 // KernelModSupported returns nil if the given module is loaded in the kernel.
 func KernelModSupported(mod string) error {
+
+	// Load the module
+	exec.Command("modprobe", mod).Run()
 
 	// Check if the module is in the kernel
 	f, err := os.Open("/proc/filesystems")
