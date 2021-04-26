@@ -191,6 +191,7 @@ var syscontSyscallWhitelist = []string{
 	"_newselect",
 	"open",
 	"openat",
+	"openat2",
 	"pause",
 	"pipe",
 	"pipe2",
