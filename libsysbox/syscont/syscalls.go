@@ -65,6 +65,7 @@ var syscontSyscallWhitelist = []string{
 	"exit",
 	"exit_group",
 	"faccessat",
+	"faccessat2",
 	"fadvise64",
 	"fadvise64_64",
 	"fallocate",
