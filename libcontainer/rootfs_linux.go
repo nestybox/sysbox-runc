@@ -475,7 +475,7 @@ func doBindMounts(config *configs.Config, pipe io.ReadWriter) error {
 		for _, mr := range mntReqs {
 
 			// Mount destinations in mntReqs are relative to the rootfs
-			// (see prepareBindDest()); thus we need to prepent "/" for a
+			// (see prepareBindDest()); thus we need to prepend "/" for a
 			// proper comparison.
 			if strings.HasPrefix(m.Destination, filepath.Join("/", mr.Mount.Destination)) {
 				mntDependsOnPrior = true
@@ -1117,47 +1117,6 @@ func validateCwd(rootfs string) error {
 	if cwd != rootfs {
 		return newSystemErrorWithCausef(err, "cwd %s is not container's rootfs %s", cwd, rootfs)
 	}
-	return nil
-}
-
-// sysbox-runc: allowShiftfsBindSource checks if the source dir of a bind mount is allowed
-// when using shiftfs.
-func allowShiftfsBindSource(source, rootfs string) error {
-
-	// We do not allow bind mounts whose source is directly above the container's rootfs
-	// (e.g., if the rootfs is at /a/b/c/d, we don't allow bind sources at /, /a, /a/b, or
-	// /a/b/c; but we do allow them at /a/x, /a/b/x, or /a/b/c/x). The reason we disallow
-	// such bind mounts is that when using uid-shifting we need to mount shiftfs on the
-	// rootfs as well as the bind sources. If we where to allow bind sources directly above
-	// rootfs, we would end with shiftfs-on-shiftfs which is not supported.
-	if strings.Contains(rootfs, source) {
-		return fmt.Errorf("bind mount with source at %s is above the container's rootfs at %s; this is not supported when using uid-shifting", source, rootfs)
-	}
-
-	return nil
-}
-
-// The following are host directories where we never mount shiftfs, as they contain
-// critical excutables for the host and mounting shiftfs on them will implicitly make
-// them non-executable in the host's mount namespace, rendering the host unusable.
-var shiftfsBlackList = []string{
-	"/", "/bin", "/sbin", "/usr/bin", "/usr/sbin", "/usr/local/bin", "/usr/local/sbin", "/dev", "/run", "/var/run",
-}
-
-// sysbox-runc: skipShiftfsBindSource indicates if shiftfs mounts should be skipped on the
-// given directory.
-func skipShiftfsBindSource(source string) error {
-
-	// Since shiftfs marks are set on the host's mount namespace and are implicitly
-	// "noexec" mounts, we skip them over host directories with critical executables
-	// needed for the system (as otherwise the shiftfs mount will render the host
-	// unusable).
-	for _, m := range shiftfsBlackList {
-		if source == m {
-			return fmt.Errorf("skipping shiftfs mount on bind source at %s as it will render the mountpoint non-executable on the host", source)
-		}
-	}
-
 	return nil
 }
 

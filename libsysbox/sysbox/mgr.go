@@ -44,7 +44,7 @@ func (mgr *Mgr) Enabled() bool {
 	return mgr.Active
 }
 
-// Register registers the container with sysbox-mgr. If successful, returns
+// Registers the container with sysbox-mgr. If successful, returns
 // configuration tokens for sysbox-runc.
 func (mgr *Mgr) Register() error {
 	config, err := sysboxMgrGrpc.Register(mgr.Id)
@@ -55,7 +55,7 @@ func (mgr *Mgr) Register() error {
 	return nil
 }
 
-// Unregister unregisters the container with sysbox-mgr.
+// Unregisters the container with sysbox-mgr.
 func (mgr *Mgr) Unregister() error {
 	if err := sysboxMgrGrpc.Unregister(mgr.Id); err != nil {
 		return fmt.Errorf("failed to unregister with sysbox-mgr: %v", err)
@@ -90,11 +90,12 @@ func (mgr *Mgr) ReqMounts(rootfs string, uid, gid uint32, shiftUids bool, reqLis
 }
 
 // ReqShiftfsMark sends a request to sysbox-mgr to mark shiftfs on the given dirs; all paths must be absolute.
-func (mgr *Mgr) ReqShiftfsMark(rootfs string, mounts []configs.ShiftfsMount) error {
-	if err := sysboxMgrGrpc.ReqShiftfsMark(mgr.Id, rootfs, mounts); err != nil {
-		return fmt.Errorf("failed to request shiftfs marking to sysbox-mgr: %v", err)
+func (mgr *Mgr) ReqShiftfsMark(rootfs string, mounts []configs.ShiftfsMount) ([]configs.ShiftfsMount, error) {
+	resp, err := sysboxMgrGrpc.ReqShiftfsMark(mgr.Id, rootfs, mounts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to request shiftfs marking to sysbox-mgr: %v", err)
 	}
-	return nil
+	return resp, nil
 }
 
 // ReqFsState sends a request to sysbox-mgr for container's rootfs state.
