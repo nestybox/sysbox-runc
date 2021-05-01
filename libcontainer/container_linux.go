@@ -15,7 +15,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -2493,11 +2492,11 @@ func (c *linuxContainer) setupShiftfsMarks() error {
 	config := c.config
 	shiftfsMounts := []configs.ShiftfsMount{}
 
-	if !c.config.UidShiftSupported {
+	if !config.UidShiftSupported {
 		return nil
 	}
 
-	if c.config.UidShiftRootfs {
+	if config.UidShiftRootfs {
 		shiftfsMounts = append(shiftfsMounts, configs.ShiftfsMount{Source: config.Rootfs, Readonly: false})
 	}
 
@@ -2508,6 +2507,7 @@ func (c *linuxContainer) setupShiftfsMarks() error {
 	if c.sysMgr.Config.BindMountUidShift {
 		for _, m := range config.Mounts {
 			if m.Device == "bind" {
+
 				needShiftfs, err := needUidShiftOnBindSrc(m, config)
 				if err != nil {
 					return newSystemErrorWithCause(err, "checking uid shifting on bind source")
@@ -2517,7 +2517,12 @@ func (c *linuxContainer) setupShiftfsMarks() error {
 					continue
 				}
 
-				// shiftfs mounts must be on directories (not on files)
+				// shiftfs mounts must be on directories (not on files). But this does
+				// not mean that the directory on which shiftfs is mounted is
+				// necessarily fully exposed inside the container; it may be that only
+				// a file in that directory is exposed inside the container (via
+				// bind-mounts when setting up the container rootfs).
+
 				var dir string
 				if !m.BindSrcInfo.IsDir {
 					dir = filepath.Dir(m.Source)
@@ -2525,86 +2530,72 @@ func (c *linuxContainer) setupShiftfsMarks() error {
 					dir = m.Source
 				}
 
-				if err := allowShiftfsBindSource(config, dir); err != nil {
-					return newSystemErrorWithCause(err, "validating bind source")
+				duplicate := false
+				for _, sm := range shiftfsMounts {
+					if sm.Source == dir {
+						duplicate = true
+					}
 				}
 
-				if err := skipShiftfsBindSource(dir); err != nil {
-					continue
-				}
-
-				sm := configs.ShiftfsMount{
-					Source:   dir,
-					Readonly: m.Flags&unix.MS_RDONLY == unix.MS_RDONLY,
-				}
-
-				shiftfsMounts = append(shiftfsMounts, sm)
-			}
-		}
-	}
-
-	// To avoid shiftfs-on-shiftfs, if we see source paths such as /x/y and /x/y/z, mount
-	// shiftfs on /x/y only (i.e., the base source path)
-	baseMounts := []configs.ShiftfsMount{}
-
-	if len(shiftfsMounts) > 0 {
-		sort.Slice(shiftfsMounts, func(i, j int) bool {
-			return !strings.HasPrefix(shiftfsMounts[i].Source, shiftfsMounts[j].Source)
-		})
-
-		baseMounts = append(baseMounts, shiftfsMounts[0])
-		for i := 1; i < len(shiftfsMounts); i++ {
-			found := false
-			for _, b := range baseMounts {
-				if shiftfsMounts[i].Source == b.Source || strings.HasPrefix(shiftfsMounts[i].Source, b.Source+"/") {
-					found = true
-				}
-			}
-			if !found {
-				baseMounts = append(baseMounts, shiftfsMounts[i])
-			}
-		}
-	}
-
-	// The shiftfs mark points will be used later by the container's init process to
-	// actually mount shiftfs in the container's mount-ns.
-	c.config.ShiftfsMounts = baseMounts
-
-	// If any of the shiftfs mount points is a parent dir of a bind mount source
-	// mounted on a special dir, disallow it. For example, mounting
-	// /a/b/c->/var/lib/docker is not allowed if /, /a, or /a/b are shiftfs
-	// mountpoints. The reason is that this would imply that the special mount
-	// would also be under shiftfs, and the latter is something we want to avoid
-	// (as Docker for example will fail when shiftfs is mounted on
-	// /var/lib/docker).
-	specialDir := map[string]bool{
-		"/var/lib/docker":  true,
-		"/var/lib/kubelet": true,
-		"/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs": true,
-	}
-
-	for _, shiftfsMount := range baseMounts {
-		for _, m := range config.Mounts {
-			_, isMountOverSpecialDir := specialDir[m.Destination]
-			if isMountOverSpecialDir {
-				if shiftfsMount.Source != m.Source && strings.HasPrefix(m.Source, shiftfsMount.Source) {
-					return fmt.Errorf("detected disallowed nested bind-mount sources (%s and %s); the latter"+
-						" is a mount over %s and thus can't be a subdir of the former",
-						shiftfsMount.Source, m.Source, m.Destination)
+				if !duplicate {
+					sm := configs.ShiftfsMount{
+						Source:   dir,
+						Readonly: m.Flags&unix.MS_RDONLY == unix.MS_RDONLY,
+					}
+					shiftfsMounts = append(shiftfsMounts, sm)
 				}
 			}
 		}
 	}
 
-	// Perform the shiftfs marks; normally this is done by sysbox-mgr as it can track
-	// shiftfs mark-points on the host even when some of these are shared among sys
-	// containers. But for sysbox-runc unit testing the sysbox-mgr is not present, so we do
-	// the shiftfs marking locally (which only works when sys containers are not sharing
-	// mount points)
+	// Perform the shiftfs marks; normally this is done by sysbox-mgr as it can
+	// track shiftfs mark-points on the host. But for sysbox-runc unit testing
+	// the sysbox-mgr is not present, so we do the shiftfs marking locally (which
+	// only works when sys containers are not sharing mount points).
 
 	if c.sysMgr.Enabled() {
-		return c.sysMgr.ReqShiftfsMark(baseMounts)
+
+		shiftfsMarks, err := c.sysMgr.ReqShiftfsMark(shiftfsMounts)
+		if err != nil {
+			return err
+		}
+
+		if len(shiftfsMarks) != len(shiftfsMounts) {
+			return fmt.Errorf("Error creating shiftfs mark-mounts: shiftfsMounts = %v, shiftfsMarks = %v",
+				shiftfsMounts, shiftfsMarks)
+		}
+
+		config.ShiftfsMounts = shiftfsMarks
+
+		// Replace the container's mounts that have shiftfs with the shiftfs
+		// markpoint allocated by sysbox-mgr.
+
+		if config.UidShiftRootfs {
+			config.Rootfs = shiftfsMarks[0].Source
+		}
+
+		for _, m := range config.Mounts {
+			if m.Device == "bind" {
+				if m.BindSrcInfo.IsDir {
+					for i, sm := range shiftfsMounts {
+						if m.Source == sm.Source {
+							m.Source = shiftfsMarks[i].Source
+						}
+					}
+				} else {
+					for i, sm := range shiftfsMounts {
+						if filepath.Dir(m.Source) == sm.Source {
+							m.Source = filepath.Join(shiftfsMarks[i].Source, filepath.Base(m.Source))
+						}
+					}
+				}
+			}
+		}
+
+		return nil
+
 	} else {
+		config.ShiftfsMounts = shiftfsMounts
 		return c.setupShiftfsMarkLocal()
 	}
 }
@@ -2618,7 +2609,7 @@ func (c *linuxContainer) setupShiftfsMarkLocal() error {
 			return newSystemErrorWithCausef(err, "checking for shiftfs mount at %s", m.Source)
 		}
 		if !mounted {
-			if err := shiftfs.Mark(m.Source); err != nil {
+			if err := shiftfs.Mark(m.Source, m.Source); err != nil {
 				return newSystemErrorWithCausef(err, "marking shiftfs on %s", m.Source)
 			}
 		}
