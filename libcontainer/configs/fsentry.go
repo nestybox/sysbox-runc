@@ -74,7 +74,7 @@ func (e *FsEntry) Add() error {
 
 	case SoftlinkFsKind:
 		// Check if softlink exists.
-		var _, err = os.Stat(e.Path)
+		var _, err = os.Lstat(e.Path)
 
 		// Create softlink if not present.
 		if os.IsNotExist(err) {
