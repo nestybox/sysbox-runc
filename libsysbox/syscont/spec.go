@@ -705,6 +705,8 @@ func checkSpec(spec *specs.Spec) error {
 			if (st1.Dev == st2.Dev) && (st1.Ino == st2.Ino) {
 				return fmt.Errorf("sysbox containers can't share a network namespace with the host (because they use the linux user-namespace for isolation)")
 			}
+
+			break
 		}
 	}
 

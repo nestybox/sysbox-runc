@@ -158,6 +158,7 @@ func needUidShiftOnRootfs(spec *specs.Spec) (bool, error) {
 	for _, mapping := range spec.Linux.UIDMappings {
 		if mapping.ContainerID == 0 {
 			hostUidMap = mapping.HostID
+			break
 		}
 	}
 
@@ -165,6 +166,7 @@ func needUidShiftOnRootfs(spec *specs.Spec) (bool, error) {
 	for _, mapping := range spec.Linux.GIDMappings {
 		if mapping.ContainerID == 0 {
 			hostGidMap = mapping.HostID
+			break
 		}
 	}
 
