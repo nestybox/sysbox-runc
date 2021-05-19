@@ -38,74 +38,65 @@ var minKernel = kernelRelease{4, 10} // 4.10 (see issue #89)
 // uid shifting requires shiftfs, currenlty present in Ubuntu only.
 var uidShiftDistros = []string{"ubuntu"}
 
-// checkUnprivilegedUserns checks if the kernel is configured to allow
-// unprivileged users to create namespaces. This is necessary for
-// running containers inside a system container.
-func checkUnprivilegedUserns() error {
+func readFileInt(path string) (int, error) {
 
-	distro, err := libutils.GetDistro()
+	f, err := os.Open(path)
 	if err != nil {
-		return err
+		return -1, err
+	}
+	defer f.Close()
+
+	var b []byte = make([]byte, unsafe.Sizeof(int(0)))
+	_, err = f.Read(b)
+	if err != nil {
+		return -1, err
 	}
 
-	switch distro {
+	var val int
+	_, err = fmt.Sscanf(string(b), "%d", &val)
+	if err != nil {
+		return -1, err
+	}
 
-	case "debian", "ubuntu":
-		path := "/proc/sys/kernel/unprivileged_userns_clone"
+	return val, nil
+}
 
-		f, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		defer f.Close()
+// checks if the kernel is configured to allow unprivileged users to create
+// namespaces. This is necessary for running containers inside a system
+// container.
+func checkUnprivilegedUserns() error {
 
-		var b []byte = make([]byte, 8)
-		_, err = f.Read(b)
-		if err != nil {
-			return err
-		}
+	// In Debian-based distros, unprivileged userns creation is enabled via
+	// "/proc/sys/kernel/unprivileged_userns_clone". In Fedora (and related)
+	// distros this sysctl does not exist. Rather, unprivileged userns creation
+	// is enabled by setting a non-zero value in "/proc/sys/user/max_user_namespaces".
+	// Here we check both.
 
-		var val int
-		_, err = fmt.Sscanf(string(b), "%d", &val)
+	path := "/proc/sys/kernel/unprivileged_userns_clone"
+	if _, err := os.Stat(path); err == nil {
+
+		val, err := readFileInt(path)
 		if err != nil {
 			return err
 		}
 
 		if val != 1 {
-			return fmt.Errorf("kernel is not configured to allow unprivileged users to create namespaces: %s: want 1, have %d", path, val)
-		}
-
-	case "fedora", "centos", "redhat":
-		path := "/proc/sys/user/max_user_namespaces"
-
-		f, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-
-		var b []byte = make([]byte, unsafe.Sizeof(int(0)))
-		_, err = f.Read(b)
-		if err != nil {
-			return err
-		}
-
-		var val int
-		_, err = fmt.Sscanf(string(b), "%d", &val)
-		if err != nil {
-			return err
-		}
-
-		if val == 0 {
-			return fmt.Errorf("kernel is not configured to allow unprivileged users to create namespaces: %s: want >= 1, have %d",
+			return fmt.Errorf("kernel is not configured to allow unprivileged users to create namespaces: %s: want 1, have %d",
 				path, val)
 		}
 	}
 
-	// TODO: add other distros
-	// Arch
-	// Alpine
-	// Amazon
+	path = "/proc/sys/user/max_user_namespaces"
+
+	val, err := readFileInt(path)
+	if err != nil {
+		return err
+	}
+
+	if val == 0 {
+		return fmt.Errorf("kernel is not configured to allow unprivileged users to create namespaces: %s: want >= 1, have %d",
+			path, val)
+	}
 
 	return nil
 }
