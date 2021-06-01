@@ -2530,6 +2530,10 @@ func (c *linuxContainer) setupShiftfsMarks() error {
 					dir = m.Source
 				}
 
+				if skipShiftfsBindSource(dir) {
+					continue
+				}
+
 				duplicate := false
 				for _, sm := range shiftfsMounts {
 					if sm.Source == dir {
@@ -2634,4 +2638,18 @@ func (c *linuxContainer) teardownShiftfsMarkLocal() error {
 	}
 
 	return nil
+}
+
+// The following are host directories where we never mount shiftfs as it causes functional problems.
+var shiftfsBlackList = []string{"/dev"}
+
+// sysbox-runc: skipShiftfsBindSource indicates if shiftfs mounts should be skipped on the
+// given directory.
+func skipShiftfsBindSource(source string) bool {
+	for _, m := range shiftfsBlackList {
+		if source == m {
+			return true
+		}
+	}
+	return false
 }
