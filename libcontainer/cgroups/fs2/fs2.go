@@ -209,7 +209,7 @@ func (m *manager) Set(container *configs.Config) error {
 		return err
 	}
 	// rdma (since kernel 4.11)
-	if err := fscommon.RdmaSet(m.dirPath, r); err != nil {
+	if err := fscommon.RdmaSet(m.dirPath, container.Cgroups); err != nil {
 		return err
 	}
 	// freezer (since kernel 5.2, pseudo-controller)
