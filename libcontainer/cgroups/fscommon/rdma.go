@@ -111,8 +111,8 @@ func createCmdString(device string, limits configs.LinuxRdma) string {
 }
 
 // RdmaSet sets RDMA resources.
-func RdmaSet(path string, r *configs.Resources) error {
-	for device, limits := range r.Rdma {
+func RdmaSet(path string, cgroup *configs.Cgroup) error {
+	for device, limits := range cgroup.Resources.Rdma {
 		if err := cgroups.WriteFile(path, "rdma.max", createCmdString(device, limits)); err != nil {
 			return err
 		}

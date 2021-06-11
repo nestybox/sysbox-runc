@@ -19,8 +19,8 @@ func (s *RdmaGroup) Apply(path string, d *cgroupData) error {
 	return join(path, d.pid)
 }
 
-func (s *RdmaGroup) Set(path string, r *configs.Resources) error {
-	return fscommon.RdmaSet(path, r)
+func (s *RdmaGroup) Set(path string, cgroup *configs.Cgroup) error {
+	return fscommon.RdmaSet(path, cgroup)
 }
 
 func (s *RdmaGroup) GetStats(path string, stats *cgroups.Stats) error {
