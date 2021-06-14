@@ -5,6 +5,8 @@ package fs
 import (
 	"bytes"
 	"errors"
+	"fmt"
+	"os"
 	"reflect"
 
 	"github.com/opencontainers/runc/libcontainer/cgroups"
@@ -107,5 +109,18 @@ func (s *DevicesGroup) Set(path string, cgroup *configs.Cgroup) error {
 }
 
 func (s *DevicesGroup) GetStats(path string, stats *cgroups.Stats) error {
+	return nil
+}
+
+func (s *DevicesGroup) Clone(source, dest string) error {
+
+	if err := fscommon.WriteFile(source, "cgroup.clone_children", "1"); err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(dest, 0755); err != nil {
+		return fmt.Errorf("Failed to create cgroup %s", dest)
+	}
+
 	return nil
 }

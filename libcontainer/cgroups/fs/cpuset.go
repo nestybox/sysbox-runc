@@ -42,6 +42,20 @@ func (s *CpusetGroup) Set(path string, cgroup *configs.Cgroup) error {
 	return nil
 }
 
+func (s *CpusetGroup) Clone(source, dest string) error {
+
+	// For the cpuset cgroup, cloning is done by simply setting cgroup.clone_children on the source
+	if err := fscommon.WriteFile(source, "cgroup.clone_children", "1"); err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(dest, 0755); err != nil {
+		return fmt.Errorf("Failed to create cgroup %s", dest)
+	}
+
+	return nil
+}
+
 func getCpusetStat(path string, filename string) ([]uint16, error) {
 	var extracted []uint16
 	fileContent, err := fscommon.GetCgroupParamString(path, filename)

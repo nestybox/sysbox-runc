@@ -4,6 +4,7 @@ package fs
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 
@@ -65,5 +66,18 @@ func (s *PidsGroup) GetStats(path string, stats *cgroups.Stats) error {
 
 	stats.PidsStats.Current = current
 	stats.PidsStats.Limit = max
+	return nil
+}
+
+func (s *PidsGroup) Clone(source, dest string) error {
+
+	if err := fscommon.WriteFile(source, "cgroup.clone_children", "1"); err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(dest, 0755); err != nil {
+		return fmt.Errorf("Failed to create cgroup %s", dest)
+	}
+
 	return nil
 }
