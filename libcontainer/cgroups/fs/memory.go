@@ -351,3 +351,34 @@ func addNUMAStatsByType(stats *cgroups.PageUsageByNUMA, byTypeStats cgroups.Page
 	}
 	return nil
 }
+
+func (s *MemoryGroup) Clone(source, dest string) error {
+
+	if err := fscommon.WriteFile(source, "cgroup.clone_children", "1"); err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(dest, 0755); err != nil {
+		return fmt.Errorf("Failed to create cgroup %s", dest)
+	}
+
+	// Copy the memory cgroup limits from source to dest; this helps in the scenario where
+	// "dest" is the cgroup associated with the container's init process, as it allows some
+	// tools that collect container stats (e.g., "docker stats") to collect the appropriate
+	// mem limits for the container.
+	files := []string{
+		"memory.limit_in_bytes",
+		"memory.soft_limit_in_bytes",
+	}
+
+	for _, f := range files {
+		srcPath := filepath.Join(source, f)
+		dstPath := filepath.Join(dest, f)
+
+		if err := fscommon.CopyFile(srcPath, dstPath); err != nil {
+			return fmt.Errorf("failed to copy %s to %s: %s", srcPath, dstPath, err)
+		}
+	}
+
+	return nil
+}

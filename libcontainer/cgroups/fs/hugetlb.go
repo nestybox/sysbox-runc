@@ -4,6 +4,7 @@ package fs
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 
 	"github.com/opencontainers/runc/libcontainer/cgroups"
@@ -60,6 +61,19 @@ func (s *HugetlbGroup) GetStats(path string, stats *cgroups.Stats) error {
 		hugetlbStats.Failcnt = value
 
 		stats.HugetlbStats[pageSize] = hugetlbStats
+	}
+
+	return nil
+}
+
+func (s *HugetlbGroup) Clone(source, dest string) error {
+
+	if err := fscommon.WriteFile(source, "cgroup.clone_children", "1"); err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(dest, 0755); err != nil {
+		return fmt.Errorf("Failed to create cgroup %s", dest)
 	}
 
 	return nil

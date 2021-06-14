@@ -4,6 +4,8 @@ package fscommon
 
 import (
 	"bytes"
+	"fmt"
+	"io/ioutil"
 	"os"
 
 	"github.com/pkg/errors"
@@ -37,6 +39,40 @@ func ReadFile(dir, file string) (string, error) {
 
 	_, err = buf.ReadFrom(fd)
 	return buf.String(), err
+}
+
+func CopyFile(source, dest string) error {
+	var (
+		srcF *os.File
+		dstF *os.File
+		data []byte
+		err  error
+	)
+
+	srcF, err = os.Open(source)
+	if err != nil {
+		return fmt.Errorf("failed to open %s: %s", source, err)
+	}
+	defer srcF.Close()
+
+	dstF, err = os.Open(dest)
+	if err != nil {
+		dstF.Close()
+		return fmt.Errorf("failed to open %s: %s", dest, err)
+	}
+	defer dstF.Close()
+
+	data, err = ioutil.ReadFile(source)
+	if err != nil {
+		return fmt.Errorf("failed to read %s: %s", source, err)
+	}
+
+	err = ioutil.WriteFile(dest, data, 0)
+	if err != nil {
+		return fmt.Errorf("failed to read %s: %s", dest, err)
+	}
+
+	return nil
 }
 
 func retryingWriteFile(fd *os.File, data string) error {

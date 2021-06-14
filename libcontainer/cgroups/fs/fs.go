@@ -12,7 +12,6 @@ import (
 	"sync"
 
 	"github.com/opencontainers/runc/libcontainer/cgroups"
-	"github.com/opencontainers/runc/libcontainer/cgroups/fscommon"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	libcontainerUtils "github.com/opencontainers/runc/libcontainer/utils"
 	"github.com/pkg/errors"
@@ -49,6 +48,8 @@ type subsystem interface {
 	Apply(path string, c *cgroupData) error
 	// Set the cgroup represented by cgroup.
 	Set(path string, cgroup *configs.Cgroup) error
+	// Copy cgroup settings to from a given cgroup to another
+	Clone(source, dest string) error
 }
 
 type manager struct {
@@ -224,17 +225,13 @@ func isIgnorableError(rootless bool, err error) bool {
 func (m *manager) CreateChildCgroup(container *configs.Config) error {
 	paths := m.GetPaths()
 	for _, sys := range subsystems {
-		if paths[sys.Name()] != "" {
-			// The child cgroup inherits the system container's cgroup settings (which are
-			// assumed to be set at this point)
-			if err := fscommon.WriteFile(paths[sys.Name()], "cgroup.clone_children", "1"); err != nil {
-				return err
-			}
+		cgroupPath := paths[sys.Name()]
 
-			path := filepath.Join(paths[sys.Name()], cgroups.SyscontCgroupRoot)
+		if cgroupPath != "" {
+			childPath := filepath.Join(cgroupPath, cgroups.SyscontCgroupRoot)
 
-			if err := os.MkdirAll(path, 0755); err != nil {
-				return fmt.Errorf("Failed to create sub cgroup %s", path)
+			if err := sys.Clone(cgroupPath, childPath); err != nil {
+				return fmt.Errorf("Failed to clone cgroup %s to %s", cgroupPath, childPath)
 			}
 
 			// Change child cgroup ownership to match the root user in the system container
@@ -246,17 +243,17 @@ func (m *manager) CreateChildCgroup(container *configs.Config) error {
 			if err != nil {
 				return err
 			}
-			if err := os.Chown(path, rootuid, rootgid); err != nil {
-				return fmt.Errorf("Failed to change owner of sub cgroup %s", path)
+			if err := os.Chown(childPath, rootuid, rootgid); err != nil {
+				return fmt.Errorf("Failed to change owner of sub cgroup %s", childPath)
 			}
 
 			// Change ownership of the files inside the child cgroup
-			files, err := ioutil.ReadDir(path)
+			files, err := ioutil.ReadDir(childPath)
 			if err != nil {
 				return err
 			}
 			for _, file := range files {
-				absFileName := filepath.Join(path, file.Name())
+				absFileName := filepath.Join(childPath, file.Name())
 				if err := os.Chown(absFileName, rootuid, rootgid); err != nil {
 					return fmt.Errorf("Failed to change owner for file %s", absFileName)
 				}
