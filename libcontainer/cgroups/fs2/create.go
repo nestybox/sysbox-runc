@@ -107,6 +107,7 @@ func CreateCgroupPath(path string, c *configs.Cgroup) (Err error) {
 			}
 			cgType, _ := fscommon.ReadFile(current, cgTypeFile)
 			cgType = strings.TrimSpace(cgType)
+
 			switch cgType {
 			// If the cgroup is in an invalid mode (usually this means there's an internal
 			// process in the cgroup tree, because we created a cgroup under an

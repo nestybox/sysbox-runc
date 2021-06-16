@@ -4,7 +4,9 @@ package fs2
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/opencontainers/runc/libcontainer/cgroups"
@@ -258,17 +260,105 @@ func (m *manager) Exists() bool {
 	return cgroups.PathExists(m.dirPath)
 }
 
-func (m *manager) CreateChildCgroup(container *configs.Config) error {
-	// sysbox-runc: implement this function
-	return fmt.Errorf("Systemd not supported")
+func (m *manager) CreateChildCgroup(config *configs.Config) error {
+
+	// Change the cgroup ownership to match the root user in the system
+	// container (needed for delegation).
+	path := m.dirPath
+
+	rootuid, err := config.HostRootUID()
+	if err != nil {
+		return err
+	}
+	rootgid, err := config.HostRootGID()
+	if err != nil {
+		return err
+	}
+
+	if err := os.Chown(path, rootuid, rootgid); err != nil {
+		return fmt.Errorf("Failed to change owner of cgroup %s", path)
+	}
+
+	// Change ownership of some of the files inside the sys container's cgroup;
+	// for cgroups v2 we only change the ownership of a subset of the files, as
+	// specified in section "Cgroups Delegation: Delegating a Hierarchy to a Less
+	// Privileged User" in cgroups(7).
+	files, err := ioutil.ReadDir(path)
+	if err != nil {
+		return err
+	}
+	for _, file := range files {
+		fname := file.Name()
+
+		if fname == "cgroup.procs" ||
+			fname == "cgroup.subtree_control" ||
+			fname == "cgroup.threads" {
+
+			absFileName := filepath.Join(path, fname)
+			if err := os.Chown(absFileName, rootuid, rootgid); err != nil {
+				return fmt.Errorf("Failed to change owner for file %s", absFileName)
+			}
+		}
+	}
+
+	// Create a leaf cgroup to be used for the sys container's init process (and
+	// for all it's child processes). It's purpose is to prevent processes from
+	// living the sys container's cgroup root, because once inner sub-cgroups are
+	// created, the kernel considers the sys container's cgroup root an
+	// intermediate node in the global cgroup hierarchy. This in turn forces all
+	// sub-groups inside the sys container to be of "domain-invalid" type (and
+	// thus preventing domain cgroup controllers such as the memory controller
+	// from being applied inside the sys container).
+	//
+	// We choose the name "init.scope" for the leaf cgroup because it works well
+	// in sys containers that carry systemd, as well as those that don't. In both
+	// cases, the sys container's init processes are placed in the init.scope
+	// cgroup. For sys container's with systemd, systemd then moves the processes
+	// to other sub-cgroups it manages.
+	//
+	// Note that processes that enter the sys container via "exec" will also
+	// be placed in this sub-cgroup.
+
+	leafPath := filepath.Join(path, "init.scope")
+	if err = os.MkdirAll(leafPath, 0755); err != nil {
+		return err
+	}
+
+	if err := os.Chown(leafPath, rootuid, rootgid); err != nil {
+		return fmt.Errorf("Failed to change owner of cgroup %s", leafPath)
+	}
+
+	files, err = ioutil.ReadDir(leafPath)
+	if err != nil {
+		return err
+	}
+	for _, file := range files {
+		fname := file.Name()
+
+		if fname == "cgroup.procs" ||
+			fname == "cgroup.subtree_control" ||
+			fname == "cgroup.threads" {
+
+			absFileName := filepath.Join(leafPath, fname)
+			if err := os.Chown(absFileName, rootuid, rootgid); err != nil {
+				return fmt.Errorf("Failed to change owner for file %s", absFileName)
+			}
+		}
+	}
+
+	return nil
 }
 
 func (m *manager) ApplyChildCgroup(pid int) error {
-	// sysbox-runc: implement this function
-	return fmt.Errorf("Systemd not supported")
+	paths := make(map[string]string, 1)
+	paths[""] = filepath.Join(m.dirPath, "init.scope")
+	return cgroups.EnterPid(paths, pid)
 }
 
 func (m *manager) GetChildCgroupPaths() map[string]string {
-	// sysbox-runc: implement this function
-	return nil
+	return m.GetPaths()
+}
+
+func (m *manager) GetType() cgroups.CgroupType {
+	return cgroups.Cgroup_v2_fs
 }

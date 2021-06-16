@@ -516,3 +516,7 @@ func (m *unifiedManager) GetChildCgroupPaths() map[string]string {
 	// sysbox-runc: implement this function
 	return nil
 }
+
+func (m *unifiedManager) GetType() cgroups.CgroupType {
+	return cgroups.Cgroup_v2_systemd
+}

@@ -378,8 +378,12 @@ func (p *initProcess) start() (retErr error) {
 
 	// sysbox-runc: create a child cgroup that will serve as the system container's
 	// cgroup root.
-	if err := p.manager.CreateChildCgroup(p.config.Config); err != nil {
-		return newSystemErrorWithCause(err, "creating container child cgroup")
+	cgType := p.manager.GetType()
+
+	if cgType == cgroups.Cgroup_v1_fs || cgType == cgroups.Cgroup_v1_systemd {
+		if err := p.manager.CreateChildCgroup(p.config.Config); err != nil {
+			return newSystemErrorWithCause(err, "creating container child cgroup")
+		}
 	}
 
 	if err := p.setupDevSubdir(); err != nil {
@@ -411,8 +415,10 @@ func (p *initProcess) start() (retErr error) {
 
 	// sysbox-runc: place the system container's init process in the child cgroup. Do
 	// this before syncing with child so that no children can escape the cgroup
-	if err := p.manager.ApplyChildCgroup(childPid); err != nil {
-		return newSystemErrorWithCause(err, "applying cgroup configuration for process")
+	if cgType == cgroups.Cgroup_v1_fs || cgType == cgroups.Cgroup_v1_systemd {
+		if err := p.manager.ApplyChildCgroup(childPid); err != nil {
+			return newSystemErrorWithCause(err, "applying cgroup configuration for process")
+		}
 	}
 
 	if p.intelRdtManager != nil {
@@ -513,6 +519,15 @@ func (p *initProcess) start() (retErr error) {
 			sentRun = true
 
 		case rootfsReady:
+			// Setup cgroup v2 child cgroup
+			if cgType == cgroups.Cgroup_v2_fs || cgType == cgroups.Cgroup_v2_systemd {
+				if err := p.manager.CreateChildCgroup(p.config.Config); err != nil {
+					return newSystemErrorWithCause(err, "creating container child cgroup")
+				}
+				if err := p.manager.ApplyChildCgroup(childPid); err != nil {
+					return newSystemErrorWithCause(err, "applying cgroup configuration for process")
+				}
+			}
 			// Register container with sysbox-fs.
 			if err = p.registerWithSysboxfs(childPid); err != nil {
 				return err

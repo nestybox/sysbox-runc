@@ -14,6 +14,15 @@ import (
 
 var SyscontCgroupRoot string = "syscont-cgroup-root"
 
+type CgroupType int
+
+const (
+	Cgroup_v1_fs CgroupType = iota
+	Cgroup_v1_systemd
+	Cgroup_v2_fs
+	Cgroup_v2_systemd
+)
+
 type Manager interface {
 	// Applies cgroup configuration to the process with the specified pid
 	Apply(pid int) error
@@ -72,4 +81,7 @@ type Manager interface {
 
 	// sysbox-runc: same as GetPaths(), but returns child cgroup paths
 	GetChildCgroupPaths() map[string]string
+
+	// sysbox-runc: get the type of the cgroup manager
+	GetType() CgroupType
 }
