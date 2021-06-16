@@ -222,7 +222,7 @@ func isIgnorableError(rootless bool, err error) bool {
 	return false
 }
 
-func (m *manager) CreateChildCgroup(container *configs.Config) error {
+func (m *manager) CreateChildCgroup(config *configs.Config) error {
 	paths := m.GetPaths()
 	for _, sys := range subsystems {
 		cgroupPath := paths[sys.Name()]
@@ -235,11 +235,11 @@ func (m *manager) CreateChildCgroup(container *configs.Config) error {
 			}
 
 			// Change child cgroup ownership to match the root user in the system container
-			rootuid, err := container.HostRootUID()
+			rootuid, err := config.HostRootUID()
 			if err != nil {
 				return err
 			}
-			rootgid, err := container.HostRootGID()
+			rootgid, err := config.HostRootGID()
 			if err != nil {
 				return err
 			}
