@@ -2651,5 +2651,11 @@ func skipShiftfsBindSource(source string) bool {
 			return true
 		}
 	}
+
+	// Don't mount shiftfs on cgroup v2 bind-source either
+	if strings.HasPrefix(source, "/sys/fs/cgroup") {
+		return true
+	}
+
 	return false
 }

@@ -520,3 +520,7 @@ func (m *legacyManager) GetChildCgroupPaths() map[string]string {
 	childMgr := fs.NewManager(m.cgroups, m.paths, false)
 	return childMgr.GetChildCgroupPaths()
 }
+
+func (m *legacyManager) GetType() cgroups.CgroupType {
+	return cgroups.Cgroup_v1_systemd
+}

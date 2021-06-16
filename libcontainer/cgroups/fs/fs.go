@@ -548,3 +548,7 @@ func (m *manager) GetFreezerState() (configs.FreezerState, error) {
 func (m *manager) Exists() bool {
 	return cgroups.PathExists(m.Path("devices"))
 }
+
+func (m *manager) GetType() cgroups.CgroupType {
+	return cgroups.Cgroup_v1_fs
+}
