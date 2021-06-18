@@ -4,6 +4,7 @@ package systemd
 
 import (
 	"fmt"
+	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
@@ -262,11 +263,23 @@ func (m *unifiedManager) Apply(pid int) error {
 		properties = append(properties, newProp("PIDs", []uint32{uint32(pid)}))
 	}
 
-	// Check if we can delegate. This is only supported on systemd versions 218 and above.
-	if !strings.HasSuffix(unitName, ".slice") {
-		// Assume scopes always support delegation.
-		properties = append(properties, newProp("Delegate", true))
+	// sysbox-runc requires service or scope units for the container, as otherwise delegation won't work.
+	if strings.HasSuffix(unitName, ".slice") {
+		return fmt.Errorf("container cgroup is on systemd slice unit %s; sysbox-runc requires it to be on systemd service or scope units in order for cgroup delegation to work", unitName)
 	}
+
+	// sysbox-runc requires cgroup delegation, which is supported on systemd versions >= 218.
+	dbusConnection, err := getDbusConnection(false)
+	if err != nil {
+		return err
+	}
+
+	sdVer := systemdVersion(dbusConnection)
+	if sdVer < 218 {
+		return fmt.Errorf("systemd version is < 218; sysbox-runc requires version >= 218 for cgroup delegation.")
+	}
+
+	properties = append(properties, newProp("Delegate", true))
 
 	// Always enable accounting, this gets us the same behaviour as the fs implementation,
 	// plus the kernel has some problems with joining the memory cgroup at a later time.
@@ -279,10 +292,6 @@ func (m *unifiedManager) Apply(pid int) error {
 	properties = append(properties,
 		newProp("DefaultDependencies", false))
 
-	dbusConnection, err := getDbusConnection(m.rootless)
-	if err != nil {
-		return err
-	}
 	resourcesProperties, err := genV2ResourcesProperties(c, dbusConnection)
 	if err != nil {
 		return err
@@ -502,19 +511,103 @@ func (m *unifiedManager) Exists() bool {
 	return cgroups.PathExists(m.path)
 }
 
-func (m *unifiedManager) CreateChildCgroup(container *configs.Config) error {
-	// sysbox-runc: implement this function
-	return fmt.Errorf("Systemd not supported")
+func (m *unifiedManager) CreateChildCgroup(config *configs.Config) error {
+
+	// Change the cgroup ownership to match the root user in the system
+	// container (needed for delegation).
+	path := m.path
+
+	rootuid, err := config.HostRootUID()
+	if err != nil {
+		return err
+	}
+	rootgid, err := config.HostRootGID()
+	if err != nil {
+		return err
+	}
+
+	if err := os.Chown(path, rootuid, rootgid); err != nil {
+		return fmt.Errorf("Failed to change owner of cgroup %s", path)
+	}
+
+	// Change ownership of some of the files inside the sys container's cgroup;
+	// for cgroups v2 we only change the ownership of a subset of the files, as
+	// specified in section "Cgroups Delegation: Delegating a Hierarchy to a Less
+	// Privileged User" in cgroups(7).
+	files, err := ioutil.ReadDir(path)
+	if err != nil {
+		return err
+	}
+	for _, file := range files {
+		fname := file.Name()
+
+		if fname == "cgroup.procs" ||
+			fname == "cgroup.subtree_control" ||
+			fname == "cgroup.threads" {
+
+			absFileName := filepath.Join(path, fname)
+			if err := os.Chown(absFileName, rootuid, rootgid); err != nil {
+				return fmt.Errorf("Failed to change owner for file %s", absFileName)
+			}
+		}
+	}
+
+	// Create a leaf cgroup to be used for the sys container's init process (and
+	// for all it's child processes). It's purpose is to prevent processes from
+	// living the sys container's cgroup root, because once inner sub-cgroups are
+	// created, the kernel considers the sys container's cgroup root an
+	// intermediate node in the global cgroup hierarchy. This in turn forces all
+	// sub-groups inside the sys container to be of "domain-invalid" type (and
+	// thus preventing domain cgroup controllers such as the memory controller
+	// from being applied inside the sys container).
+	//
+	// We choose the name "init.scope" for the leaf cgroup because it works well
+	// in sys containers that carry systemd, as well as those that don't. In both
+	// cases, the sys container's init processes are placed in the init.scope
+	// cgroup. For sys container's with systemd, systemd then moves the processes
+	// to other sub-cgroups it manages.
+	//
+	// Note that processes that enter the sys container via "exec" will also
+	// be placed in this sub-cgroup.
+
+	leafPath := filepath.Join(path, "init.scope")
+	if err = os.MkdirAll(leafPath, 0755); err != nil {
+		return err
+	}
+
+	if err := os.Chown(leafPath, rootuid, rootgid); err != nil {
+		return fmt.Errorf("Failed to change owner of cgroup %s", leafPath)
+	}
+
+	files, err = ioutil.ReadDir(leafPath)
+	if err != nil {
+		return err
+	}
+	for _, file := range files {
+		fname := file.Name()
+
+		if fname == "cgroup.procs" ||
+			fname == "cgroup.subtree_control" ||
+			fname == "cgroup.threads" {
+
+			absFileName := filepath.Join(leafPath, fname)
+			if err := os.Chown(absFileName, rootuid, rootgid); err != nil {
+				return fmt.Errorf("Failed to change owner for file %s", absFileName)
+			}
+		}
+	}
+
+	return nil
 }
 
 func (m *unifiedManager) ApplyChildCgroup(pid int) error {
-	// sysbox-runc: implement this function
-	return fmt.Errorf("Systemd not supported")
+	paths := make(map[string]string, 1)
+	paths[""] = filepath.Join(m.path, "init.scope")
+	return cgroups.EnterPid(paths, pid)
 }
 
 func (m *unifiedManager) GetChildCgroupPaths() map[string]string {
-	// sysbox-runc: implement this function
-	return nil
+	return m.GetPaths()
 }
 
 func (m *unifiedManager) GetType() cgroups.CgroupType {
