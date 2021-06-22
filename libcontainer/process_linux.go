@@ -742,18 +742,12 @@ func (p *initProcess) setupDevSubdir() error {
 	// some cases (e.g., k8s "pause" container) they do not.
 	devSubdir := filepath.Join(p.config.Config.Rootfs, "dev")
 
-	// The dir mode must match the corresponding mode in libsysbox/spec/spec.go
+	// The dir mode must match the corresponding mode in libsysbox/spec/spec.go.
+	// See that there is no need to chown() this dir to match the container's
+	// root uid & gid as we are expecting a tmpfs mount over this node to take
+	// care of that.
 	if err := os.MkdirAll(devSubdir, 0755); err != nil {
 		return newSystemErrorWithCause(err, "creating dev subdir under rootfs")
-	}
-
-	// The dir owner must match the container's root user uid & gid
-	if p.config.Config.UidMappings != nil && p.config.Config.GidMappings != nil {
-		uid := p.config.Config.UidMappings[0].HostID
-		gid := p.config.Config.GidMappings[0].HostID
-		if err := os.Chown(devSubdir, uid, gid); err != nil {
-			return newSystemErrorWithCause(err, "chown dev subdir under rootfs")
-		}
 	}
 
 	return nil
