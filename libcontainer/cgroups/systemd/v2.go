@@ -553,12 +553,12 @@ func (m *unifiedManager) CreateChildCgroup(config *configs.Config) error {
 	}
 
 	// Create a leaf cgroup to be used for the sys container's init process (and
-	// for all it's child processes). It's purpose is to prevent processes from
-	// living the sys container's cgroup root, because once inner sub-cgroups are
+	// for all its child processes). Its purpose is to prevent processes from
+	// living in the sys container's cgroup root, because once inner sub-cgroups are
 	// created, the kernel considers the sys container's cgroup root an
 	// intermediate node in the global cgroup hierarchy. This in turn forces all
 	// sub-groups inside the sys container to be of "domain-invalid" type (and
-	// thus preventing domain cgroup controllers such as the memory controller
+	// thus prevents domain cgroup controllers such as the memory controller
 	// from being applied inside the sys container).
 	//
 	// We choose the name "init.scope" for the leaf cgroup because it works well
