@@ -265,7 +265,8 @@ func (l *linuxRootfsInit) Init() error {
 			if m.Flags&^(unix.MS_REC|unix.MS_REMOUNT|unix.MS_BIND) != 0 {
 				// only remount if unique mount options are set
 				if err := remount(m); err != nil {
-					return newSystemErrorWithCausef(err, "remount %s to %s", m.Source, m.Destination)
+					return newSystemErrorWithCausef(err, "remount of %s with flags %#x",
+						m.Destination, m.Flags)
 				}
 			}
 
