@@ -1019,7 +1019,20 @@ func writeSystemProperty(key, value string) error {
 }
 
 func remount(m *configs.Mount) error {
-	return unix.Mount(m.Source, m.Destination, m.Device, uintptr(m.Flags|unix.MS_REMOUNT), "")
+	flags := uintptr(m.Flags | unix.MS_REMOUNT)
+
+	// Per mount(2): remounting must keep original mount flags, except the flags being changed
+	var s unix.Statfs_t
+	if err := unix.Statfs(m.Destination, &s); err != nil {
+		return &os.PathError{Op: "statfs", Path: m.Destination, Err: err}
+	}
+	flags |= uintptr(s.Flags)
+
+	if err := unix.Mount("", m.Destination, "", flags, ""); err != nil {
+		return fmt.Errorf("failed to remount %s with flags %#x", m.Destination, int(flags))
+	}
+
+	return nil
 }
 
 // Do the mount operation followed by additional mounts required to take care

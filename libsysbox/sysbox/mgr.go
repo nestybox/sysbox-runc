@@ -48,8 +48,8 @@ func (mgr *Mgr) Enabled() bool {
 	return mgr.Active
 }
 
-// Registers the container with sysbox-mgr. If successful, returns
-// configuration tokens for sysbox-runc.
+// Registers the container with sysbox-mgr. If successful, stores the
+// sysbox configuration tokens for sysbox-runc in mgr.Config
 func (mgr *Mgr) Register(spec *specs.Spec) error {
 	var userns string
 	var netns string
