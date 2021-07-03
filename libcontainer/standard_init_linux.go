@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strconv"
 
+	"github.com/nestybox/sysbox-runc/libcontainer/mount"
 	"github.com/opencontainers/runc/libcontainer/apparmor"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/keys"
@@ -153,11 +154,21 @@ func (l *linuxStandardInit) Init() error {
 		return errors.Wrap(err, "apply apparmor profile")
 	}
 
-	for _, path := range l.config.Config.ReadonlyPaths {
-		if err := readonlyPath(path); err != nil {
-			return errors.Wrapf(err, "readonly path %s", path)
+	// Handle read-only paths
+	if len(l.config.Config.ReadonlyPaths) > 0 {
+		mounts, err := mount.GetMounts()
+		if err != nil {
+			return errors.Wrap(err, "getting mounts")
+		}
+
+		for _, path := range l.config.Config.ReadonlyPaths {
+			if err := readonlyPath(path, mounts); err != nil {
+				return errors.Wrapf(err, "readonly path %s", path)
+			}
 		}
 	}
+
+	// Handle masked paths
 	for _, path := range l.config.Config.MaskPaths {
 		if err := maskPath(path, l.config.Config.MountLabel); err != nil {
 			return errors.Wrapf(err, "mask path %s", path)

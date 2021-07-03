@@ -14,21 +14,25 @@ func GetMountsPid(pid uint32) ([]*Info, error) {
 	return parseMountTableForPid(pid)
 }
 
+func FindMount(mountpoint string, mounts []*Info) bool {
+	for _, m := range mounts {
+		if m.Mountpoint == mountpoint {
+			return true
+		}
+	}
+	return false
+}
+
 // Mounted looks at /proc/self/mountinfo to determine if the specified
 // mountpoint has been mounted
 func Mounted(mountpoint string) (bool, error) {
-	entries, err := parseMountTable()
+	mounts, err := parseMountTable()
 	if err != nil {
 		return false, err
 	}
 
-	// Search the table for the mountpoint
-	for _, e := range entries {
-		if e.Mountpoint == mountpoint {
-			return true, nil
-		}
-	}
-	return false, nil
+	isMounted := FindMount(mountpoint, mounts)
+	return isMounted, nil
 }
 
 // MountedWithFs looks at /proc/self/mountinfo to determine if the specified

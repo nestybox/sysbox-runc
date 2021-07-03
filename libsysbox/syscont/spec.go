@@ -569,6 +569,21 @@ func cfgSysboxMounts(spec *specs.Spec) {
 		return m1.Destination == m2.Destination
 	})
 
+	// If the container's rootfs is read-only, then sysbox mounts of /sys and
+	// below should also be read-only.
+	if spec.Root.Readonly {
+		tmpMounts := []specs.Mount{}
+		rwOpt := []string{"rw"}
+		for _, m := range sysboxMounts {
+			if strings.HasPrefix(m.Destination, "/sys") {
+				m.Options = utils.StringSliceRemove(m.Options, rwOpt)
+				m.Options = append(m.Options, "ro")
+			}
+			tmpMounts = append(tmpMounts, m)
+		}
+		sysboxMounts = tmpMounts
+	}
+
 	// Add sysbox mounts
 	spec.Mounts = append(spec.Mounts, sysboxMounts...)
 }
@@ -590,6 +605,20 @@ func cfgSysboxFsMounts(spec *specs.Spec, sysFs *sysbox.Fs) {
 				cntrMountpoint,
 				1,
 			)
+	}
+
+	// If the spec indicates a read-only rootfs, the sysbox-fs mounts should also
+	// be read-only. However, we don't mark them read-only here explicitly, so
+	// that they are initially mounted read-write while setting up the container.
+	// This is needed because the setup process may need to write to some of
+	// these mounts (e.g., writes to /proc/sys during networking setup). Instead,
+	// we add the mounts to the "readonly" paths list, so that they will be
+	// remounted to read-only after the container setup completes, right before
+	// starting the container's init process.
+	if spec.Root.Readonly {
+		for _, m := range sysboxFsMounts {
+			spec.Linux.ReadonlyPaths = append(spec.Linux.ReadonlyPaths, m.Destination)
+		}
 	}
 
 	spec.Mounts = append(spec.Mounts, sysboxFsMounts...)
@@ -683,6 +712,19 @@ func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, uidShiftRootfs bool) e
 	mounts := utils.MountSliceRemove(m, spec.Mounts, func(m1, m2 specs.Mount) bool {
 		return m1.Destination == m2.Destination
 	})
+
+	// If the spec indicates a read-only rootfs, the sysbox-mgr mounts should
+	// also be read-only.
+	if spec.Root.Readonly {
+		tmpMounts := []specs.Mount{}
+		rwOpt := []string{"rw"}
+		for _, m := range mounts {
+			m.Options = utils.StringSliceRemove(m.Options, rwOpt)
+			m.Options = append(m.Options, "ro")
+			tmpMounts = append(tmpMounts, m)
+		}
+		mounts = tmpMounts
+	}
 
 	spec.Mounts = append(spec.Mounts, mounts...)
 

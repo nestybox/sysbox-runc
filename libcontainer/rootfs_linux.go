@@ -19,6 +19,7 @@ import (
 	"time"
 
 	securejoin "github.com/cyphar/filepath-securejoin"
+	"github.com/nestybox/sysbox-runc/libcontainer/mount"
 
 	"github.com/moby/sys/mountinfo"
 
@@ -927,14 +928,24 @@ func createIfNotExists(path string, isDir bool) error {
 }
 
 // readonlyPath will make a path read only.
-func readonlyPath(path string) error {
-	if err := unix.Mount(path, path, "", unix.MS_BIND|unix.MS_REC, ""); err != nil {
-		if os.IsNotExist(err) {
-			return nil
+func readonlyPath(path string, mounts []*mount.Info) error {
+	isMountpoint := mount.FindMount(path, mounts)
+
+	if !isMountpoint {
+		if err := unix.Mount(path, path, "", unix.MS_BIND|unix.MS_REC, ""); err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return err
 		}
-		return err
 	}
-	return unix.Mount(path, path, "", unix.MS_BIND|unix.MS_REMOUNT|unix.MS_RDONLY|unix.MS_REC, "")
+
+	m := &configs.Mount{
+		Destination: path,
+		Flags:       unix.MS_BIND | unix.MS_RDONLY | unix.MS_REC,
+	}
+
+	return remount(m)
 }
 
 // remountReadonly will remount an existing mount point and ensure that it is read-only.
