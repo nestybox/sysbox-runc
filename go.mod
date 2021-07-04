@@ -39,6 +39,8 @@ replace github.com/nestybox/sysbox-ipc => ../sysbox-ipc
 
 replace github.com/nestybox/sysbox-libs/libseccomp-golang => ../sysbox-libs/libseccomp-golang
 
+replace github.com/nestybox/sysbox-libs/formatter => ../sysbox-libs/formatter
+
 replace github.com/nestybox/sysbox-libs/capability => ../sysbox-libs/capability
 
 replace github.com/nestybox/sysbox-libs/utils => ../sysbox-libs/utils
