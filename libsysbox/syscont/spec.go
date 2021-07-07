@@ -35,14 +35,17 @@ import (
 
 // Exported
 const (
-	SysboxFsDir string = "/var/lib/sysboxfs"
-	IdRangeMin  uint32 = 65536
+	IdRangeMin uint32 = 65536
 )
 
 // Internal
 const (
 	defaultUid uint32 = 231072
 	defaultGid uint32 = 231072
+)
+
+var (
+	SysboxFsDir string = "/var/lib/sysboxfs"
 )
 
 // System container "must-have" mounts
@@ -595,7 +598,7 @@ func cfgSysboxFsMounts(spec *specs.Spec, sysFs *sysbox.Fs) {
 	})
 
 	// Adjust sysboxFsMounts path attending to container-id value.
-	cntrMountpoint := filepath.Join(SysboxFsDir, sysFs.Id)
+	cntrMountpoint := filepath.Join(sysFs.Mountpoint, sysFs.Id)
 
 	for i := range sysboxFsMounts {
 		sysboxFsMounts[i].Source =
@@ -606,6 +609,8 @@ func cfgSysboxFsMounts(spec *specs.Spec, sysFs *sysbox.Fs) {
 				1,
 			)
 	}
+
+	SysboxFsDir = sysFs.Mountpoint
 
 	// If the spec indicates a read-only rootfs, the sysbox-fs mounts should also
 	// be read-only. However, we don't mark them read-only here explicitly, so

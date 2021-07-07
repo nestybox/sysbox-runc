@@ -39,10 +39,11 @@ type FsRegInfo struct {
 }
 
 type Fs struct {
-	Active bool
-	Id     string // container-id
-	PreReg bool   // indicates if the container was pre-registered with sysbox-fs
-	Reg    bool   // indicates if sys container was registered with sysbox-fs
+	Active     bool
+	Id         string // container-id
+	PreReg     bool   // indicates if the container was pre-registered with sysbox-fs
+	Reg        bool   // indicates if sys container was registered with sysbox-fs
+	Mountpoint string // sysbox-fs FUSE mountpoint
 }
 
 func NewFs(id string, enable bool) *Fs {
@@ -54,6 +55,17 @@ func NewFs(id string, enable bool) *Fs {
 
 func (fs *Fs) Enabled() bool {
 	return fs.Active
+}
+
+func (fs *Fs) GetConfig() error {
+
+	mp, err := sysboxFsGrpc.GetMountpoint()
+	if err != nil {
+		return fmt.Errorf("failed to get config from sysbox-fs: %v", err)
+	}
+
+	fs.Mountpoint = mp
+	return nil
 }
 
 // Pre-registers container with sysbox-fs.
