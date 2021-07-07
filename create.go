@@ -96,6 +96,13 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 			}()
 		}
 
+		// Get sysbox-fs related configs
+		if sysFs.Enabled() {
+			if err = sysFs.GetConfig(); err != nil {
+				return err
+			}
+		}
+
 		uidShiftSupported, uidShiftRootfs, err = syscont.ConvertSpec(context, sysMgr, sysFs, spec)
 		if err != nil {
 			return fmt.Errorf("error in the container spec: %v", err)
