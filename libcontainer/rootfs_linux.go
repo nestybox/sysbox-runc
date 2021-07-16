@@ -1343,7 +1343,7 @@ func switchDockerDnsIP(config *configs.Config, pipe io.ReadWriter) error {
 	newData := strings.Replace(string(oldData), dockerDns, defRoute, -1)
 
 	// As we are about to write to resolv.conf, we should ensure that this one
-	// is writable, which is not necesarily the case as file could have been
+	// is writable, which is not necessarily the case as file could have been
 	// bind-mounted in RO mode (usually the case when 'readonly' spec attribute
 	// is present). In these scenarios we will first remount the resource as RW,
 	// and will remount it back to RO once the write operation is completed.
