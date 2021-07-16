@@ -38,7 +38,7 @@ func equalIDMappings(a, b []specs.LinuxIDMapping) bool {
 
 func TestMergeIDMappings(t *testing.T) {
 
-	// test merging of continous ID mappings
+	// test merging of continuous ID mappings
 	have := []specs.LinuxIDMapping{
 		{ContainerID: 0, HostID: 1000000, Size: 1},
 		{ContainerID: 1, HostID: 1000001, Size: 2},
@@ -57,7 +57,7 @@ func TestMergeIDMappings(t *testing.T) {
 		t.Errorf("mergeIDMappings(%v) failed: got %v, want %v", have, got, want)
 	}
 
-	// test that merging on non-continous host ID mappings fails
+	// test that merging on non-continuous host ID mappings fails
 	have = []specs.LinuxIDMapping{
 		{ContainerID: 0, HostID: 1000000, Size: 1},
 		{ContainerID: 1, HostID: 1000002, Size: 65535},
@@ -69,7 +69,7 @@ func TestMergeIDMappings(t *testing.T) {
 		t.Errorf("mergeIDMappings(%v) passed; expected to fail", have)
 	}
 
-	// test that merging on non-continous container ID mappings fails
+	// test that merging on non-continuous container ID mappings fails
 	have = []specs.LinuxIDMapping{
 		{ContainerID: 0, HostID: 1000000, Size: 1},
 		{ContainerID: 2, HostID: 1000001, Size: 65535},
