@@ -18,6 +18,7 @@ require (
 	github.com/nestybox/sysbox-ipc v0.0.0-00010101000000-000000000000
 	github.com/nestybox/sysbox-libs/capability v0.0.0-00010101000000-000000000000
 	github.com/nestybox/sysbox-libs/dockerUtils v0.0.0-00010101000000-000000000000
+	github.com/nestybox/sysbox-libs/formatter v0.0.0-00010101000000-000000000000
 	github.com/nestybox/sysbox-libs/libseccomp-golang v0.0.0-00010101000000-000000000000
 	github.com/nestybox/sysbox-libs/utils v0.0.0-00010101000000-000000000000
 	github.com/opencontainers/runc v0.0.0-00010101000000-000000000000
@@ -42,5 +43,7 @@ replace github.com/nestybox/sysbox-libs/capability => ../sysbox-libs/capability
 replace github.com/nestybox/sysbox-libs/utils => ../sysbox-libs/utils
 
 replace github.com/nestybox/sysbox-libs/dockerUtils => ../sysbox-libs/dockerUtils
+
+replace github.com/nestybox/sysbox-libs/formatter => ../sysbox-libs/formatter
 
 replace github.com/opencontainers/runc => ./
