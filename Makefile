@@ -1,8 +1,12 @@
 CONTAINER_ENGINE := docker
 GO := go
+ARCH := amd64
 
+RUNC_BUILDROOT := build
+RUNC_BUILDDIR := $(RUNC_BUILDROOT)/$(ARCH)
 RUNC_TARGET := sysbox-runc
 RUNC_DEBUG_TARGET := sysbox-runc-debug
+RUNC_STATIC_TARGET := sysbox-runc-static
 
 SOURCES := $(shell find . 2>&1 | grep -E '.*\.(c|h|go)$$')
 PREFIX ?= /usr/local
@@ -62,11 +66,22 @@ ifeq ($(shell $(GO) env GOOS),linux)
 		GO_BUILDMODE := "-buildmode=pie"
 	endif
 endif
-GO_BUILD := $(GO) build $(GO_BUILDMODE) $(EXTRA_FLAGS) -tags "$(BUILDTAGS)" \
+
+ifeq ($(ARCH),armel)
+	GO_XCOMPILE := CGO_ENABLED=1 GOOS=linux GOARCH=arm GOARM=6 CC=arm-linux-gnueabi-gcc
+else ifeq ($(ARCH),armhf)
+	GO_XCOMPILE := CGO_ENABLED=1 GOOS=linux GOARCH=arm GOARM=7 CC=arm-linux-gnueabihf-gcc
+else ifeq ($(ARCH),arm64)
+	GO_XCOMPILE = CGO_ENABLED=1 GOOS=linux GOARCH=arm64 CC=aarch64-linux-gnu-gcc
+else
+	GO_XCOMPILE = GOARCH=amd64
+endif
+
+GO_BUILD := $(GO_XCOMPILE) $(GO) build $(GO_BUILDMODE) $(EXTRA_FLAGS) -tags "$(BUILDTAGS)" \
 	-ldflags $(LDFLAGS) $(EXTRA_LDFLAGS)
-GO_BUILD_STATIC := CGO_ENABLED=1 $(GO) build $(EXTRA_FLAGS) -tags "$(BUILDTAGS) netgo osusergo" \
+GO_BUILD_STATIC := CGO_ENABLED=1 $(GO_XCOMPILE) $(GO) build $(EXTRA_FLAGS) -tags "$(BUILDTAGS) netgo osusergo" \
 	-ldflags "-w -extldflags -static" -ldflags $(LDFLAGS) $(EXTRA_LDFLAGS)
-GO_BUILD_DEBUG := $(GO) build --buildmode=exe $(EXTRA_FLAGS) -tags "$(BUILDTAGS)" \
+GO_BUILD_DEBUG := $(GO_XCOMPILE) $(GO) build --buildmode=exe $(EXTRA_FLAGS) -tags "$(BUILDTAGS)" \
 	-ldflags $(LDFLAGS) $(EXTRA_LDFLAGS) -gcflags="all=-N -l"
 
 RUN_TEST_CONT := $(CONTAINER_ENGINE) run ${DOCKER_RUN_PROXY} \
@@ -79,22 +94,26 @@ RUN_TEST_CONT := $(CONTAINER_ENGINE) run ${DOCKER_RUN_PROXY} \
 		$(KERNEL_HEADERS_MOUNTS)                                    \
 		$(RUNC_IMAGE)
 
-.DEFAULT: $(RUNC_TARGET)
+.DEFAULT: sysbox-runc
 
-$(RUNC_TARGET): $(SOURCES) $(SYSIPC_SRC) $(LIBSECCOMP_SRC)
-	$(GO_BUILD) -o $(RUNC_TARGET) .
+$(RUNC_BUILDDIR)/$(RUNC_TARGET): $(SOURCES) $(SYSIPC_SRC) $(LIBSECCOMP_SRC)
+	$(GO_BUILD) -o $(RUNC_BUILDDIR)/$(RUNC_TARGET) .
+
+sysbox-runc: $(RUNC_BUILDDIR)/$(RUNC_TARGET)
 
 # -buildmode=exe required in order to debug nsenter (cgo)
-$(RUNC_DEBUG_TARGET):
-	$(GO_BUILD_DEBUG) -o $(RUNC_TARGET) .
+$(RUNC_BUILDDIR)/$(RUNC_DEBUG_TARGET):
+	$(GO_BUILD_DEBUG) -o $(RUNC_BUILDDIR)/$(RUNC_TARGET) .
 
-all: $(RUNC_TARGET) recvtty
+sysbox-runc-debug: $(RUNC_BUILDDIR)/$(RUNC_DEBUG_TARGET)
+
+all: $(RUNC_BUILDDIR)/$(RUNC_TARGET) recvtty
 
 recvtty:
 	$(GO_BUILD) -o contrib/cmd/recvtty/recvtty ./contrib/cmd/recvtty
 
 static: $(SOURCES) $(SYSIPC_SRC)
-	$(GO_BUILD_STATIC) -o $(RUNC_TARGET) .
+	$(GO_BUILD_STATIC) -o $(RUNC_BUILDDIR)/$(RUNC_TARGET) .
 	$(GO_BUILD_STATIC) -o contrib/cmd/recvtty/recvtty ./contrib/cmd/recvtty
 
 release:
@@ -158,7 +177,7 @@ shell: runcimage
 		$(RUNC_IMAGE) bash
 
 install:
-	install -D -m0755 $(RUNC_TARGET) $(BINDIR)/$(RUNC_TARGET)
+	install -D -m0755 $(RUNC_BUILDDIR)/$(RUNC_TARGET) $(BINDIR)/$(RUNC_TARGET)
 
 install-bash:
 	install -D -m0644 contrib/completions/bash/$(RUNC_TARGET) $(PREFIX)/share/bash-completion/completions/$(RUNC_TARGET)
@@ -174,10 +193,13 @@ uninstall-bash:
 	rm -f $(PREFIX)/share/bash-completion/completions/$(RUNC_TARGET)
 
 clean:
-	rm -f $(RUNC_TARGET) $(RUNC_TARGET)-*
+	rm -rf $(RUNC_BUILDROOT)/$(RUNC_TARGET)
 	rm -f contrib/cmd/recvtty/recvtty
 	rm -rf release
 	rm -rf man/man8
+
+distclean: clean
+	rm -rf $(SYSFS_BUILDROOT)
 
 validate:
 	script/validate-gofmt
@@ -194,15 +216,6 @@ shfmt:
 
 ci: validate test release
 
-cross: runcimage
-	docker run ${DOCKER_RUN_PROXY} -e BUILDTAGS="$(BUILDTAGS)" --rm -v $(CURDIR):$(RUNC) $(RUNC_IMAGE) make localcross
-
-localcross:
-	CGO_ENABLED=1 GOARCH=arm GOARM=6 CC=arm-linux-gnueabi-gcc   $(GO_BUILD) -o runc-armel .
-	CGO_ENABLED=1 GOARCH=arm GOARM=7 CC=arm-linux-gnueabihf-gcc $(GO_BUILD) -o runc-armhf .
-	CGO_ENABLED=1 GOARCH=arm64 CC=aarch64-linux-gnu-gcc         $(GO_BUILD) -o runc-arm64 .
-	CGO_ENABLED=1 GOARCH=ppc64le CC=powerpc64le-linux-gnu-gcc   $(GO_BUILD) -o runc-ppc64le .
-
 # memoize allpackages, so that it's executed only once and only if used
 _allpackages = $(shell $(GO) list ./... | grep -v vendor)
 allpackages = $(if $(__allpackages),,$(eval __allpackages := $$(_allpackages)))$(__allpackages)
@@ -213,5 +226,4 @@ listpackages:
 .PHONY: runc all recvtty static release dbuild lint man runcimage \
 	test localtest unittest localunittest integration localintegration \
 	rootlessintegration localrootlessintegration shell install install-bash \
-	install-man uninstall uninstall-bash clean validate ci shfmt shellcheck \
-	cross localcross
+	install-man uninstall uninstall-bash clean validate ci shfmt shellcheck
