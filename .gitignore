@@ -1,6 +1,5 @@
+build
 vendor/pkg
-/sysbox-runc
-/sysbox-runc-*
 contrib/cmd/recvtty/recvtty
 man/man8
 release
