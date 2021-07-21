@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	//"math"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -142,10 +142,10 @@ func parseIDMap(idMap string, uid, gid, size *uint32) error {
 	*gid = uint32(num[1])
 	*size = uint32(num[2])
 
-//	if *uid > math.MaxUint32 || *gid > math.MaxUint32 || *size < syscont.IdRangeMin {
-//		return fmt.Errorf("invalid id-map \"%v\": uid and gid must be <= %v, size must be >= %v",
-//			idMap, math.MaxUint32, syscont.IdRangeMin)
-//	}
+	if *uid > math.MaxUint32 || *gid > math.MaxUint32 || *size < syscont.IdRangeMin {
+		return fmt.Errorf("invalid id-map \"%v\": uid and gid must be <= %v, size must be >= %v",
+			idMap, uint32(math.MaxUint32), syscont.IdRangeMin)
+	}
 
 	return nil
 }
