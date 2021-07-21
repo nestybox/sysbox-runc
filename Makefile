@@ -96,16 +96,16 @@ RUN_TEST_CONT := $(CONTAINER_ENGINE) run ${DOCKER_RUN_PROXY} \
 
 .DEFAULT: sysbox-runc
 
+sysbox-runc: $(RUNC_BUILDDIR)/$(RUNC_TARGET)
+
 $(RUNC_BUILDDIR)/$(RUNC_TARGET): $(SOURCES) $(SYSIPC_SRC) $(LIBSECCOMP_SRC)
 	$(GO_BUILD) -o $(RUNC_BUILDDIR)/$(RUNC_TARGET) .
 
-sysbox-runc: $(RUNC_BUILDDIR)/$(RUNC_TARGET)
+sysbox-runc-debug: $(RUNC_BUILDDIR)/$(RUNC_DEBUG_TARGET)
 
 # -buildmode=exe required in order to debug nsenter (cgo)
 $(RUNC_BUILDDIR)/$(RUNC_DEBUG_TARGET):
 	$(GO_BUILD_DEBUG) -o $(RUNC_BUILDDIR)/$(RUNC_TARGET) .
-
-sysbox-runc-debug: $(RUNC_BUILDDIR)/$(RUNC_DEBUG_TARGET)
 
 all: $(RUNC_BUILDDIR)/$(RUNC_TARGET) recvtty
 
