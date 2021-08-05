@@ -1159,19 +1159,26 @@ func needUidShiftOnBindSrc(mount *configs.Mount, config *configs.Config) (bool, 
 	}
 
 	// If the bind source has uid:gid ownership matching the container's user-ns
-	// host uid:gid, shiftfs is not needed
+	// mappings, shiftfs is not needed.
+
 	var hostUid, hostGid uint32
+	var uidSize, gidSize uint32
+
 	for _, mapping := range config.UidMappings {
 		if mapping.ContainerID == 0 {
 			hostUid = uint32(mapping.HostID)
 		}
+		uidSize += uint32(mapping.Size)
 	}
 	for _, mapping := range config.GidMappings {
 		if mapping.ContainerID == 0 {
 			hostGid = uint32(mapping.HostID)
 		}
+		gidSize += uint32(mapping.Size)
 	}
-	if hostUid == mount.BindSrcInfo.Uid && hostGid == mount.BindSrcInfo.Gid {
+
+	if (mount.BindSrcInfo.Uid >= hostUid) && (mount.BindSrcInfo.Uid < hostUid+uidSize) &&
+		(mount.BindSrcInfo.Gid >= hostGid) && (mount.BindSrcInfo.Gid < hostGid+gidSize) {
 		return false, nil
 	}
 
