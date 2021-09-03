@@ -375,6 +375,18 @@ var syscontSyscallTrapList = []string{
 	"chown",
 	"fchown",
 	"fchownat",
+	"setxattr",
+	"lsetxattr",
+	"fsetxattr",
+	"getxattr",
+	"lgetxattr",
+	"fgetxattr",
+	"removexattr",
+	"lremovexattr",
+	"fremovexattr",
+	"listxattr",
+	"llistxattr",
+	"flistxattr",
 }
 
 // AddSyscallTraps modifies the given libcontainer config to add seccomp notification
