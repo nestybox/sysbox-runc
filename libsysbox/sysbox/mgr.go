@@ -123,8 +123,8 @@ func (mgr *Mgr) PrepMounts(uid, gid uint32, prepList []ipcLib.MountPrepInfo) err
 }
 
 // ReqMounts sends a request to sysbox-mgr for container mounts; all paths must be absolute.
-func (mgr *Mgr) ReqMounts(rootfs string, uid, gid uint32, shiftUids bool, reqList []ipcLib.MountReqInfo) ([]specs.Mount, error) {
-	mounts, err := sysboxMgrGrpc.ReqMounts(mgr.Id, rootfs, uid, gid, shiftUids, reqList)
+func (mgr *Mgr) ReqMounts(rootfs string, uid, gid uint32, reqList []ipcLib.MountReqInfo) ([]specs.Mount, error) {
+	mounts, err := sysboxMgrGrpc.ReqMounts(mgr.Id, rootfs, uid, gid, reqList)
 	if err != nil {
 		return nil, fmt.Errorf("failed to request mounts from sysbox-mgr: %v", err)
 	}
