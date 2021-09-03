@@ -20,8 +20,10 @@ package syscont
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	mapset "github.com/deckarep/golang-set"
 	ipcLib "github.com/nestybox/sysbox-ipc/sysboxMgrLib"
@@ -690,24 +692,68 @@ func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, uidShiftRootfs bool) e
 	}
 
 	// Otherwise, add the special dir to the list of mounts that we will request
-	// sysbox-mgr to setup
-	reqList := []ipcLib.MountReqInfo{}
-	for dest, kind := range specialDir {
-		info := ipcLib.MountReqInfo{
-			Kind: kind,
-			Dest: dest,
-		}
-		reqList = append(reqList, info)
-	}
-
-	// sysbox-mgr will setup host dirs to back the mounts in the
+	// sysbox-mgr to setup. Sysbox-mgr will setup host dirs to back the mounts in the
 	// request list; it will also send us any other mounts it needs.
+
 	rootPath, err := filepath.Abs(spec.Root.Path)
 	if err != nil {
 		return err
 	}
 
-	m, err := mgr.ReqMounts(rootPath, uid, gid, uidShiftRootfs, reqList)
+	reqList := []ipcLib.MountReqInfo{}
+	for dest, kind := range specialDir {
+
+		// Check if the special dir requires uid shifting or not
+		path := filepath.Join(rootPath, dest)
+		shiftUids := false
+
+		fi, err := os.Stat(path)
+
+		if err == nil {
+
+			// If the special dir exists within the container's rootfs, then uid
+			// shifting is required when it's owned by root:root.
+
+			st, _ := fi.Sys().(*syscall.Stat_t)
+
+			if st.Uid != st.Gid {
+				return fmt.Errorf("container rootfs has special dir %s with non-matching uid & gid: %u %u", path, st.Uid, st.Gid)
+			}
+
+			if st.Uid != 0 && st.Uid != uid {
+				return fmt.Errorf("container rootfs has special dir %s with unexpected uid: %u; want %u or %u", path, st.Uid, 0, uid)
+			}
+
+			if st.Uid == 0 && st.Gid == 0 {
+				shiftUids = true
+			}
+
+		} else if os.IsNotExist(err) {
+
+			// If the special dir does not exist within the container rootfs, then
+			// uid shifting is not required when the container starts. However,
+			// when the container stops, if the sysbox host volume that backs the
+			// mount over the special dir has data in it, we copy that back to the
+			// container's rootfs. In this case, whether we do uid shifting on the
+			// during the copy depends on whether the container rootfs requires
+			// uid shifting or not.
+
+			shiftUids = uidShiftRootfs
+
+		} else {
+			return err
+		}
+
+		info := ipcLib.MountReqInfo{
+			Kind:      kind,
+			Dest:      dest,
+			ShiftUids: shiftUids,
+		}
+
+		reqList = append(reqList, info)
+	}
+
+	m, err := mgr.ReqMounts(rootPath, uid, gid, reqList)
 	if err != nil {
 		return err
 	}
