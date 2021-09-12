@@ -724,6 +724,10 @@ func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, uidShiftRootfs bool) e
 				return fmt.Errorf("container rootfs has special dir %s with unexpected uid: %u; want %u or %u", path, st.Uid, 0, uid)
 			}
 
+			if st.Gid != 0 && st.Gid != gid {
+				return fmt.Errorf("container rootfs has special dir %s with unexpected gid: %u; want %u or %u", path, st.Gid, 0, gid)
+			}
+
 			if st.Uid == 0 && st.Gid == 0 {
 				shiftUids = true
 			}
@@ -735,8 +739,10 @@ func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, uidShiftRootfs bool) e
 			// when the container stops, if the sysbox host volume that backs the
 			// mount over the special dir has data in it, we copy that back to the
 			// container's rootfs. In this case, whether we do uid shifting on the
-			// during the copy depends on whether the container rootfs requires
-			// uid shifting or not.
+			// special dir during the copy depends on whether the container rootfs
+			// itself requires uid shifting or not (i.e., whether the rootfs is
+			// owned by root:root (shifting required) or by the <uid>:<gid> in the
+			// userns map (shifting not required).
 
 			shiftUids = uidShiftRootfs
 
