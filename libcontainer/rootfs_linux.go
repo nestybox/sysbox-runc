@@ -70,7 +70,7 @@ func prepareRootfs(pipe io.ReadWriter, iConfig *initConfig) (err error) {
 
 	setupDev := needsSetupDev(config)
 	if setupDev {
-		if err := createDevices(config); err != nil {
+		if err := createDevices(config, pipe); err != nil {
 			return newSystemErrorWithCause(err, "creating device nodes")
 		}
 		if err := setupPtmx(config); err != nil {
@@ -197,7 +197,7 @@ func mountCmd(cmd configs.Command) error {
 	return nil
 }
 
-func prepareBindDest(m *configs.Mount, rootfs string, absDestPath bool) (err error) {
+func prepareBindDest(m *configs.Mount, absDestPath bool, config *configs.Config, pipe io.ReadWriter) (err error) {
 	var base, dest string
 
 	// ensure that the destination of the bind mount is resolved of symlinks at mount time because
@@ -206,7 +206,7 @@ func prepareBindDest(m *configs.Mount, rootfs string, absDestPath bool) (err err
 	// evil stuff to try to escape the container's rootfs.
 
 	if absDestPath {
-		base = rootfs
+		base = config.Rootfs
 	} else {
 		base = "."
 	}
@@ -217,14 +217,14 @@ func prepareBindDest(m *configs.Mount, rootfs string, absDestPath bool) (err err
 
 	// update the mount with the correct dest after symlinks are resolved.
 	m.Destination = dest
-	if err = createIfNotExists(dest, m.BindSrcInfo.IsDir); err != nil {
+	if err = createIfNotExists(dest, m.BindSrcInfo.IsDir, config, pipe); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func mountCgroupV1(m *configs.Mount, rootfs, mountLabel string, enableCgroupns bool, pipe io.ReadWriter) error {
+func mountCgroupV1(m *configs.Mount, enableCgroupns bool, config *configs.Config, pipe io.ReadWriter) error {
 	binds, err := getCgroupMounts(m)
 	if err != nil {
 		return err
@@ -245,14 +245,14 @@ func mountCgroupV1(m *configs.Mount, rootfs, mountLabel string, enableCgroupns b
 		PropagationFlags: m.PropagationFlags,
 	}
 
-	if err := mountToRootfs(tmpfs, rootfs, mountLabel, enableCgroupns, pipe); err != nil {
+	if err := mountToRootfs(tmpfs, config, enableCgroupns, pipe); err != nil {
 		return err
 	}
 	for _, b := range binds {
 		if enableCgroupns {
 			// sysbox-runc: use relative path (as otherwise we may not have permission to mkdir)
 			subsystemPath := b.Destination
-			if err := os.MkdirAll(subsystemPath, 0755); err != nil {
+			if err := mkdirall(subsystemPath, 0755, config, pipe); err != nil {
 				return err
 			}
 			flags := defaultMountFlags
@@ -270,7 +270,7 @@ func mountCgroupV1(m *configs.Mount, rootfs, mountLabel string, enableCgroupns b
 				return err
 			}
 		} else {
-			if err := mountToRootfs(b, rootfs, mountLabel, enableCgroupns, pipe); err != nil {
+			if err := mountToRootfs(b, config, enableCgroupns, pipe); err != nil {
 				return err
 			}
 		}
@@ -288,12 +288,12 @@ func mountCgroupV1(m *configs.Mount, rootfs, mountLabel string, enableCgroupns b
 	return nil
 }
 
-func mountCgroupV2(m *configs.Mount, rootfs, mountLabel string, enableCgroupns bool) error {
+func mountCgroupV2(m *configs.Mount, enableCgroupns bool, config *configs.Config, pipe io.ReadWriter) error {
 	cgroupPath, err := securejoin.SecureJoin(".", m.Destination)
 	if err != nil {
 		return err
 	}
-	if err := mkdirall(cgroupPath, 0755); err != nil {
+	if err := mkdirall(cgroupPath, 0755, config, pipe); err != nil {
 		return err
 	}
 	if err := unix.Mount(m.Source, cgroupPath, "cgroup2", uintptr(m.Flags), m.Data); err != nil {
@@ -310,7 +310,7 @@ func mountCgroupV2(m *configs.Mount, rootfs, mountLabel string, enableCgroupns b
 // working directory (cwd). This avoids permission-denied problems on the Mkdirall call
 // when shiftfs is mounted on the cwd. The exact cause of the permission problem is not
 // clear and needs further investigation.
-func mkdirall(path string, mode os.FileMode) error {
+func mkdirall(path string, mode os.FileMode, config *configs.Config, pipe io.ReadWriter) error {
 
 	fd, err := syscall.Open(".", unix.O_PATH|unix.O_CLOEXEC|unix.O_DIRECTORY, 0)
 	if err != nil {
@@ -322,7 +322,24 @@ func mkdirall(path string, mode os.FileMode) error {
 	}
 
 	if err := os.MkdirAll(path, mode); err != nil {
-		return fmt.Errorf("mkdirall %s with mode %o failed: %v", path, mode, err)
+
+		// In some cases the container's init process process won't have
+		// permission to perform the mkdir (e.g., if the parent directory in the
+		// image is owned by root:root on the host). In this case, we ask the
+		// parent sysbox-runc process to do this for us.
+
+		req := opReq{
+			Op:     mkdir,
+			Rootfs: config.Rootfs,
+			Path:   path,
+			Mode:   mode,
+			Uid:    config.UidMappings[0].HostID,
+			Gid:    config.GidMappings[0].HostID,
+		}
+
+		if err := syncParentDoOp([]opReq{req}, pipe); err != nil {
+			return fmt.Errorf("mkdirall %s with mode %o failed: %v", path, mode, err)
+		}
 	}
 
 	if err := syscall.Close(fd); err != nil {
@@ -332,9 +349,10 @@ func mkdirall(path string, mode os.FileMode) error {
 	return nil
 }
 
-func mountToRootfs(m *configs.Mount, rootfs, mountLabel string, enableCgroupns bool, pipe io.ReadWriter) error {
+func mountToRootfs(m *configs.Mount, config *configs.Config, enableCgroupns bool, pipe io.ReadWriter) error {
 	var (
-		dest = m.Destination
+		mountLabel = config.MountLabel
+		dest       = m.Destination
 	)
 
 	// This function assumes cwd is the container's rootfs
@@ -355,13 +373,13 @@ func mountToRootfs(m *configs.Mount, rootfs, mountLabel string, enableCgroupns b
 		} else if fi.Mode()&os.ModeDir == 0 {
 			return fmt.Errorf("filesystem %q must be mounted on ordinary directory", m.Device)
 		}
-		if err := mkdirall(dest, 0755); err != nil {
+		if err := mkdirall(dest, 0755, config, pipe); err != nil {
 			return fmt.Errorf("failed to created dir for %s mount: %v", m.Device, err)
 		}
 		// Selinux kernels do not support labeling of /proc or /sys
 		return mountPropagate(m, "")
 	case "mqueue":
-		if err := mkdirall(dest, 0755); err != nil {
+		if err := mkdirall(dest, 0755, config, pipe); err != nil {
 			return err
 		}
 		if err := mountPropagate(m, ""); err != nil {
@@ -380,7 +398,7 @@ func mountToRootfs(m *configs.Mount, rootfs, mountLabel string, enableCgroupns b
 		m.Destination = dest
 		stat, err := os.Stat(dest)
 		if err != nil {
-			if err := mkdirall(dest, 0755); err != nil {
+			if err := mkdirall(dest, 0755, config, pipe); err != nil {
 				return err
 			}
 		}
@@ -430,15 +448,15 @@ func mountToRootfs(m *configs.Mount, rootfs, mountLabel string, enableCgroupns b
 		return nil
 	case "cgroup":
 		if cgroups.IsCgroup2UnifiedMode() {
-			return mountCgroupV2(m, rootfs, mountLabel, enableCgroupns)
+			return mountCgroupV2(m, enableCgroupns, config, pipe)
 		}
-		return mountCgroupV1(m, rootfs, mountLabel, enableCgroupns, pipe)
+		return mountCgroupV1(m, enableCgroupns, config, pipe)
 	default:
 		// ensure that the destination of the mount is resolved of symlinks at mount time because
 		// any previous mounts can invalidate the next mount's destination.
 		// this can happen when a user specifies mounts within other mounts to cause breakouts or other
 		// evil stuff to try to escape the container's rootfs.
-		if err := mkdirall(dest, 0755); err != nil {
+		if err := mkdirall(dest, 0755, config, pipe); err != nil {
 			return err
 		}
 		return mountPropagate(m, mountLabel)
@@ -494,7 +512,7 @@ func doBindMounts(config *configs.Config, pipe io.ReadWriter) error {
 			}
 		}
 
-		if err := prepareBindDest(m, config.Rootfs, false); err != nil {
+		if err := prepareBindDest(m, false, config, pipe); err != nil {
 			return err
 		}
 
@@ -629,7 +647,7 @@ func reOpenDevNull() error {
 }
 
 // Create the device nodes in the container.
-func createDevices(config *configs.Config) error {
+func createDevices(config *configs.Config, pipe io.ReadWriter) error {
 	useBindMount := system.RunningInUserNS() || config.Namespaces.Contains(configs.NEWUSER)
 	oldMask := unix.Umask(0000)
 	for _, node := range config.Devices {
@@ -641,7 +659,7 @@ func createDevices(config *configs.Config) error {
 
 		// containers running in a user namespace are not allowed to mknod
 		// devices so we can just bind mount it from the host.
-		if err := createDeviceNode(node, useBindMount); err != nil {
+		if err := createDeviceNode(node, useBindMount, config, pipe); err != nil {
 			unix.Umask(oldMask)
 			return err
 		}
@@ -662,14 +680,14 @@ func bindMountDeviceNode(dest string, node *devices.Device) error {
 }
 
 // Creates the device node in the rootfs of the container.
-func createDeviceNode(node *devices.Device, bind bool) error {
+func createDeviceNode(node *devices.Device, bind bool, config *configs.Config, pipe io.ReadWriter) error {
 	if node.Path == "" {
 		// The node only exists for cgroup reasons, ignore it here.
 		return nil
 	}
 	dest := filepath.Join(".", node.Path)
 
-	if err := mkdirall(filepath.Dir(dest), 0755); err != nil {
+	if err := mkdirall(filepath.Dir(dest), 0755, config, pipe); err != nil {
 		return err
 	}
 	if bind {
@@ -908,13 +926,13 @@ func chroot() error {
 }
 
 // createIfNotExists creates a file or a directory only if it does not already exist.
-func createIfNotExists(path string, isDir bool) error {
+func createIfNotExists(path string, isDir bool, config *configs.Config, pipe io.ReadWriter) error {
 	if _, err := os.Stat(path); err != nil {
 		if os.IsNotExist(err) {
 			if isDir {
-				return mkdirall(path, 0755)
+				return mkdirall(path, 0755, config, pipe)
 			}
-			if err := mkdirall(filepath.Dir(path), 0755); err != nil {
+			if err := mkdirall(filepath.Dir(path), 0755, config, pipe); err != nil {
 				return err
 			}
 			f, err := os.OpenFile(path, os.O_CREATE, 0755)
@@ -1100,7 +1118,7 @@ func doMounts(config *configs.Config, pipe io.ReadWriter) error {
 	// Do non-bind mounts
 	for _, m := range config.Mounts {
 		if m.Device != "bind" {
-			if err := mountToRootfs(m, config.Rootfs, config.MountLabel, true, pipe); err != nil {
+			if err := mountToRootfs(m, config, true, pipe); err != nil {
 				return newSystemErrorWithCausef(err, "mounting %q to rootfs %q at %q", m.Source, config.Rootfs, m.Destination)
 			}
 

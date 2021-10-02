@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver"
+	securejoin "github.com/cyphar/filepath-securejoin"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/selinux/go-selinux/label"
 	"golang.org/x/sys/unix"
@@ -294,13 +295,39 @@ func (l *linuxRootfsInit) Init() error {
 		rootfs := l.reqs[0].Rootfs
 
 		for _, req := range l.reqs {
-			path := filepath.Join(rootfs, req.Path)
+			path, err := securejoin.SecureJoin(rootfs, req.Path)
+			if err != nil {
+				return newSystemErrorWithCausef(err, "secure join of %s and %s failed: %s", rootfs, req.Path, err)
+			}
+
 			uid := req.Uid
 			gid := req.Gid
 
 			if err := unix.Chown(path, uid, gid); err != nil {
 				return newSystemErrorWithCausef(err, "failed to chown %s to %v:%v", path, uid, gid)
 			}
+		}
+
+	case mkdir:
+		rootfs := l.reqs[0].Rootfs
+
+		for _, req := range l.reqs {
+			path, err := securejoin.SecureJoin(rootfs, req.Path)
+			if err != nil {
+				return newSystemErrorWithCausef(err, "secure join of %s and %s failed: %s", rootfs, req.Path, err)
+			}
+
+			mode := req.Mode
+			uid := req.Uid
+			gid := req.Gid
+
+			if err := os.MkdirAll(path, mode); err != nil {
+				return newSystemErrorWithCausef(err, "failed to mkdirall %s: %s", path, err)
+			}
+			if err := unix.Chown(path, uid, gid); err != nil {
+				return newSystemErrorWithCausef(err, "failed to chown %s to %v:%v", path, uid, gid)
+			}
+
 		}
 
 	default:
