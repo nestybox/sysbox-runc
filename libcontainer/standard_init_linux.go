@@ -38,6 +38,7 @@ const (
 	switchDockerDns
 	seccompFd
 	chown
+	mkdir
 )
 
 type opReq struct {
@@ -52,10 +53,11 @@ type opReq struct {
 	OldDns string `json:"olddns"`
 	NewDns string `json:"newdns"`
 
-	// chown
-	Path string `json:"path"`
-	Uid  int    `json:"uid"`
-	Gid  int    `json:"gid"`
+	// chown & mkdir
+	Path string      `json:"path"`
+	Uid  int         `json:"uid"`
+	Gid  int         `json:"gid"`
+	Mode os.FileMode `json:"mode"`
 }
 
 func (l *linuxStandardInit) getSessionRingParams() (string, uint32, uint32) {

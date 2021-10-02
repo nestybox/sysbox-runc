@@ -1321,7 +1321,7 @@ func (c *linuxContainer) makeCriuRestoreMountpoints(m *configs.Mount) error {
 		// sysbox-runc: this is no longer the case; prepareBindDest() only checks the
 		// mount destination; if we need to check the mount source we need to create a
 		// function that explicitly does this.
-		if err := prepareBindDest(m, c.config.Rootfs, true); err != nil {
+		if err := prepareBindDest(m, true, c.config, nil); err != nil {
 			return err
 		}
 	default:
@@ -2343,7 +2343,7 @@ func (c *linuxContainer) handleReqOp(childPid int, reqs []opReq) error {
 	// of the same type.
 	op := reqs[0].Op
 
-	if op != bind && op != switchDockerDns && op != chown {
+	if op != bind && op != switchDockerDns && op != chown && op != mkdir {
 		return newSystemError(fmt.Errorf("invalid opReq type %d", int(op)))
 	}
 
@@ -2389,12 +2389,10 @@ func (c *linuxContainer) handleOp(op opReqType, childPid int, reqs []opReq) erro
 	var nsPath string
 
 	switch op {
-	case bind:
+	case bind, chown, mkdir:
 		nsPath = fmt.Sprintf("mnt:/proc/%d/ns/mnt", childPid)
 	case switchDockerDns:
 		nsPath = fmt.Sprintf("net:/proc/%d/ns/net", childPid)
-	case chown:
-		nsPath = fmt.Sprintf("mnt:/proc/%d/ns/mnt", childPid)
 	}
 
 	namespaces := []string{nsPath}
