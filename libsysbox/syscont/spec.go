@@ -20,6 +20,7 @@ package syscont
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -658,20 +659,24 @@ func cfgSystemdMounts(spec *specs.Spec) {
 // Notice that even though this code habilitates the custom definition of the data-root's
 // location, this will be only honored by Sysbox if this attribute is set prior to the
 // container creation (i.e., at docker-image build time).
-func getDockerDataRootPath(spec *specs.Spec) string {
+func getInnerDockerDataRootPath(spec *specs.Spec) (string, error) {
 
 	var defaultDataRoot = "/var/lib/docker"
 
 	rootPath, err := filepath.Abs(spec.Root.Path)
 	if err != nil {
-		return defaultDataRoot
+		return "", err
 	}
 
 	dockerCfgFile := filepath.Join(rootPath, "/etc/docker/daemon.json")
 
 	f, err := os.Open(dockerCfgFile)
 	if err != nil {
-		return defaultDataRoot
+		if errors.Is(err, os.ErrNotExist) {
+			return defaultDataRoot, nil
+		} else {
+			return "", err
+		}
 	}
 	defer f.Close()
 
@@ -680,32 +685,19 @@ func getDockerDataRootPath(spec *specs.Spec) string {
 
 	// Parse the data-root field of the docker's config file:
 	//
-	// Example:    "data-root": "/var/lib/docker",
+	// Example:  "data-root": "/var/lib/docker",
 	for scanner.Scan() {
 		data := scanner.Text()
 		if strings.Contains(data, "data-root") {
 
 			dataRootStr := strings.Split(data, ":")
 			if len(dataRootStr) == 2 {
-				s := dataRootStr[1]
+				dataRoot := dataRootStr[1]
+				dataRoot = strings.TrimSpace(dataRoot)
+				dataRoot = strings.Trim(dataRoot, "\",")
 
-				s = strings.TrimSpace(s)
-
-				// Skip leading quotes.
-				if len(s) > 0 && s[0] == '"' {
-						s = s[1:]
-				}
-				// Skip trailing coma.
-				if len(s) > 0 && s[len(s) - 1] == ',' {
-					s = s[:len(s)-1]
-				}
-				// Skip trailing quotes.
-				if len(s) > 0 && s[len(s) - 1] == '"' {
-					s = s[:len(s)-1]
-				}
-
-				if len(s) > 0 {
-					return s
+				if len(dataRoot) > 0 {
+					return dataRoot, nil
 				}
 
 				break
@@ -713,29 +705,35 @@ func getDockerDataRootPath(spec *specs.Spec) string {
 		}
 	}
 
-	return defaultDataRoot
+	return defaultDataRoot, nil
 }
 
-func getSpecialDirs(spec *specs.Spec) map[string]ipcLib.MntKind {
+func getSpecialDirs(spec *specs.Spec) (map[string]ipcLib.MntKind, error) {
 
-	var dockerDataRoot = getDockerDataRootPath(spec)
+	innerDockerDataRoot, err := getInnerDockerDataRootPath(spec)
+	if err != nil {
+		return nil, err
+	}
 
 	// These directories in the sys container are bind-mounted from host dirs managed by sysbox-mgr
 	specialDirMap := map[string]ipcLib.MntKind{
-		dockerDataRoot:         ipcLib.MntVarLibDocker,
+		innerDockerDataRoot:    ipcLib.MntVarLibDocker,
 		"/var/lib/kubelet":     ipcLib.MntVarLibKubelet,
 		"/var/lib/rancher/k3s": ipcLib.MntVarLibK3s,
 		"/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs": ipcLib.MntVarLibContainerdOvfs,
 	}
 
-	return specialDirMap
+	return specialDirMap, nil
 }
 
 // sysMgrSetupMounts requests the sysbox-mgr to setup special sys container mounts.
 func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, uidShiftRootfs bool) error {
 
 	// Obtain map of Sysbox's special directories.
-	specialDirMap := getSpecialDirs(spec)
+	specialDirMap, err := getSpecialDirs(spec)
+	if err != nil {
+		return err
+	}
 
 	uid := spec.Linux.UIDMappings[0].HostID
 	gid := spec.Linux.GIDMappings[0].HostID
