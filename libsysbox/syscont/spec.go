@@ -19,6 +19,7 @@
 package syscont
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -650,16 +651,91 @@ func cfgSystemdMounts(spec *specs.Spec) {
 	spec.Mounts = append(spec.Mounts, sysboxSystemdMounts...)
 }
 
-// sysMgrSetupMounts requests the sysbox-mgr to setup special sys container mounts.
-func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, uidShiftRootfs bool) error {
+// Obtains the docker data-root path utilized by the inner docker process to store its
+// data. This is used to define the container mountpoint on which the host's docker
+// volume (backing this resource) will be mounted on.
+//
+// Notice that even though this code habilitates the custom definition of the data-root's
+// location, this will be only honored by Sysbox if this attribute is set prior to the
+// container creation (i.e., at docker-image build time).
+func getDockerDataRootPath(spec *specs.Spec) string {
+
+	var defaultDataRoot = "/var/lib/docker"
+
+	rootPath, err := filepath.Abs(spec.Root.Path)
+	if err != nil {
+		return defaultDataRoot
+	}
+
+	dockerCfgFile := filepath.Join(rootPath, "/etc/docker/daemon.json")
+
+	f, err := os.Open(dockerCfgFile)
+	if err != nil {
+		return defaultDataRoot
+	}
+	defer f.Close()
+
+	// Splits on newlines by default.
+	scanner := bufio.NewScanner(f)
+
+	// Parse the data-root field of the docker's config file:
+	//
+	// Example:    "data-root": "/var/lib/docker",
+	for scanner.Scan() {
+		data := scanner.Text()
+		if strings.Contains(data, "data-root") {
+
+			dataRootStr := strings.Split(data, ":")
+			if len(dataRootStr) == 2 {
+				s := dataRootStr[1]
+
+				s = strings.TrimSpace(s)
+
+				// Skip leading quotes.
+				if len(s) > 0 && s[0] == '"' {
+						s = s[1:]
+				}
+				// Skip trailing coma.
+				if len(s) > 0 && s[len(s) - 1] == ',' {
+					s = s[:len(s)-1]
+				}
+				// Skip trailing quotes.
+				if len(s) > 0 && s[len(s) - 1] == '"' {
+					s = s[:len(s)-1]
+				}
+
+				if len(s) > 0 {
+					return s
+				}
+
+				break
+			}
+		}
+	}
+
+	return defaultDataRoot
+}
+
+func getSpecialDirs(spec *specs.Spec) map[string]ipcLib.MntKind {
+
+	var dockerDataRoot = getDockerDataRootPath(spec)
 
 	// These directories in the sys container are bind-mounted from host dirs managed by sysbox-mgr
-	specialDir := map[string]ipcLib.MntKind{
-		"/var/lib/docker":      ipcLib.MntVarLibDocker,
+	specialDirMap := map[string]ipcLib.MntKind{
+		dockerDataRoot:         ipcLib.MntVarLibDocker,
 		"/var/lib/kubelet":     ipcLib.MntVarLibKubelet,
 		"/var/lib/rancher/k3s": ipcLib.MntVarLibK3s,
 		"/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs": ipcLib.MntVarLibContainerdOvfs,
 	}
+
+	return specialDirMap
+}
+
+// sysMgrSetupMounts requests the sysbox-mgr to setup special sys container mounts.
+func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, uidShiftRootfs bool) error {
+
+	// Obtain map of Sysbox's special directories.
+	specialDirMap := getSpecialDirs(spec)
 
 	uid := spec.Linux.UIDMappings[0].HostID
 	gid := spec.Linux.GIDMappings[0].HostID
@@ -672,7 +748,7 @@ func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, uidShiftRootfs bool) e
 	for i := len(spec.Mounts) - 1; i >= 0; i-- {
 
 		m := spec.Mounts[i]
-		_, isSpecialDir := specialDir[m.Destination]
+		_, isSpecialDir := specialDirMap[m.Destination]
 
 		if m.Type == "bind" && isSpecialDir {
 			info := ipcLib.MountPrepInfo{
@@ -681,7 +757,7 @@ func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, uidShiftRootfs bool) e
 			}
 
 			prepList = append(prepList, info)
-			delete(specialDir, m.Destination)
+			delete(specialDirMap, m.Destination)
 		}
 	}
 
@@ -701,7 +777,7 @@ func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, uidShiftRootfs bool) e
 	}
 
 	reqList := []ipcLib.MountReqInfo{}
-	for dest, kind := range specialDir {
+	for dest, kind := range specialDirMap {
 
 		// Check if the special dir requires uid shifting or not
 		path := filepath.Join(rootPath, dest)
