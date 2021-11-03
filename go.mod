@@ -7,6 +7,7 @@ require (
 	github.com/checkpoint-restore/go-criu/v4 v4.1.0
 	github.com/cilium/ebpf v0.3.0
 	github.com/containerd/console v1.0.1
+	github.com/containerd/containerd v1.4.11
 	github.com/coreos/go-systemd/v22 v22.1.0
 	github.com/cyphar/filepath-securejoin v0.2.2
 	github.com/deckarep/golang-set v1.7.1
