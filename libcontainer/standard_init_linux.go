@@ -39,6 +39,7 @@ const (
 	seccompFd
 	chown
 	mkdir
+	mknod
 )
 
 type opReq struct {
@@ -53,11 +54,16 @@ type opReq struct {
 	OldDns string `json:"olddns"`
 	NewDns string `json:"newdns"`
 
-	// chown & mkdir
+	// chown & mkdir && mknod
 	Path string      `json:"path"`
 	Uid  int         `json:"uid"`
 	Gid  int         `json:"gid"`
 	Mode os.FileMode `json:"mode"`
+
+	// mknod
+	Device uint64  `json:"device"`
+	Major int      `json:"major"`
+	Minor int      `json:"minor"`
 }
 
 func (l *linuxStandardInit) getSessionRingParams() (string, uint32, uint32) {

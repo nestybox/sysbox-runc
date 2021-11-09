@@ -99,12 +99,18 @@ var sysboxMounts = []specs.Mount{
 		Options:     []string{"nosuid", "strictatime", "mode=755", "size=65536k"},
 	},
 	//we don't yet support /dev/kmsg; create a dummy one
-	specs.Mount{
-		Destination: "/dev/kmsg",
-		Source:      "/dev/null",
-		Type:        "bind",
-		Options:     []string{"rbind", "rprivate"},
-	},
+	// specs.Mount{
+	// 	Destination: "/dev/kmsg",
+	// 	Source:      "/dev/null",
+	// 	Type:        "bind",
+	// 	Options:     []string{"rbind", "rprivate"},
+	// },
+	// specs.Mount{
+	// 	Destination: "/dev/net/tun",
+	// 	Source:      "/dev/net/tun",
+	// 	Type:        "bind",
+	// 	Options:     []string{"rbind", "mode=666", "rprivate"},
+	// },
 }
 
 // system container mounts virtualized by sysbox-fs

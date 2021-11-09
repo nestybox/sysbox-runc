@@ -27,7 +27,6 @@ import (
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/devices"
-	"github.com/opencontainers/runc/libcontainer/system"
 	"github.com/opencontainers/runc/libcontainer/utils"
 	libcontainerUtils "github.com/opencontainers/runc/libcontainer/utils"
 	"github.com/opencontainers/runc/libsysbox/syscont"
@@ -55,6 +54,7 @@ func needsSetupDev(config *configs.Config) bool {
 // rootfs.
 func prepareRootfs(pipe io.ReadWriter, iConfig *initConfig) (err error) {
 	config := iConfig.Config
+	//time.Sleep(30 * time.Second)
 
 	if err := validateCwd(config.Rootfs); err != nil {
 		return newSystemErrorWithCause(err, "validating cwd")
@@ -648,7 +648,8 @@ func reOpenDevNull() error {
 
 // Create the device nodes in the container.
 func createDevices(config *configs.Config, pipe io.ReadWriter) error {
-	useBindMount := system.RunningInUserNS() || config.Namespaces.Contains(configs.NEWUSER)
+	//useBindMount := system.RunningInUserNS() || config.Namespaces.Contains(configs.NEWUSER)
+	useBindMount := false
 	oldMask := unix.Umask(0000)
 	for _, node := range config.Devices {
 
@@ -693,7 +694,12 @@ func createDeviceNode(node *devices.Device, bind bool, config *configs.Config, p
 	if bind {
 		return bindMountDeviceNode(dest, node)
 	}
-	if err := mknodDevice(dest, node); err != nil {
+
+	// Added by Rodny for debugging
+	if dest == "dev/null" {
+		return bindMountDeviceNode(dest, node)
+	}
+	if err := mknodDevice(dest, node, config, pipe); err != nil {
 		if os.IsExist(err) {
 			return nil
 		} else if os.IsPermission(err) {
@@ -704,7 +710,7 @@ func createDeviceNode(node *devices.Device, bind bool, config *configs.Config, p
 	return nil
 }
 
-func mknodDevice(dest string, node *devices.Device) error {
+func mknodDevice(dest string, node *devices.Device, config *configs.Config, pipe io.ReadWriter) error {
 	fileMode := node.FileMode
 	switch node.Type {
 	case devices.BlockDevice:
@@ -716,14 +722,39 @@ func mknodDevice(dest string, node *devices.Device) error {
 	default:
 		return fmt.Errorf("%c is not a valid device type for device %s", node.Type, node.Path)
 	}
-	dev, err := node.Mkdev()
-	if err != nil {
-		return err
+	// dev, err := node.Mkdev()
+	// if err != nil {
+	// 	return err
+	// }
+	// if err := unix.Mknod(dest, uint32(fileMode), int(dev)); err != nil {
+	// 	return err
+	// }
+	// return unix.Chown(dest, int(node.Uid), int(node.Gid))
+
+	// Request the parent runc to enter the container's net-ns and change the DNS
+	// in the iptables (can't do this from within the container as we may not
+	// have the required / compatible iptables package in the container).
+	reqs := []opReq{
+		{
+			Op:     mknod,
+			Rootfs: config.Rootfs,
+			Path:   dest,
+			Mode:   fileMode,
+			//Device: dev,
+			Major:  int(node.Major),
+			Minor:  int(node.Minor),
+			// Uid:    config.UidMappings[0].HostID,
+			// Gid:    config.GidMappings[0].HostID,
+			Uid:    int(node.Uid),
+			Gid:    int(node.Gid),
+		},
 	}
-	if err := unix.Mknod(dest, uint32(fileMode), int(dev)); err != nil {
-		return err
+
+	if err := syncParentDoOp(reqs, pipe); err != nil {
+		return newSystemErrorWithCause(err, "syncing with parent runc to switch DNS IP")
 	}
-	return unix.Chown(dest, int(node.Uid), int(node.Gid))
+
+	return nil
 }
 
 // Get the parent mount point of directory passed in as argument. Also return

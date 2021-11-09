@@ -373,6 +373,8 @@ var syscontSyscallAllowRestrList = []string{
 var syscontSyscallTrapList = []string{
 	"mount",
 	"umount2",
+	"mknod",
+	"mknodat",
 	"chown",
 	"fchown",
 	"fchownat",

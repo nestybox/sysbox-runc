@@ -2343,7 +2343,7 @@ func (c *linuxContainer) handleReqOp(childPid int, reqs []opReq) error {
 	// of the same type.
 	op := reqs[0].Op
 
-	if op != bind && op != switchDockerDns && op != chown && op != mkdir {
+	if op != bind && op != switchDockerDns && op != chown && op != mkdir && op != mknod {
 		return newSystemError(fmt.Errorf("invalid opReq type %d", int(op)))
 	}
 
@@ -2387,15 +2387,29 @@ func (c *linuxContainer) handleOp(op opReqType, childPid int, reqs []opReq) erro
 
 	// create the config payload
 	var nsPath string
+	var namespaces []string
 
 	switch op {
 	case bind, chown, mkdir:
 		nsPath = fmt.Sprintf("mnt:/proc/%d/ns/mnt", childPid)
+		namespaces = []string{nsPath}
+
 	case switchDockerDns:
 		nsPath = fmt.Sprintf("net:/proc/%d/ns/net", childPid)
+		namespaces = []string{nsPath}
+
+	case mknod:
+		namespaces = []string{
+			fmt.Sprintf("mnt:/proc/%d/ns/mnt", childPid),
+			fmt.Sprintf("pid:/proc/%d/ns/pid", childPid),
+			fmt.Sprintf("net:/proc/%d/ns/net", childPid),
+			fmt.Sprintf("ipc:/proc/%d/ns/ipc", childPid),
+			fmt.Sprintf("cgroup:/proc/%d/ns/cgroup", childPid),
+			fmt.Sprintf("uts:/proc/%d/ns/uts", childPid),
+		}
 	}
 
-	namespaces := []string{nsPath}
+	// namespaces := []string{nsPath}
 
 	r := nl.NewNetlinkRequest(int(InitMsg), 0)
 	r.AddData(&Bytemsg{

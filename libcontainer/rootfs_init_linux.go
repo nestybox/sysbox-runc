@@ -15,6 +15,9 @@ import (
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/selinux/go-selinux/label"
 	"golang.org/x/sys/unix"
+	setxid "gopkg.in/hlandau/service.v1/daemon/setuid"
+
+	cap "github.com/nestybox/sysbox-libs/capability"
 )
 
 type linuxRootfsInit struct {
@@ -330,6 +333,102 @@ func (l *linuxRootfsInit) Init() error {
 
 		}
 
+	case mknod:
+		time.Sleep(15 * time.Second)
+
+		rootfs := l.reqs[0].Rootfs
+		path := l.reqs[0].Path
+		mode := l.reqs[0].Mode
+		// device := l.reqs[0].Device
+		major := l.reqs[0].Major
+		minor := l.reqs[0].Minor
+		uid := l.reqs[0].Uid
+		gid := l.reqs[0].Gid
+
+		path, err := securejoin.SecureJoin(rootfs, path)
+		if err != nil {
+			return newSystemErrorWithCausef(err, "secure join of %s and %s failed: %s", rootfs, path, err)
+		}
+
+		dirPath := filepath.Dir(path)
+		if err := os.MkdirAll(dirPath, 0755); err != nil {
+			return newSystemErrorWithCausef(err, "failed to mknod %s: %s", path, err)
+		}
+		if err := unix.Chown(dirPath, uid, gid); err != nil {
+			return newSystemErrorWithCausef(err, "failed to chown %s to %v:%v", path, uid, gid)
+		}
+
+		if err := unix.Chdir(dirPath); err != nil {
+			return newSystemErrorWithCausef(err, "failed to chdir %s to %v:%v", dirPath, uid, gid)
+		}
+		if err := unix.Chroot(dirPath); err != nil {
+			return newSystemErrorWithCausef(err, "failed to chroot %s to %v:%v", dirPath, uid, gid)
+		}
+	
+		// Obtain an fd for the directory on which we want to create the dev file.
+		fdDir, err := os.OpenFile(
+			//dirPath,
+			".",
+			unix.O_PATH|unix.O_RDONLY|unix.O_CLOEXEC|unix.O_DIRECTORY,
+			0)
+		if err != nil {
+			return nil
+		}
+
+		pid := unix.Getpid()
+		caps, err := cap.NewPid2(int(pid))
+		if err != nil {
+			return err
+		}
+		if err = caps.Load(); err != nil {
+			return err
+		}
+		origCaps := caps.GetEffCaps()
+
+		// Execute setresgid() syscall to set this process' effective gid.
+		if err := setxid.Setresgid(-1, int(gid), -1); err != nil {
+			return err
+		}
+	
+		// Execute setresuid() syscall to set this process' effective uid.
+		// Notice that as part of this instruction all effective capabilities of
+		// the running process will be reset, which is something that we are looking
+		// after given that "sysbox-fs nsenter" process runs with all capabilities
+		// turned on. Further below we re-apply only those capabilities that were
+		// present in the original process.
+		if err := setxid.Setresuid(-1, int(uid), -1); err != nil {
+			return err
+		}
+
+		// Set process' effective capabilities to match those passed by callee.
+		caps.SetEffCaps(origCaps)
+		if err := caps.Apply(
+			cap.EFFECTIVE | cap.PERMITTED | cap.INHERITABLE); err != nil {
+			return err
+		}
+	
+		file := filepath.Base(path)
+		
+		device := unix.Mkdev(uint32(major), uint32(minor))
+		err = unix.Mknodat(
+			int(fdDir.Fd()),
+			file,
+			uint32(mode),
+			int(device),
+		)
+		if err != nil {
+			return newSystemErrorWithCausef(err, "failed to mknodat %s to %v:%v", path, uid, gid)
+		}
+
+		if err := unix.Chown(file, uid, gid); err != nil {
+			return newSystemErrorWithCausef(err, "failed to chown %s to %v:%v", file, uid, gid)
+		}
+
+		err = os.Chmod(file, mode)
+		if err != nil {
+			return newSystemErrorWithCausef(err, "failed to chmod device %s to mode %v: %s", mode, err)
+		}
+
 	default:
 		return newSystemError(fmt.Errorf("invalid init type"))
 	}
@@ -339,5 +438,61 @@ func (l *linuxRootfsInit) Init() error {
 	}
 
 	l.pipe.Close()
+	return nil
+}
+
+func sysbox_mknod(rootfs, path string, mode, major, minor, uid, gid int) error {
+
+	if rootfs != "" {
+		path, err := securejoin.SecureJoin(rootfs, path)
+		if err != nil {
+			return newSystemErrorWithCausef(err, "secure join of %s and %s failed: %s", rootfs, path, err)
+		}
+	}
+
+	dirPath := filepath.Dir(path)
+	if err := os.MkdirAll(dirPath, 0755); err != nil {
+		return newSystemErrorWithCausef(err, "failed to mknod %s: %s", path, err)
+	}
+	if err := unix.Chown(dirPath, uid, gid); err != nil {
+		return newSystemErrorWithCausef(err, "failed to chown %s to %v:%v", path, uid, gid)
+	}
+
+	// Using sysbox-fs mknod nsenter approach
+	// err = unix.Chdir(dirPath)
+	// if err != nil {
+	// 	return nil
+	// }
+	
+	// if err := unix.Chroot(dirPath); err != nil {
+	// 	return nil
+	// }
+	
+	// Obtain an fd for the directory on which we want to create the dev file.
+	// fdDir, err := os.OpenFile(
+	// 	dirPath,
+	// 	unix.O_PATH|unix.O_RDONLY|unix.O_CLOEXEC|unix.O_DIRECTORY,
+	// 	0)
+	// if err != nil {
+	// 	return nil
+	// }
+	// file := filepath.Base(path)
+
+	// mode |= unix.S_IFCHR
+	// dev := unix.Mkdev(uint32(major), uint32(minor))
+	// if err := unix.Mknod(path, uint32(mode), int(dev)); err != nil {
+	// // err = unix.Mknodat(
+	// // 	int(fdDir.Fd()),
+	// // 	file,
+	// // 	uint32(mode),
+	// // 	int(dev),
+	// // )
+	// 	return newSystemErrorWithCausef(err, "failed to mknodat %s to %v:%v", path, uid, gid)
+	// }
+
+	if err := unix.Chown(path, uid, gid); err != nil {
+		return newSystemErrorWithCausef(err, "failed to chown %s to %v:%v", path, uid, gid)
+	}
+
 	return nil
 }
