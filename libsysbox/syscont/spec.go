@@ -783,11 +783,12 @@ func getSpecialDirs(spec *specs.Spec) (map[string]ipcLib.MntKind, error) {
 
 	// These directories in the sys container are bind-mounted from host dirs managed by sysbox-mgr
 	specialDirMap := map[string]ipcLib.MntKind{
-		innerDockerDataRoot: ipcLib.MntVarLibDocker,
-		"/var/lib/kubelet":  ipcLib.MntVarLibKubelet,
-		"/var/lib/k0s":      ipcLib.MntVarLibK0s,
-		innerK3sDataDir:     ipcLib.MntVarLibRancherK3s,
-		innerRke2DataDir:    ipcLib.MntVarLibRancherRke2,
+		innerDockerDataRoot:    ipcLib.MntVarLibDocker,
+		"/var/lib/kubelet":     ipcLib.MntVarLibKubelet,
+		"/var/lib/k0s":         ipcLib.MntVarLibK0s,
+		innerK3sDataDir:        ipcLib.MntVarLibRancherK3s,
+		innerRke2DataDir:       ipcLib.MntVarLibRancherRke2,
+		"/var/lib/buildkit":    ipcLib.MntVarLibBuildkit,
 		"/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs": ipcLib.MntVarLibContainerdOvfs,
 	}
 
