@@ -720,6 +720,7 @@ func getSpecialDirs(spec *specs.Spec) (map[string]ipcLib.MntKind, error) {
 		innerDockerDataRoot:    ipcLib.MntVarLibDocker,
 		"/var/lib/kubelet":     ipcLib.MntVarLibKubelet,
 		"/var/lib/rancher/k3s": ipcLib.MntVarLibK3s,
+		"/var/lib/k0s":         ipcLib.MntVarLibK0s,
 		"/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs": ipcLib.MntVarLibContainerdOvfs,
 	}
 
