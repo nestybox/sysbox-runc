@@ -20,7 +20,6 @@ package syscont
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -652,6 +651,49 @@ func cfgSystemdMounts(spec *specs.Spec) {
 	spec.Mounts = append(spec.Mounts, sysboxSystemdMounts...)
 }
 
+// Function parses any given 'file' looking for an 'attr' field. For the parsing
+// operation to succeed, the say file is expected to conform to this layout:
+// "<attr>: <val>".
+//
+// Examples:
+//
+// - Docker -> "data-root": "/var/lib/docker",
+// - RKE2   -> "data-dir": "/var/lib/rancher/rke2",
+//
+func getFileAttrValue(file, attr string) (string, error) {
+
+	f, err := os.Open(file)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	// Splits on newlines by default.
+	scanner := bufio.NewScanner(f)
+
+	// Parse the 'attr' field of the passed file.
+	for scanner.Scan() {
+		data := scanner.Text()
+		if strings.Contains(data, attr) {
+
+			dataRootStr := strings.Split(data, ":")
+			if len(dataRootStr) == 2 {
+				dataRoot := dataRootStr[1]
+				dataRoot = strings.TrimSpace(dataRoot)
+				dataRoot = strings.Trim(dataRoot, "\",")
+
+				if len(dataRoot) > 0 {
+					return dataRoot, nil
+				}
+
+				break
+			}
+		}
+	}
+
+	return "", nil
+}
+
 // Obtains the docker data-root path utilized by the inner docker process to store its
 // data. This is used to define the container mountpoint on which the host's docker
 // volume (backing this resource) will be mounted on.
@@ -670,42 +712,56 @@ func getInnerDockerDataRootPath(spec *specs.Spec) (string, error) {
 
 	dockerCfgFile := filepath.Join(rootPath, "/etc/docker/daemon.json")
 
-	f, err := os.Open(dockerCfgFile)
+	val, err := getFileAttrValue(dockerCfgFile, "data-root")
+	if err != nil || val == "" {
+		return defaultDataRoot, nil
+	}
+
+	return val, nil
+}
+
+// Obtains the data-dir path utilized by the inner rke or k3s server/agents to
+// to store their data. This is used to define the container mountpoint on which
+// the host's docker volume (backing this resource) will be mounted on.
+func getInnerK3sDataDirPath(spec *specs.Spec) (string, error) {
+
+	var defaultDataDir = "/var/lib/rancher/k3s"
+
+	rootPath, err := filepath.Abs(spec.Root.Path)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return defaultDataRoot, nil
-		} else {
-			return "", err
-		}
-	}
-	defer f.Close()
-
-	// Splits on newlines by default.
-	scanner := bufio.NewScanner(f)
-
-	// Parse the data-root field of the docker's config file:
-	//
-	// Example:  "data-root": "/var/lib/docker",
-	for scanner.Scan() {
-		data := scanner.Text()
-		if strings.Contains(data, "data-root") {
-
-			dataRootStr := strings.Split(data, ":")
-			if len(dataRootStr) == 2 {
-				dataRoot := dataRootStr[1]
-				dataRoot = strings.TrimSpace(dataRoot)
-				dataRoot = strings.Trim(dataRoot, "\",")
-
-				if len(dataRoot) > 0 {
-					return dataRoot, nil
-				}
-
-				break
-			}
-		}
+		return "", err
 	}
 
-	return defaultDataRoot, nil
+	k3sCfgFile := filepath.Join(rootPath, "/etc/rancher/k3s/config.yaml")
+
+	val, err := getFileAttrValue(k3sCfgFile, "data-dir")
+	if err != nil || val == "" {
+		return defaultDataDir, nil
+	}
+
+	return val, nil
+}
+
+// Obtains the rke2 data-dir path utilized by the inner rke2 server and agent
+// processes to store their data. This is used to define the container mountpoint
+// on which the host's docker volume (backing this resource) will be mounted on.
+func getInnerRke2DataDirPath(spec *specs.Spec) (string, error) {
+
+	var defaultDataDir = "/var/lib/rancher/rke2"
+
+	rootPath, err := filepath.Abs(spec.Root.Path)
+	if err != nil {
+		return "", err
+	}
+
+	rke2CfgFile := filepath.Join(rootPath, "/etc/rancher/rke2/config.yaml")
+
+	val, err := getFileAttrValue(rke2CfgFile, "data-dir")
+	if err != nil || val == "" {
+		return defaultDataDir, nil
+	}
+
+	return val, nil
 }
 
 func getSpecialDirs(spec *specs.Spec) (map[string]ipcLib.MntKind, error) {
@@ -715,13 +771,23 @@ func getSpecialDirs(spec *specs.Spec) (map[string]ipcLib.MntKind, error) {
 		return nil, err
 	}
 
+	innerK3sDataDir, err := getInnerK3sDataDirPath(spec)
+	if err != nil {
+		return nil, err
+	}
+
+	innerRke2DataDir, err := getInnerRke2DataDirPath(spec)
+	if err != nil {
+		return nil, err
+	}
+
 	// These directories in the sys container are bind-mounted from host dirs managed by sysbox-mgr
 	specialDirMap := map[string]ipcLib.MntKind{
 		innerDockerDataRoot:    ipcLib.MntVarLibDocker,
 		"/var/lib/kubelet":     ipcLib.MntVarLibKubelet,
 		"/var/lib/k0s":         ipcLib.MntVarLibK0s,
-		"/var/lib/rancher/k3s": ipcLib.MntVarLibRancherK3s,
-		"/var/lib/rancher/rke2": ipcLib.MntVarLibRancherRke2,
+		innerK3sDataDir:        ipcLib.MntVarLibRancherK3s,
+		innerRke2DataDir:       ipcLib.MntVarLibRancherRke2,
 		"/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs": ipcLib.MntVarLibContainerdOvfs,
 	}
 
