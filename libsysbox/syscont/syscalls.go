@@ -354,6 +354,7 @@ var syscontSyscallWhitelist = []string{
 	"pivot_root",
 	"gethostname",
 	"sethostname",
+	"close_range",
 
 	// allow namespace creation inside the system container (for nested containers)
 	"setns",
