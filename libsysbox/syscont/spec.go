@@ -783,11 +783,11 @@ func getSpecialDirs(spec *specs.Spec) (map[string]ipcLib.MntKind, error) {
 
 	// These directories in the sys container are bind-mounted from host dirs managed by sysbox-mgr
 	specialDirMap := map[string]ipcLib.MntKind{
-		innerDockerDataRoot:    ipcLib.MntVarLibDocker,
-		"/var/lib/kubelet":     ipcLib.MntVarLibKubelet,
-		"/var/lib/k0s":         ipcLib.MntVarLibK0s,
-		innerK3sDataDir:        ipcLib.MntVarLibRancherK3s,
-		innerRke2DataDir:       ipcLib.MntVarLibRancherRke2,
+		innerDockerDataRoot: ipcLib.MntVarLibDocker,
+		"/var/lib/kubelet":  ipcLib.MntVarLibKubelet,
+		"/var/lib/k0s":      ipcLib.MntVarLibK0s,
+		innerK3sDataDir:     ipcLib.MntVarLibRancherK3s,
+		innerRke2DataDir:    ipcLib.MntVarLibRancherRke2,
 		"/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs": ipcLib.MntVarLibContainerdOvfs,
 	}
 
@@ -859,15 +859,15 @@ func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, uidShiftRootfs bool) e
 			st, _ := fi.Sys().(*syscall.Stat_t)
 
 			if st.Uid != st.Gid {
-				return fmt.Errorf("container rootfs has special dir %s with non-matching uid & gid: %u %u", path, st.Uid, st.Gid)
+				return fmt.Errorf("container rootfs has special dir %s with non-matching uid & gid: %d %d", path, st.Uid, st.Gid)
 			}
 
 			if st.Uid != 0 && st.Uid != uid {
-				return fmt.Errorf("container rootfs has special dir %s with unexpected uid: %u; want %u or %u", path, st.Uid, 0, uid)
+				return fmt.Errorf("container rootfs has special dir %s with unexpected uid: %d; want %d or %d", path, st.Uid, 0, uid)
 			}
 
 			if st.Gid != 0 && st.Gid != gid {
-				return fmt.Errorf("container rootfs has special dir %s with unexpected gid: %u; want %u or %u", path, st.Gid, 0, gid)
+				return fmt.Errorf("container rootfs has special dir %s with unexpected gid: %d; want %d or %d", path, st.Gid, 0, gid)
 			}
 
 			if st.Uid == 0 && st.Gid == 0 {

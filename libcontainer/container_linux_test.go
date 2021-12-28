@@ -88,6 +88,10 @@ func (m *mockCgroupManager) GetChildCgroupPaths() map[string]string {
 	return m.paths
 }
 
+func (m *mockCgroupManager) GetType() cgroups.CgroupType {
+	return cgroups.Cgroup_v1_fs
+}
+
 func (m *mockIntelRdtManager) Apply(pid int) error {
 	return nil
 }

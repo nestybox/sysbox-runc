@@ -2499,7 +2499,7 @@ func (c *linuxContainer) setupShiftfsMarks() error {
 	}
 
 	// Determine if other host directories mounted into the container's rootfs
-	// need uid shifting. Sysbox config option BindMountuidshift disables this
+	// need uid shifting. Sysbox config option BindMountUidShift disables this
 	// behavior.
 
 	if c.sysMgr.Config.BindMountUidShift {
