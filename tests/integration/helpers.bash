@@ -5,7 +5,7 @@ INTEGRATION_ROOT=$(dirname "$(readlink -f "$BASH_SOURCE")")
 
 . ${INTEGRATION_ROOT}/multi-arch.bash
 
-RUNC="${INTEGRATION_ROOT}/../../sysbox-runc"
+RUNC="${INTEGRATION_ROOT}/../../build/$(go env GOARCH)/sysbox-runc"
 RUNC_FLAGS="--no-sysbox-mgr --no-sysbox-fs --no-kernel-check"
 
 RECVTTY="${INTEGRATION_ROOT}/../../contrib/cmd/recvtty/recvtty"

@@ -95,6 +95,24 @@ function teardown() {
 
 @test "runc run [bind mount directly above rootfs]" {
 
+	# Bind mounting a dir located directly above container's rootfs into the
+	# container leads to shiftfs-on-shiftfs, and this is not allowed by
+	# shiftfs. To solve this, the sysbox-mgr marks shiftfs mounts by creating
+	# mark points under /var/lib/sysbox, which prevents the shiftfs-on-shiftfs
+	# scenario.
+	#
+	# Thus, this test requires the sysbox-mgr, so we can't run it (since sysbox-mgr
+	# is not present in sysbox-runc integration tests).
+	#
+	# Though sysbox-runc has a mock shiftfs mark code in setupShiftfsMarkLocal()
+	# (see container_linux.go), this code does not prevent the shiftfs-on-shiftfs
+	# scenario so the test would fail. We can re-enable this test if and when
+	# the mock shiftfs mark code handles the shiftfs-on-shiftfs scenario.
+
+	if [ -n "$SHIFT_ROOTFS_UIDS" ]; then
+		skip "Requires sysbox-mgr; skip"
+	fi
+
 	update_config ' .mounts |= . + [{
 												 source: ".",
 												 destination: "/tmp/bind",
@@ -104,12 +122,8 @@ function teardown() {
 
 	runc run test_busybox
 
-	if [ -z "$SHIFT_ROOTFS_UIDS" ]; then
-		[ "$status" -eq 0 ]
-		[[ "${lines[0]}" =~ config.json ]]
-	else
-		[ "$status" -eq 1 ]
-	fi
+	[ "$status" -eq 0 ]
+	[[ "${lines[0]}" =~ config.json ]]
 }
 
 @test "runc run [bind mount below the rootfs]" {
