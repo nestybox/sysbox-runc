@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"time"
 
+	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
 	"github.com/opencontainers/runc/libcontainer/devices"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
@@ -216,11 +217,11 @@ type Config struct {
 	// When RootlessCgroups is set, cgroups errors are ignored.
 	RootlessCgroups bool `json:"rootless_cgroups,omitempty"`
 
-	// UidShiftSupported indicates if the host supports uid shifting (e.g., via the shiftfs kernel module).
-	UidShiftSupported bool `json:"uid_shift_supported,omitempty"`
+	// RootfsUidShiftType indicates the type of fs ID shifting to do on the rootfs
+	RootfsUidShiftType sh.IDShiftType `json:"rootfs_uid_shift_type,omitempty"`
 
-	// UidShiftRootfs indicates if uid shifting is needed for the container's rootfs
-	UidShiftRootfs bool `json:"uid_shift_rootfs,omitempty"`
+	// BindMntUidShiftType indicates the type of fs ID shifting to do on container bind-mounts
+	BindMntUidShiftType sh.IDShiftType `json:"bindmnt_uid_shift_type,omitempty"`
 
 	// ShiftfsMounts is a list of directories on which shiftfs needs to be mounted
 	ShiftfsMounts []ShiftfsMount `json:"shiftfs_mounts,omitempty"`

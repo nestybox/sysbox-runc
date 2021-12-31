@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	"golang.org/x/sys/unix"
 )
 
 const (
@@ -27,6 +29,18 @@ const (
 	   (11) super options:  per super block options*/
 	mountinfoFormat = "%d %d %d:%d %s %s %s %s"
 )
+
+var mountFlagsMap = map[string]int{
+	"ro":          unix.MS_RDONLY,
+	"nodev":       unix.MS_NODEV,
+	"noexec":      unix.MS_NOEXEC,
+	"nosuid":      unix.MS_NOSUID,
+	"noatime":     unix.MS_NOATIME,
+	"nodiratime":  unix.MS_NODIRATIME,
+	"relatime":    unix.MS_RELATIME,
+	"strictatime": unix.MS_STRICTATIME,
+	"sync":        unix.MS_SYNCHRONOUS,
+}
 
 // Parse /proc/self/mountinfo because comparing Dev and ino does not work from
 // bind mounts
@@ -90,4 +104,16 @@ func parseInfoFile(r io.Reader) ([]*Info, error) {
 		out = append(out, p)
 	}
 	return out, nil
+}
+
+func optToFlag(opts []string) int {
+	flags := 0
+	for _, opt := range opts {
+		f, ok := mountFlagsMap[opt]
+		if !ok {
+			continue
+		}
+		flags |= f
+	}
+	return flags
 }

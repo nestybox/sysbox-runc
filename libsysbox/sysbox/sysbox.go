@@ -26,6 +26,7 @@ import (
 	"syscall"
 	"unsafe"
 
+	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
 	libutils "github.com/nestybox/sysbox-libs/utils"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"
@@ -196,46 +197,67 @@ func needUidShiftOnRootfs(spec *specs.Spec) (bool, error) {
 	return false, nil
 }
 
-func hostSupportsUidShifting() bool {
+func kernelSupportsUidShifting() (sh.IDShiftType, bool) {
 
-	// For now Sysbox requires the kernel shiftfs module for UID shifting
-	// (present by default in recent Ubuntu desktop & server editions).
-	//
-	// TODO: now that ID-mapped mounts have been added to the 5.12 Linux kernel,
-	// we should leverage that functionality for uid-shifting when possible. This
-	// would void the need for shiftfs and thus increase the number of distros
-	// supported by Sysbox.
+	// TODO: check if the kernel supports ID-mapped mounts (e.g., run a quick
+	// experiment, or check for kernel >= 5.12).
 
-	if err := KernelModSupported("shiftfs"); err == nil {
-		return true
-	}
+	// TODO: if both shiftfs and ID-mapped are supported, the latter takes precendence.
 
-	return false
+	// TODO: if we do the quick experiment, sysbox-mgr should do that so that we
+	// don't have to do it on each container start.
+
+	// TODO: check also if kernel supports uid shifting on the rootfs (e.g., on overlayfs).
+	// For shiftfs: Ubuntu only (or run an experiment)
+	// For ID-mapped mounts: none yet (or run an experiment)
+
+	// XXX: DEBUG
+	// if err := KernelModSupported("shiftfs"); err == nil {
+	// 	return sh.Shiftfs, true
+	// }
+
+	return sh.NoShift, false
 }
 
-// checkUidShifting checks if the host supports uid shifting.
-// The first return value indicates if the host supports
-// uid shifting, and the second indicates if uid shifting is
-// required for the container's rootfs. If uid shifting is not
-// supported but is required for this container, the function
-// returns an error.
-func CheckUidShifting(spec *specs.Spec) (bool, bool, error) {
+// checkUidShifting returns the type of UID shifting needed (if any) for the
+// container. The first return value indicates the type of UID shifting needed
+// for the container's rootfs, while the second indicates the type of UID
+// shifting for bind-mounts.
+func CheckUidShifting(sysMgr *Mgr, spec *specs.Spec) (sh.IDShiftType, sh.IDShiftType, error) {
 
-	uidShiftSupported := hostSupportsUidShifting()
+	kernelShiftType, kernelShiftWorksOnRootfs := kernelSupportsUidShifting()
 
-	uidShiftRootfs, err := needUidShiftOnRootfs(spec)
+	needShiftOnRootfs, err := needUidShiftOnRootfs(spec)
 	if err != nil {
-		return false, false, fmt.Errorf("failed to check uid shifting requirement on rootfs: %s", err)
+		return sh.NoShift, sh.NoShift, fmt.Errorf("failed to check uid shifting requirement on rootfs: %s", err)
 	}
 
-	if !uidShiftSupported && uidShiftRootfs {
-		return false, false, fmt.Errorf("this container requires user-ID shifting but the kernel does not support it." +
-			" Upgrade your kernel to include the shiftfs module, or alternatively enable Linux user-namespace" +
-			" support in the the container manager (e.g., Docker userns-remap, CRI-O userns annotation, etc)." +
-			" Refer to the Sysbox troubleshooting guide for more info.")
+	// For the rootfs, we always ID shift; if the kernel can do it, great we use
+	// that. But if it can't do it, we chown the rootfs. Chowning is fairly safe
+	// since the container's rootfs is dedicated to the container (no other
+	// entity in the system will use it while the container is running).
+	rootfsShiftType := sh.NoShift
+
+	if needShiftOnRootfs {
+		if kernelShiftWorksOnRootfs {
+			rootfsShiftType = kernelShiftType
+		} else {
+			rootfsShiftType = sh.Chown
+		}
 	}
 
-	return uidShiftSupported, uidShiftRootfs, nil
+	// For bind mounts into the container, we rely on the kernel ID shift (i.e.,
+	// we never chown). Chowning for bind mounts is not a good idea since we
+	// don't know what's being bind mounted (e.g., the bind mount could be a
+	// user's home dir, a critical system file, etc.). Also, Sysbox config option
+	// BindMountUidShift disables ID shifting on bind-mounts.
+	bindMountShiftType := sh.NoShift
+
+	if sysMgr.Config.BindMountUidShift {
+		bindMountShiftType = kernelShiftType
+	}
+
+	return rootfsShiftType, bindMountShiftType, nil
 }
 
 // CheckHostConfig checks if the host is configured appropriately to run a
@@ -267,9 +289,9 @@ func KernelModSupported(mod string) error {
 	exec.Command("modprobe", mod).Run()
 
 	// Check if the module is in the kernel
-	f, err := os.Open("/proc/filesystems")
+	f, err := os.Open("/proc/modules")
 	if err != nil {
-		return fmt.Errorf("failed to open /proc/filesystems to check for %s module", mod)
+		return fmt.Errorf("failed to open /proc/modules to check for %s module", mod)
 	}
 	defer f.Close()
 

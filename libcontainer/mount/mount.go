@@ -82,3 +82,9 @@ func GetMountAtPid(pid uint32, mountpoint string) (*Info, error) {
 	}
 	return nil, fmt.Errorf("%s is not a mountpoint", mountpoint)
 }
+
+// Converts the set of mount options (e.g., "rw", "nodev", etc.) to it's
+// corresponding mount flags representation
+func OptionsToFlags(opt []string) int {
+	return optToFlag(opt)
+}
