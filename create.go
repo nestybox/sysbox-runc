@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
 	"github.com/opencontainers/runc/libsysbox/sysbox"
 	"github.com/opencontainers/runc/libsysbox/syscont"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -57,11 +58,11 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 	},
 	Action: func(context *cli.Context) error {
 		var (
-			err               error
-			spec              *specs.Spec
-			uidShiftSupported bool
-			uidShiftRootfs    bool
-			status            int
+			err                 error
+			spec                *specs.Spec
+			rootfsUidShiftType  sh.IDShiftType
+			bindMntUidShiftType sh.IDShiftType
+			status              int
 		)
 
 		if err = checkArgs(context, 1, exactArgs); err != nil {
@@ -103,7 +104,7 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 			}
 		}
 
-		uidShiftSupported, uidShiftRootfs, err = syscont.ConvertSpec(context, sysMgr, sysFs, spec)
+		rootfsUidShiftType, bindMntUidShiftType, err = syscont.ConvertSpec(context, sysMgr, sysFs, spec)
 		if err != nil {
 			return fmt.Errorf("error in the container spec: %v", err)
 		}
@@ -120,7 +121,7 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 			}()
 		}
 
-		status, err = startContainer(context, spec, CT_ACT_CREATE, nil, uidShiftSupported, uidShiftRootfs, sysMgr, sysFs)
+		status, err = startContainer(context, spec, CT_ACT_CREATE, nil, rootfsUidShiftType, bindMntUidShiftType, sysMgr, sysFs)
 		if err != nil {
 			return err
 		}

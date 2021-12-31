@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
 	"github.com/opencontainers/runc/libsysbox/sysbox"
 	"github.com/opencontainers/runc/libsysbox/syscont"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -69,12 +70,12 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 	},
 	Action: func(context *cli.Context) error {
 		var (
-			err               error
-			spec              *specs.Spec
-			uidShiftSupported bool
-			uidShiftRootfs    bool
-			status            int
-			profiler          interface{ Stop() }
+			err                 error
+			spec                *specs.Spec
+			rootfsUidShiftType  sh.IDShiftType
+			bindMntUidShiftType sh.IDShiftType
+			status              int
+			profiler            interface{ Stop() }
 		)
 
 		// Enable profiler if requested to do so
@@ -129,7 +130,7 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 			}
 		}
 
-		uidShiftSupported, uidShiftRootfs, err = syscont.ConvertSpec(context, sysMgr, sysFs, spec)
+		rootfsUidShiftType, bindMntUidShiftType, err = syscont.ConvertSpec(context, sysMgr, sysFs, spec)
 		if err != nil {
 			return fmt.Errorf("error in the container spec: %v", err)
 		}
@@ -146,7 +147,7 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 			}()
 		}
 
-		status, err = startContainer(context, spec, CT_ACT_RUN, nil, uidShiftSupported, uidShiftRootfs, sysMgr, sysFs)
+		status, err = startContainer(context, spec, CT_ACT_RUN, nil, rootfsUidShiftType, bindMntUidShiftType, sysMgr, sysFs)
 		if err == nil {
 
 			// note: defer func() to stop profiler won't execute on os.Exit(); must explicitly stop it.

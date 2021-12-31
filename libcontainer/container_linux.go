@@ -43,6 +43,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink/nl"
 	"golang.org/x/sys/unix"
+
+	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
 )
 
 const stdioFdCount = 3
@@ -279,7 +281,17 @@ func (c *linuxContainer) Start(process *Process) error {
 		if err := c.createExecFifo(); err != nil {
 			return err
 		}
-		if c.config.UidShiftSupported {
+
+		// TODO: check if we need to set up ID-mapped mounts here
+
+		if c.config.RootfsUidShiftType == sh.Chown {
+			if err := c.chownRootfs(); err != nil {
+				return err
+			}
+		}
+
+		if c.config.RootfsUidShiftType == sh.Shiftfs ||
+			c.config.BindMntUidShiftType == sh.Shiftfs {
 			if err := c.setupShiftfsMarks(); err != nil {
 				return err
 			}
@@ -719,26 +731,37 @@ func (c *linuxContainer) newInitConfig(process *Process) *initConfig {
 }
 
 func (c *linuxContainer) Destroy() error {
+	var err error
+
 	c.m.Lock()
 	defer c.m.Unlock()
 
-	err := c.state.destroy()
+	// If the rootfs was chowned, revert it back to its original uid & gid
+	if c.config.RootfsUidShiftType == sh.Chown {
+		if err2 := c.revertRootfsChown(); err == nil {
+			err = err2
+		}
+	}
+
+	if err2 := c.state.destroy(); err == nil {
+		err = err2
+	}
 
 	if c.sysFs.Enabled() {
-		if ferr := c.sysFs.Unregister(); err == nil {
-			err = ferr
+		if err2 := c.sysFs.Unregister(); err == nil {
+			err = err2
 		}
 	}
 
 	if c.sysMgr.Enabled() {
-		if merr := c.sysMgr.Unregister(); err == nil {
-			err = merr
+		if err2 := c.sysMgr.Unregister(); err == nil {
+			err = err2
 		}
 	} else {
 		// If sysbox-mgr is not present (i.e., unit testing), then we teardown
 		// shiftfs marks here.
-		if serr := c.teardownShiftfsMarkLocal(); err == nil {
-			err = serr
+		if err2 := c.teardownShiftfsMarkLocal(); err == nil {
+			err = err2
 		}
 	}
 
@@ -2490,19 +2513,14 @@ func (c *linuxContainer) setupShiftfsMarks() error {
 	config := c.config
 	shiftfsMounts := []configs.ShiftfsMount{}
 
-	if !config.UidShiftSupported {
-		return nil
-	}
-
-	if config.UidShiftRootfs {
+	if config.RootfsUidShiftType == sh.Shiftfs {
 		shiftfsMounts = append(shiftfsMounts, configs.ShiftfsMount{Source: config.Rootfs, Readonly: false})
 	}
 
 	// Determine if other host directories mounted into the container's rootfs
-	// need uid shifting. Sysbox config option BindMountUidShift disables this
-	// behavior.
+	// need uid shifting.
 
-	if c.sysMgr.Config.BindMountUidShift {
+	if config.BindMntUidShiftType == sh.Shiftfs {
 		for _, m := range config.Mounts {
 			if m.Device == "bind" {
 
@@ -2572,7 +2590,7 @@ func (c *linuxContainer) setupShiftfsMarks() error {
 		// Replace the container's mounts that have shiftfs with the shiftfs
 		// markpoint allocated by sysbox-mgr.
 
-		if config.UidShiftRootfs {
+		if config.RootfsUidShiftType == sh.Shiftfs {
 			config.Rootfs = shiftfsMarks[0].Source
 		}
 
@@ -2633,6 +2651,32 @@ func (c *linuxContainer) teardownShiftfsMarkLocal() error {
 				return newSystemErrorWithCausef(err, "unmarking shiftfs on %s", m.Source)
 			}
 		}
+	}
+
+	return nil
+}
+
+// chowns the container's rootfs to match the user-ns uid & gid mappings.
+func (c *linuxContainer) chownRootfs() error {
+
+	uidOffset := int32(c.config.UidMappings[0].HostID)
+	gidOffset := int32(c.config.GidMappings[0].HostID)
+
+	if err := sh.ShiftIdsWithChown(c.config.Rootfs, uidOffset, gidOffset); err != nil {
+		return newSystemErrorWithCausef(err, "chowning rootfs at %s by offset %d, %d", c.config.Rootfs, uidOffset, gidOffset)
+	}
+
+	return nil
+}
+
+// reverts the container's rootfs chown (back to it's original value)
+func (c *linuxContainer) revertRootfsChown() error {
+
+	uidOffset := 0 - int32(c.config.UidMappings[0].HostID)
+	gidOffset := 0 - int32(c.config.GidMappings[0].HostID)
+
+	if err := sh.ShiftIdsWithChown(c.config.Rootfs, uidOffset, gidOffset); err != nil {
+		return newSystemErrorWithCausef(err, "chowning rootfs at %s by offset %d, %d", c.config.Rootfs, uidOffset, gidOffset)
 	}
 
 	return nil

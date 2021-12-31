@@ -11,6 +11,7 @@ import (
 	"strconv"
 
 	"github.com/nestybox/sysbox-libs/dockerUtils"
+	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/cgroups/systemd"
 	"github.com/opencontainers/runc/libcontainer/configs"
@@ -271,7 +272,8 @@ func sysMgrGetFsState(mgr *sysbox.Mgr, config *configs.Config) error {
 func createContainer(context *cli.Context,
 	id string,
 	spec *specs.Spec,
-	uidShiftSupported, uidShiftRootfs, switchDockerDns bool,
+	rootfsUidShiftType, bindMntUidShiftType sh.IDShiftType,
+	switchDockerDns bool,
 	sysMgr *sysbox.Mgr,
 	sysFs *sysbox.Fs) (libcontainer.Container, error) {
 
@@ -281,16 +283,16 @@ func createContainer(context *cli.Context,
 	}
 
 	config, err := specconv.CreateLibcontainerConfig(&specconv.CreateOpts{
-		CgroupName:        id,
-		UseSystemdCgroup:  context.GlobalBool("systemd-cgroup"),
-		NoPivotRoot:       context.Bool("no-pivot"),
-		NoNewKeyring:      context.Bool("no-new-keyring"),
-		Spec:              spec,
-		RootlessEUID:      os.Geteuid() != 0,
-		RootlessCgroups:   rootlessCg,
-		UidShiftSupported: uidShiftSupported,
-		UidShiftRootfs:    uidShiftRootfs,
-		SwitchDockerDns:   switchDockerDns,
+		CgroupName:          id,
+		UseSystemdCgroup:    context.GlobalBool("systemd-cgroup"),
+		NoPivotRoot:         context.Bool("no-pivot"),
+		NoNewKeyring:        context.Bool("no-new-keyring"),
+		Spec:                spec,
+		RootlessEUID:        os.Geteuid() != 0,
+		RootlessCgroups:     rootlessCg,
+		RootfsUidShiftType:  rootfsUidShiftType,
+		BindMntUidShiftType: bindMntUidShiftType,
+		SwitchDockerDns:     switchDockerDns,
 	})
 	if err != nil {
 		return nil, err
@@ -482,7 +484,7 @@ func startContainer(context *cli.Context,
 	spec *specs.Spec,
 	action CtAct,
 	criuOpts *libcontainer.CriuOpts,
-	uidShiftSupported, uidShiftRootfs bool,
+	rootfsUidShiftType, bindMntUidShiftType sh.IDShiftType,
 	sysMgr *sysbox.Mgr,
 	sysFs *sysbox.Fs) (int, error) {
 
@@ -507,7 +509,7 @@ func startContainer(context *cli.Context,
 		}
 	}
 
-	container, err := createContainer(context, id, spec, uidShiftSupported, uidShiftRootfs, switchDockerDns, sysMgr, sysFs)
+	container, err := createContainer(context, id, spec, rootfsUidShiftType, bindMntUidShiftType, switchDockerDns, sysMgr, sysFs)
 	if err != nil {
 		return -1, err
 	}

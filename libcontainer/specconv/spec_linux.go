@@ -16,6 +16,7 @@ import (
 
 	systemdDbus "github.com/coreos/go-systemd/v22/dbus"
 	dbus "github.com/godbus/dbus/v5"
+	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/devices"
@@ -193,16 +194,16 @@ var AllowedDevices = []*devices.Device{
 }
 
 type CreateOpts struct {
-	CgroupName        string
-	UseSystemdCgroup  bool
-	NoPivotRoot       bool
-	NoNewKeyring      bool
-	Spec              *specs.Spec
-	RootlessEUID      bool
-	RootlessCgroups   bool
-	UidShiftSupported bool
-	UidShiftRootfs    bool
-	SwitchDockerDns   bool
+	CgroupName          string
+	UseSystemdCgroup    bool
+	NoPivotRoot         bool
+	NoNewKeyring        bool
+	Spec                *specs.Spec
+	RootlessEUID        bool
+	RootlessCgroups     bool
+	RootfsUidShiftType  sh.IDShiftType
+	BindMntUidShiftType sh.IDShiftType
+	SwitchDockerDns     bool
 }
 
 // CreateLibcontainerConfig creates a new libcontainer configuration from a
@@ -230,17 +231,17 @@ func CreateLibcontainerConfig(opts *CreateOpts) (*configs.Config, error) {
 		labels = append(labels, k+"="+v)
 	}
 	config := &configs.Config{
-		Rootfs:            rootfsPath,
-		NoPivotRoot:       opts.NoPivotRoot,
-		Readonlyfs:        spec.Root.Readonly,
-		Hostname:          spec.Hostname,
-		Labels:            append(labels, "bundle="+cwd),
-		NoNewKeyring:      opts.NoNewKeyring,
-		RootlessEUID:      opts.RootlessEUID,
-		RootlessCgroups:   opts.RootlessCgroups,
-		UidShiftSupported: opts.UidShiftSupported,
-		UidShiftRootfs:    opts.UidShiftRootfs,
-		SwitchDockerDns:   opts.SwitchDockerDns,
+		Rootfs:              rootfsPath,
+		NoPivotRoot:         opts.NoPivotRoot,
+		Readonlyfs:          spec.Root.Readonly,
+		Hostname:            spec.Hostname,
+		Labels:              append(labels, "bundle="+cwd),
+		NoNewKeyring:        opts.NoNewKeyring,
+		RootlessEUID:        opts.RootlessEUID,
+		RootlessCgroups:     opts.RootlessCgroups,
+		RootfsUidShiftType:  opts.RootfsUidShiftType,
+		BindMntUidShiftType: opts.BindMntUidShiftType,
+		SwitchDockerDns:     opts.SwitchDockerDns,
 	}
 
 	for _, m := range spec.Mounts {
