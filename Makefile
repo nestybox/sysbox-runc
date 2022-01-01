@@ -26,9 +26,11 @@ COMMIT ?= $(if $(shell git status --porcelain --untracked-files=no),$(COMMIT_NO)
 BUILT_AT := $(shell date)
 BUILT_BY := $(shell git config user.name)
 
-SYSIPC := github.com/nestybox/sysbox/sysbox-ipc
 SYSIPC_DIR := ../sysbox-ipc
 SYSIPC_SRC := $(shell find $(SYSIPC_DIR) 2>&1 | grep -E '.*\.(c|h|go|proto)$$')
+
+SYSLIB_DIR := ../sysbox-libs
+SYSLIB_SRC := $(shell find $(SYSLIB_DIR) 2>&1 | grep -E '.*\.(c|h|go|proto)$$')
 
 LIBSECCOMP_DIR := ../sysbox-libs/libseccomp-golang
 LIBSECCOMP_SRC := $(shell find $(LIBSECCOMP_DIR) 2>&1 | grep -E '.*\.(go)')
@@ -102,7 +104,7 @@ RUN_TEST_CONT := $(CONTAINER_ENGINE) run ${DOCKER_RUN_PROXY} \
 
 sysbox-runc: $(RUNC_BUILDDIR)/$(RUNC_TARGET)
 
-$(RUNC_BUILDDIR)/$(RUNC_TARGET): $(SOURCES) $(SYSIPC_SRC) $(LIBSECCOMP_SRC)
+$(RUNC_BUILDDIR)/$(RUNC_TARGET): $(SOURCES) $(SYSIPC_SRC) $(SYSLIB_SRC) $(LIBSECCOMP_SRC)
 	$(GO_BUILD) -o $(RUNC_BUILDDIR)/$(RUNC_TARGET) .
 
 sysbox-runc-debug: $(RUNC_BUILDDIR)/$(RUNC_DEBUG_TARGET)
@@ -116,7 +118,7 @@ all: $(RUNC_BUILDDIR)/$(RUNC_TARGET) recvtty
 recvtty:
 	$(GO_BUILD) -o contrib/cmd/recvtty/recvtty ./contrib/cmd/recvtty
 
-static: $(SOURCES) $(SYSIPC_SRC)
+static: $(SOURCES) $(SYSIPC_SRC) $(SYSLIB_SRC)
 	$(GO_BUILD_STATIC) -o $(RUNC_BUILDDIR)/$(RUNC_TARGET) .
 	$(GO_BUILD_STATIC) -o contrib/cmd/recvtty/recvtty ./contrib/cmd/recvtty
 
