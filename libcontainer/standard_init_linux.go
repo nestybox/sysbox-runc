@@ -1,4 +1,4 @@
-// +build linux
+//go:build linux
 
 package libcontainer
 
@@ -36,7 +36,6 @@ type opReqType int
 const (
 	bind = iota
 	switchDockerDns
-	seccompFd
 	chown
 	mkdir
 )
