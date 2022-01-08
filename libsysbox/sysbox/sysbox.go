@@ -17,10 +17,8 @@
 package sysbox
 
 import (
-	"bufio"
 	"fmt"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"syscall"
@@ -33,7 +31,7 @@ import (
 )
 
 // The min supported kernel release is chosen based on whether it contains all kernel
-// fixes required to run sysbox. Refer to the Sysbox distro compatibility doc.
+// fixes required to run Sysbox. Refer to the Sysbox distro compatibility doc.
 type kernelRelease struct{ major, minor int }
 
 var minKernel = kernelRelease{5, 5}       // 5.5
@@ -103,47 +101,40 @@ func checkUnprivilegedUserns() error {
 }
 
 func checkKernelVersion(distro string) error {
-	var kmaj, kmin int
+	var (
+		reqMaj, reqMin int
+		major, minor   int
+	)
 
 	rel, err := libutils.GetKernelRelease()
 	if err != nil {
 		return err
 	}
 
-	splits := strings.SplitN(rel, ".", -1)
-	if len(splits) < 2 {
-		return fmt.Errorf("failed to parse kernel release %v", rel)
-	}
-
-	major, err := strconv.Atoi(splits[0])
+	major, minor, err = libutils.ParseKernelRelease(rel)
 	if err != nil {
-		return fmt.Errorf("failed to parse kernel release %v", rel)
-	}
-
-	minor, err := strconv.Atoi(splits[1])
-	if err != nil {
-		return fmt.Errorf("failed to parse kernel release %v", rel)
+		return err
 	}
 
 	if distro == "ubuntu" {
-		kmaj = minKernelUbuntu.major
-		kmin = minKernelUbuntu.minor
+		reqMaj = minKernelUbuntu.major
+		reqMin = minKernelUbuntu.minor
 	} else {
-		kmaj = minKernel.major
-		kmin = minKernel.minor
+		reqMaj = minKernel.major
+		reqMin = minKernel.minor
 	}
 
 	supported := false
-	if major > kmaj {
+	if major > reqMaj {
 		supported = true
-	} else if major == kmaj {
-		if minor >= kmin {
+	} else if major == reqMaj {
+		if minor >= reqMin {
 			supported = true
 		}
 	}
 
 	if !supported {
-		s := []string{strconv.Itoa(kmaj), strconv.Itoa(kmin)}
+		s := []string{strconv.Itoa(reqMaj), strconv.Itoa(reqMin)}
 		kver := strings.Join(s, ".")
 		return fmt.Errorf("%s kernel release %v is not supported; need >= %v", distro, rel, kver)
 	}
@@ -197,26 +188,38 @@ func needUidShiftOnRootfs(spec *specs.Spec) (bool, error) {
 	return false, nil
 }
 
-func kernelSupportsUidShifting() (sh.IDShiftType, bool) {
+// Checks if the kernel supports UID shifting and whether the shifting works on
+// the container's rootfs (e.g., whether the shifting works on top of
+// overlayfs).
+func kernelSupportsUidShifting() (sh.IDShiftType, bool, error) {
 
-	// TODO: check if the kernel supports ID-mapped mounts (e.g., run a quick
-	// experiment, or check for kernel >= 5.12).
+	idMapMntSupported, err := libutils.KernelSupportsIDMappedMounts()
+	if err != nil {
+		return sh.NoShift, false, err
+	}
 
-	// TODO: if both shiftfs and ID-mapped are supported, the latter takes precendence.
+	if idMapMntSupported {
 
-	// TODO: if we do the quick experiment, sysbox-mgr should do that so that we
-	// don't have to do it on each container start.
+		// ID-mapped mounts on top of the container's rootfs are not supported
+		// (ID-mapped mount for overlayfs, aufs, and the like is not yet supported
+		// as of 01/2022).
 
-	// TODO: check also if kernel supports uid shifting on the rootfs (e.g., on overlayfs).
-	// For shiftfs: Ubuntu only (or run an experiment)
-	// For ID-mapped mounts: none yet (or run an experiment)
+		return sh.IDMappedMount, false, nil
 
-	// XXX: DEBUG
-	// if err := KernelModSupported("shiftfs"); err == nil {
-	// 	return sh.Shiftfs, true
-	// }
+	} else {
 
-	return sh.NoShift, false
+		shiftfsSupported, err := libutils.KernelModSupported("shiftfs")
+		if err != nil {
+			return sh.NoShift, false, err
+		}
+
+		if shiftfsSupported {
+			// Shiftfs does work on top of the container's rootfs
+			return sh.Shiftfs, true, nil
+		}
+	}
+
+	return sh.NoShift, false, nil
 }
 
 // checkUidShifting returns the type of UID shifting needed (if any) for the
@@ -224,18 +227,28 @@ func kernelSupportsUidShifting() (sh.IDShiftType, bool) {
 // for the container's rootfs, while the second indicates the type of UID
 // shifting for bind-mounts.
 func CheckUidShifting(sysMgr *Mgr, spec *specs.Spec) (sh.IDShiftType, sh.IDShiftType, error) {
+	var (
+		kernelShiftType          sh.IDShiftType
+		kernelShiftWorksOnRootfs bool
+		needShiftOnRootfs        bool
+		err                      error
+	)
 
-	kernelShiftType, kernelShiftWorksOnRootfs := kernelSupportsUidShifting()
+	kernelShiftType, kernelShiftWorksOnRootfs, err = kernelSupportsUidShifting()
+	if err != nil {
+		return sh.NoShift, sh.NoShift, fmt.Errorf("failed to check kernel uid shifting support: %s", err)
+	}
 
-	needShiftOnRootfs, err := needUidShiftOnRootfs(spec)
+	needShiftOnRootfs, err = needUidShiftOnRootfs(spec)
 	if err != nil {
 		return sh.NoShift, sh.NoShift, fmt.Errorf("failed to check uid shifting requirement on rootfs: %s", err)
 	}
 
-	// For the rootfs, we always ID shift; if the kernel can do it, great we use
-	// that. But if it can't do it, we chown the rootfs. Chowning is fairly safe
-	// since the container's rootfs is dedicated to the container (no other
-	// entity in the system will use it while the container is running).
+	// For UID shifting is needed on the rootfs, we do it via the kernel's ID
+	// shift mechanism (e.g., shiftfs, when available) or by chown'ing the rootfs
+	// hierarchy. Chowning is fairly safe since the container's rootfs is
+	// dedicated to the container (no other entity in the system will use it
+	// while the container is running).
 	rootfsShiftType := sh.NoShift
 
 	if needShiftOnRootfs {
@@ -246,11 +259,11 @@ func CheckUidShifting(sysMgr *Mgr, spec *specs.Spec) (sh.IDShiftType, sh.IDShift
 		}
 	}
 
-	// For bind mounts into the container, we rely on the kernel ID shift (i.e.,
-	// we never chown). Chowning for bind mounts is not a good idea since we
-	// don't know what's being bind mounted (e.g., the bind mount could be a
-	// user's home dir, a critical system file, etc.). Also, Sysbox config option
-	// BindMountUidShift disables ID shifting on bind-mounts.
+	// For bind mounts into the container, we rely on the kernel ID shift
+	// mechanism (i.e., shiftfs or ID-mapped mounts) and never chown. Chowning
+	// for bind mounts is not a good idea since we don't know what's being bind
+	// mounted (e.g., the bind mount could be a user's home dir, a critical
+	// system file, etc.).
 	bindMountShiftType := sh.NoShift
 
 	if sysMgr.Config.BindMountUidShift {
@@ -280,27 +293,4 @@ func CheckHostConfig(context *cli.Context, spec *specs.Spec) error {
 	}
 
 	return nil
-}
-
-// KernelModSupported returns nil if the given module is loaded in the kernel.
-func KernelModSupported(mod string) error {
-
-	// Load the module
-	exec.Command("modprobe", mod).Run()
-
-	// Check if the module is in the kernel
-	f, err := os.Open("/proc/modules")
-	if err != nil {
-		return fmt.Errorf("failed to open /proc/modules to check for %s module", mod)
-	}
-	defer f.Close()
-
-	s := bufio.NewScanner(f)
-	for s.Scan() {
-		if strings.Contains(s.Text(), mod) {
-			return nil
-		}
-	}
-
-	return fmt.Errorf("%s module is not loaded in the kernel", mod)
 }

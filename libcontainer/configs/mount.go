@@ -39,4 +39,7 @@ type Mount struct {
 
 	// Bind mount source info
 	BindSrcInfo BindSrcInfo `json:"bind_src_info,omitempty"`
+
+	// Indicates if mounts is to be ID-mapped (see mount_setattr(2) in Linux >= 5.12).
+	IDMappedMount bool `json:"idmap_mount"`
 }

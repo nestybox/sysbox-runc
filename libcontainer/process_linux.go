@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 package libcontainer
@@ -575,7 +576,7 @@ func (p *initProcess) start() (retErr error) {
 				return newSystemErrorWithCause(err, "receiving / decoding reqOp'")
 			}
 			if err := p.container.handleReqOp(childPid, reqs); err != nil {
-				return newSystemErrorWithCausef(err, "handleReqOp")
+				return newSystemErrorWithCause(err, "handleReqOp")
 			}
 			if err := writeSync(p.messageSockPair.parent, opDone); err != nil {
 				return newSystemErrorWithCause(err, "writing syncT 'opDone'")

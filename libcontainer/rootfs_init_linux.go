@@ -15,6 +15,8 @@ import (
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/selinux/go-selinux/label"
 	"golang.org/x/sys/unix"
+
+	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
 )
 
 type linuxRootfsInit struct {
@@ -253,6 +255,8 @@ func (l *linuxRootfsInit) Init() error {
 			return newSystemErrorWithCausef(err, "chdir to rootfs %s", rootfs)
 		}
 
+		initPid := l.reqs[0].InitPid
+
 		for _, req := range l.reqs {
 			m := &req.Mount
 			mountLabel := req.Label
@@ -279,6 +283,21 @@ func (l *linuxRootfsInit) Init() error {
 				shared := label.IsShared(m.Relabel)
 				if err := label.Relabel(m.Source, mountLabel, shared); err != nil {
 					return newSystemErrorWithCausef(err, "relabeling %s to %s", m.Source, mountLabel)
+				}
+			}
+
+			// Set up the ID-mapping as needed
+			if m.IDMappedMount {
+
+				// Note: arguments to IDMapMount() must be absolute.
+				usernsPath := fmt.Sprintf("/proc/%d/ns/user", initPid)
+				target, err := securejoin.SecureJoin(rootfs, m.Destination)
+				if err != nil {
+					return err
+				}
+
+				if err := sh.IDMapMount(usernsPath, target); err != nil {
+					return newSystemErrorWithCausef(err, "setting up ID-mapped mount on userns %s, path %s", usernsPath, target)
 				}
 			}
 		}
