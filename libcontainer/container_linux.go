@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 package libcontainer
@@ -31,6 +32,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/utils"
 	"github.com/opencontainers/runc/libsysbox/shiftfs"
 	"github.com/opencontainers/runc/libsysbox/sysbox"
+	"github.com/opencontainers/runc/libsysbox/syscont"
 	"github.com/opencontainers/runtime-spec/specs-go"
 
 	"github.com/checkpoint-restore/go-criu/v4"
@@ -282,8 +284,6 @@ func (c *linuxContainer) Start(process *Process) error {
 			return err
 		}
 
-		// TODO: check if we need to set up ID-mapped mounts here
-
 		if c.config.RootfsUidShiftType == sh.Chown {
 			if err := c.chownRootfs(); err != nil {
 				return err
@@ -293,6 +293,12 @@ func (c *linuxContainer) Start(process *Process) error {
 		if c.config.RootfsUidShiftType == sh.Shiftfs ||
 			c.config.BindMntUidShiftType == sh.Shiftfs {
 			if err := c.setupShiftfsMarks(); err != nil {
+				return err
+			}
+		}
+
+		if c.config.BindMntUidShiftType == sh.IDMappedMount {
+			if err := c.setupIDMappedMounts(); err != nil {
 				return err
 			}
 		}
@@ -2370,6 +2376,9 @@ func (c *linuxContainer) handleReqOp(childPid int, reqs []opReq) error {
 		return newSystemError(fmt.Errorf("invalid opReq type %d", int(op)))
 	}
 
+	// Add the container's init process pid to the first op request
+	reqs[0].InitPid = childPid
+
 	return c.handleOp(op, childPid, reqs)
 }
 
@@ -2379,7 +2388,7 @@ func (c *linuxContainer) handleReqOp(childPid int, reqs []opReq) error {
 // that the container's init process would have in order to perform those same actions.
 func (c *linuxContainer) handleOp(op opReqType, childPid int, reqs []opReq) error {
 
-	// create the socket pairs for communication with the child
+	// create the socket pairs for communication with the new nsenter child process
 	parentMsgPipe, childMsgPipe, err := utils.NewSockPair("initHelper")
 	if err != nil {
 		return newSystemErrorWithCause(err, "creating new initHelper pipe")
@@ -2409,16 +2418,18 @@ func (c *linuxContainer) handleOp(op opReqType, childPid int, reqs []opReq) erro
 	}
 
 	// create the config payload
-	var nsPath string
+	namespaces := []string{}
 
 	switch op {
 	case bind, chown, mkdir:
-		nsPath = fmt.Sprintf("mnt:/proc/%d/ns/mnt", childPid)
+		namespaces = append(namespaces,
+			fmt.Sprintf("mnt:/proc/%d/ns/mnt", childPid),
+		)
 	case switchDockerDns:
-		nsPath = fmt.Sprintf("net:/proc/%d/ns/net", childPid)
+		namespaces = append(namespaces,
+			fmt.Sprintf("net:/proc/%d/ns/net", childPid),
+		)
 	}
-
-	namespaces := []string{nsPath}
 
 	r := nl.NewNetlinkRequest(int(InitMsg), 0)
 	r.AddData(&Bytemsg{
@@ -2700,4 +2711,89 @@ func skipShiftfsBindSource(source string) bool {
 	}
 
 	return false
+}
+
+// sysbox-runc: determines which mounts must be ID-mapped; does not actually
+// perform the ID-mapped mounts, simply adds the list of ID-mapped mounts to the
+// config.
+func (c *linuxContainer) setupIDMappedMounts() error {
+
+	config := c.config
+
+	// Determine if other host directories mounted into the container's rootfs
+	// need ID-mapping.
+
+	for _, m := range config.Mounts {
+		if m.Device == "bind" {
+
+			if skipIDMapMountBindSource(m.Source) {
+				continue
+			}
+
+			needIDMap, err := needUidShiftOnBindSrc(m, config)
+			if err != nil {
+				return newSystemErrorWithCause(err, "checking uid shifting on bind source")
+			}
+
+			m.IDMappedMount = needIDMap
+		}
+	}
+
+	return nil
+}
+
+// The following are host directories where we never ID-map-mount as it causes
+// functional problems (i.e., the kernel does not allow ID-maps over them).
+var idMapMountBlackList = []string{"/dev/null"}
+
+// sysbox-runc: skipIDMapMountBindSource indicates if ID-mapped mounting should
+// be skipped on the given file.
+func skipIDMapMountBindSource(source string) bool {
+	for _, m := range idMapMountBlackList {
+		if source == m {
+			return true
+		}
+	}
+	return false
+}
+
+// needUidShiftOnBindSrc checks if uid/gid shifting on the given bind mount source path is
+// required to run the system container.
+func needUidShiftOnBindSrc(mount *configs.Mount, config *configs.Config) (bool, error) {
+
+	// sysbox-fs handles uid(gid) shifting itself, so no need for mounting shiftfs on top
+	if strings.HasPrefix(mount.Source, syscont.SysboxFsDir+"/") {
+		return false, nil
+	}
+
+	// Don't mount shiftfs on bind sources under the container's rootfs
+	if strings.HasPrefix(mount.Source, config.Rootfs+"/") {
+		return false, nil
+	}
+
+	// If the bind source has uid:gid ownership matching the container's user-ns
+	// mappings, shiftfs is not needed.
+
+	var hostUid, hostGid uint32
+	var uidSize, gidSize uint32
+
+	for _, mapping := range config.UidMappings {
+		if mapping.ContainerID == 0 {
+			hostUid = uint32(mapping.HostID)
+		}
+		uidSize += uint32(mapping.Size)
+	}
+	for _, mapping := range config.GidMappings {
+		if mapping.ContainerID == 0 {
+			hostGid = uint32(mapping.HostID)
+		}
+		gidSize += uint32(mapping.Size)
+	}
+
+	if (mount.BindSrcInfo.Uid >= hostUid) && (mount.BindSrcInfo.Uid < hostUid+uidSize) &&
+		(mount.BindSrcInfo.Gid >= hostGid) && (mount.BindSrcInfo.Gid < hostGid+gidSize) {
+		return false, nil
+	}
+
+	return true, nil
 }
