@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 package libcontainer
@@ -1207,9 +1208,9 @@ func needUidShiftOnBindSrc(mount *configs.Mount, config *configs.Config) (bool, 
 // mount. It does this by reopening the rootfs directory.
 func effectRootfsMount() error {
 
-	// The method for reopening the rootfs directory is pretty lame,
-	// but I could not find any other. Note that the "dev" subdirectory
-	// is guaranteed to be present, as it's created by our parent
+	// @ctalledo: the method for reopening the rootfs directory is pretty lame,
+	// but I could not find any other. Note that the "dev" subdirectory is
+	// guaranteed to be present, as it's always created by our parent
 	// sysbox-runc.
 
 	if err := os.Chdir("dev"); err != nil {
