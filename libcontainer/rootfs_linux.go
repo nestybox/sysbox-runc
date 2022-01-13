@@ -54,7 +54,6 @@ func needsSetupDev(config *configs.Config) bool {
 // rootfs.
 func prepareRootfs(pipe io.ReadWriter, iConfig *initConfig) (err error) {
 	config := iConfig.Config
-	//time.Sleep(30 * time.Second)
 
 	if err := validateCwd(config.Rootfs); err != nil {
 		return newSystemErrorWithCause(err, "validating cwd")
@@ -722,14 +721,6 @@ func mknodDevice(dest string, node *devices.Device, config *configs.Config, pipe
 	default:
 		return fmt.Errorf("%c is not a valid device type for device %s", node.Type, node.Path)
 	}
-	// dev, err := node.Mkdev()
-	// if err != nil {
-	// 	return err
-	// }
-	// if err := unix.Mknod(dest, uint32(fileMode), int(dev)); err != nil {
-	// 	return err
-	// }
-	// return unix.Chown(dest, int(node.Uid), int(node.Gid))
 
 	// Request the parent runc to enter the container's net-ns and change the DNS
 	// in the iptables (can't do this from within the container as we may not
@@ -740,11 +731,8 @@ func mknodDevice(dest string, node *devices.Device, config *configs.Config, pipe
 			Rootfs: config.Rootfs,
 			Path:   dest,
 			Mode:   fileMode,
-			//Device: dev,
 			Major:  int(node.Major),
 			Minor:  int(node.Minor),
-			// Uid:    config.UidMappings[0].HostID,
-			// Gid:    config.GidMappings[0].HostID,
 			Uid:    int(node.Uid),
 			Gid:    int(node.Gid),
 		},

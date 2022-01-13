@@ -2409,8 +2409,6 @@ func (c *linuxContainer) handleOp(op opReqType, childPid int, reqs []opReq) erro
 		}
 	}
 
-	// namespaces := []string{nsPath}
-
 	r := nl.NewNetlinkRequest(int(InitMsg), 0)
 	r.AddData(&Bytemsg{
 		Type:  NsPathsAttr,
