@@ -7,7 +7,6 @@ require (
 	github.com/checkpoint-restore/go-criu/v4 v4.1.0
 	github.com/cilium/ebpf v0.3.0
 	github.com/containerd/console v1.0.1
-	github.com/containerd/containerd v1.4.11
 	github.com/coreos/go-systemd/v22 v22.1.0
 	github.com/cyphar/filepath-securejoin v0.2.2
 	github.com/deckarep/golang-set v1.7.1
@@ -19,6 +18,7 @@ require (
 	github.com/nestybox/sysbox-ipc v0.0.0-00010101000000-000000000000
 	github.com/nestybox/sysbox-libs/capability v0.0.0-00010101000000-000000000000
 	github.com/nestybox/sysbox-libs/dockerUtils v0.0.0-00010101000000-000000000000
+	github.com/nestybox/sysbox-libs/formatter v0.0.0-00010101000000-000000000000 // indirect
 	github.com/nestybox/sysbox-libs/idShiftUtils v0.0.0-00010101000000-000000000000
 	github.com/nestybox/sysbox-libs/libseccomp-golang v0.0.0-00010101000000-000000000000
 	github.com/nestybox/sysbox-libs/utils v0.0.0-00010101000000-000000000000
@@ -32,7 +32,7 @@ require (
 	github.com/urfave/cli v1.22.1
 	github.com/vishvananda/netlink v1.1.0
 	github.com/willf/bitset v1.1.11
-	golang.org/x/sys v0.0.0-20201107080550-4d91cf3a1aaf
+	golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e
 )
 
 replace github.com/nestybox/sysbox-ipc => ../sysbox-ipc
@@ -46,5 +46,7 @@ replace github.com/nestybox/sysbox-libs/capability => ../sysbox-libs/capability
 replace github.com/nestybox/sysbox-libs/utils => ../sysbox-libs/utils
 
 replace github.com/nestybox/sysbox-libs/dockerUtils => ../sysbox-libs/dockerUtils
+
+replace github.com/nestybox/sysbox-libs/idShiftUtils => ../sysbox-libs/idShiftUtils
 
 replace github.com/opencontainers/runc => ./
