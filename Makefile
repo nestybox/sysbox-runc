@@ -128,6 +128,9 @@ release:
 dbuild: runcimage
 	$(RUN_TEST_CONT) make clean all
 
+gomod-tidy:
+	$(GO) mod tidy
+
 lint:
 	$(GO) vet ./...
 	$(GO) fmt ./...
