@@ -188,17 +188,18 @@ func needUidShiftOnRootfs(spec *specs.Spec) (bool, error) {
 	return false, nil
 }
 
-// Checks if the kernel supports UID shifting and whether the shifting works on
-// the container's rootfs (e.g., whether the shifting works on top of
-// overlayfs).
-func kernelSupportsUidShifting() (sh.IDShiftType, bool, error) {
+// Checks if the kernel supports filesystem user-ID shifting and whether the
+// shifting works on the container's rootfs (e.g., on top of overlayfs). If the
+// kernel supports multiple UID shifting mechanisms, it prioritizes
+// ID-mapped-mounts.
+func kernelSupportsUidShifting(noShiftfs, noIDMappedMount bool) (sh.IDShiftType, bool, error) {
 
 	idMapMntSupported, err := libutils.KernelSupportsIDMappedMounts()
 	if err != nil {
 		return sh.NoShift, false, err
 	}
 
-	if idMapMntSupported {
+	if idMapMntSupported && !noIDMappedMount {
 
 		// ID-mapped mounts on top of the container's rootfs are not supported
 		// (ID-mapped mount for overlayfs, aufs, and the like is not yet supported
@@ -213,7 +214,7 @@ func kernelSupportsUidShifting() (sh.IDShiftType, bool, error) {
 			return sh.NoShift, false, err
 		}
 
-		if shiftfsSupported {
+		if shiftfsSupported && !noShiftfs {
 			// Shiftfs does work on top of the container's rootfs
 			return sh.Shiftfs, true, nil
 		}
@@ -234,7 +235,9 @@ func CheckUidShifting(sysMgr *Mgr, spec *specs.Spec) (sh.IDShiftType, sh.IDShift
 		err                      error
 	)
 
-	kernelShiftType, kernelShiftWorksOnRootfs, err = kernelSupportsUidShifting()
+	kernelShiftType, kernelShiftWorksOnRootfs, err = kernelSupportsUidShifting(
+		sysMgr.Config.NoShiftfs, sysMgr.Config.NoIDMappedMount)
+
 	if err != nil {
 		return sh.NoShift, sh.NoShift, fmt.Errorf("failed to check kernel uid shifting support: %s", err)
 	}
@@ -264,11 +267,7 @@ func CheckUidShifting(sysMgr *Mgr, spec *specs.Spec) (sh.IDShiftType, sh.IDShift
 	// for bind mounts is not a good idea since we don't know what's being bind
 	// mounted (e.g., the bind mount could be a user's home dir, a critical
 	// system file, etc.).
-	bindMountShiftType := sh.NoShift
-
-	if sysMgr.Config.BindMountUidShift {
-		bindMountShiftType = kernelShiftType
-	}
+	bindMountShiftType := kernelShiftType
 
 	return rootfsShiftType, bindMountShiftType, nil
 }
