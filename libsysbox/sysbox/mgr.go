@@ -37,10 +37,7 @@ func NewMgr(id string, enable bool) *Mgr {
 	return &Mgr{
 		Active: enable,
 		Id:     id,
-		Config: &ipcLib.ContainerConfig{
-			AliasDns:          true,
-			BindMountUidShift: true,
-		},
+		Config: &ipcLib.ContainerConfig{},
 	}
 }
 
