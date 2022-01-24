@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 package libcontainer
@@ -284,6 +285,20 @@ func (c *linuxContainer) Start(process *Process) error {
 		}
 
 		if c.config.RootfsUidShiftType == sh.Chown {
+
+			cloneRootfs, err := c.rootfsCloningRequired()
+			if err != nil {
+				return err
+			}
+
+			if cloneRootfs {
+				newRootfs, err := c.sysMgr.CloneRootfs(c.config.Rootfs)
+				if err != nil {
+					return newSystemErrorWithCause(err, "failed to clone rootfs")
+				}
+				c.config.Rootfs = newRootfs
+			}
+
 			if err := c.chownRootfs(); err != nil {
 				return err
 			}
@@ -785,6 +800,13 @@ func (c *linuxContainer) Pause() error {
 		if err := c.cgroupManager.Freeze(configs.Frozen); err != nil {
 			return err
 		}
+
+		if c.config.RootfsUidShiftType == sh.Chown {
+			if err := c.revertRootfsChown(); err == nil {
+				return err
+			}
+		}
+
 		if c.sysMgr.Enabled() {
 			if err := c.sysMgr.Pause(); err != nil {
 				return err
@@ -807,6 +829,13 @@ func (c *linuxContainer) Resume() error {
 	if status != Paused {
 		return newGenericError(fmt.Errorf("container not paused"), ContainerNotPaused)
 	}
+
+	if c.config.RootfsUidShiftType == sh.Chown {
+		if err := c.chownRootfs(); err != nil {
+			return err
+		}
+	}
+
 	if err := c.cgroupManager.Freeze(configs.Thawed); err != nil {
 		return err
 	}
@@ -2666,14 +2695,51 @@ func (c *linuxContainer) teardownShiftfsMarkLocal() error {
 	return nil
 }
 
+func (c *linuxContainer) rootfsCloningRequired() (bool, error) {
+
+	// If the rootfs is on an overlayfs mount, then chown can be very slow (in
+	// the order of many seconds because it triggers a "copy-up" of every file),
+	// unless the overlay was mounted with "metacopy=on". If metacopy is disabled
+	// (e.g., Docker does not set this option), then we need a solution.
+	//
+	// Turns out we can't simply add the "metacopy=on" to the existing overlayfs
+	// mount on the rootfs via a remount (it's not supported). We could unmount
+	// and then remount, but the unmount may break the container manager that set
+	// up the mount. We tried, it did not work (Docker/containerd did not like
+	// it).
+	//
+	// The solution is to ask the sysbox-mgr to clone the rootfs at a separate
+	// location, and mount the overlay with metacopy=on. We will then setup the
+	// container using this cloned rootfs.
+
+	if !c.sysMgr.Enabled() {
+		return false, nil
+	}
+
+	rootfs := c.config.Rootfs
+
+	mi, err := mount.GetMountAtPid(uint32(os.Getpid()), rootfs)
+	if err != nil {
+		return false, fmt.Errorf("failed to get mount info for rootfs at %s: %s", rootfs, err)
+	}
+
+	if mi.Fstype == "overlay" && !strings.Contains(mi.Opts, "metacopy=on") {
+		return true, nil
+	}
+
+	return false, nil
+}
+
 // chowns the container's rootfs to match the user-ns uid & gid mappings.
 func (c *linuxContainer) chownRootfs() error {
+
+	rootfs := c.config.Rootfs
 
 	uidOffset := int32(c.config.UidMappings[0].HostID)
 	gidOffset := int32(c.config.GidMappings[0].HostID)
 
-	if err := sh.ShiftIdsWithChown(c.config.Rootfs, uidOffset, gidOffset); err != nil {
-		return newSystemErrorWithCausef(err, "chowning rootfs at %s by offset %d, %d", c.config.Rootfs, uidOffset, gidOffset)
+	if err := sh.ShiftIdsWithChown(rootfs, uidOffset, gidOffset); err != nil {
+		return newSystemErrorWithCausef(err, "chowning rootfs at %s by offset %d, %d", rootfs, uidOffset, gidOffset)
 	}
 
 	return nil
@@ -2681,6 +2747,10 @@ func (c *linuxContainer) chownRootfs() error {
 
 // reverts the container's rootfs chown (back to it's original value)
 func (c *linuxContainer) revertRootfsChown() error {
+
+	if c.sysMgr.IsRootfsCloned() {
+		c.config.Rootfs = c.sysMgr.GetClonedRootfs()
+	}
 
 	uidOffset := 0 - int32(c.config.UidMappings[0].HostID)
 	gidOffset := 0 - int32(c.config.GidMappings[0].HostID)

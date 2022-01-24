@@ -14,6 +14,7 @@
 // limitations under the License.
 //
 
+//go:build linux
 // +build linux
 
 package syscont
@@ -30,7 +31,6 @@ import (
 	ipcLib "github.com/nestybox/sysbox-ipc/sysboxMgrLib"
 	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
 	utils "github.com/nestybox/sysbox-libs/utils"
-	"github.com/nestybox/sysbox-runc/libcontainer/mount"
 	"github.com/opencontainers/runc/libsysbox/sysbox"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
@@ -533,142 +533,11 @@ func cfgReadonlyPaths(spec *specs.Spec) {
 	spec.Linux.ReadonlyPaths = utils.StringSliceRemove(spec.Linux.ReadonlyPaths, sysboxRwPaths)
 }
 
-// Determines if the rootfs overlayfs mount options need changing, and if so
-// returns the mount flags, mount options, and propagation flags required for
-// the mount.
-func getRootfsOvfsMountOpt(mi *mount.Info) (bool, int, string, int) {
-
-	// Remove "nodev" (if present) to avoid older versions of the OCI runc inside
-	// a sysbox container hitting https://github.com/opencontainers/runc/pull/1603
-	dontWantMntOpts := mapset.NewSetFromSlice([]interface{}{"nodev"})
-
-	// overlayfs metacopy=on is needed to significantly improve performance when
-	// sysbox performs chowns in the container's rootfs
-	wantVfsOpts := mapset.NewSetFromSlice([]interface{}{"metacopy=on"})
-
-	currMntOpts := mapset.NewSet()
-	for _, opt := range strings.Split(mi.Opts, ",") {
-		currMntOpts.Add(opt)
-	}
-
-	currVfsOpts := mapset.NewSet()
-	for _, opt := range strings.Split(mi.VfsOpts, ",") {
-		currVfsOpts.Add(opt)
-	}
-
-	// If the current mount and vfs opts are as we want them, we are done.
-	if currMntOpts.Intersect(dontWantMntOpts).Cardinality() == 0 &&
-		currVfsOpts.IsSuperset(wantVfsOpts) {
-		return false, 0, "", 0
-	}
-
-	// Find the mount options that need to be added
-	addVfsOpts := wantVfsOpts.Difference(currVfsOpts)
-
-	// The vfs opts reported by mountinfo are a combination of per superblock
-	// mount opts and the overlayfs-specific data; we need to separate these so
-	// we can do the mount properly.
-	properMntOpts := mapset.NewSetFromSlice([]interface{}{
-		"ro", "rw", "nodev", "noexec", "nosuid", "noatime", "nodiratime", "relatime", "strictatime", "sync",
-	})
-
-	newMntOpts := currVfsOpts.Intersect(properMntOpts)
-	newMntOpts = newMntOpts.Difference(dontWantMntOpts)
-
-	newVfsOpts := currVfsOpts.Difference(properMntOpts)
-	newVfsOpts = newVfsOpts.Union(addVfsOpts)
-
-	// Convert the mount options to the mount flags
-	newMntOptsString := []string{}
-	for _, opt := range newMntOpts.ToSlice() {
-		newMntOptsString = append(newMntOptsString, fmt.Sprintf("%s", opt))
-	}
-	mntFlags := mount.OptionsToFlags(newMntOptsString)
-
-	// Convert the vfs option set to the mount data string
-	newVfsOptsString := ""
-	for i, opt := range newVfsOpts.ToSlice() {
-		if i != 0 {
-			newVfsOptsString += ","
-		}
-		newVfsOptsString += fmt.Sprintf("%s", opt)
-	}
-
-	// Set the mount propagation flags as they were in the original mount
-	// (shared, slave, etc.)
-	propFlags := 0
-
-	if strings.Contains(mi.Optional, "shared") {
-		propFlags |= unix.MS_SHARED
-	} else if strings.Contains(mi.Optional, "master") {
-		propFlags |= unix.MS_SLAVE
-	} else if strings.Contains(mi.Optional, "unbindable") {
-		propFlags |= unix.MS_UNBINDABLE
-	} else {
-		propFlags |= unix.MS_PRIVATE
-	}
-
-	return true, mntFlags, newVfsOptsString, propFlags
-}
-
-// Reconfigures the existing overlayfs mount for the container's rootfs, to ensure it has
-// sysbox-required attributes set.
-//
-// Note: per mount(2) we should be able to change the mount options by simply
-// remounting. However this does not work for overlayfs "metacopy=on" (the flag
-// is ignored during a remount). Thus we have to unmount and create a fresh new
-// mount that is identical to the prior one except it has the desired mount
-// options.
-func cfgRootfsOvfsMount(mi *mount.Info) error {
-
-	remount, mntFlags, options, propFlags := getRootfsOvfsMountOpt(mi)
-
-	if !remount {
-		return nil
-	}
-
-	if err := unix.Unmount(mi.Mountpoint, unix.MNT_DETACH); err != nil {
-		return fmt.Errorf("failed to unmount %s: %s", mi.Mountpoint, err)
-	}
-
-	if err := unix.Mount("overlay", mi.Mountpoint, "overlay", uintptr(mntFlags), options); err != nil {
-		return fmt.Errorf("failed to mount %s: %s", mi.Mountpoint, err)
-	}
-
-	if err := unix.Mount("", mi.Mountpoint, "", uintptr(propFlags), ""); err != nil {
-		return fmt.Errorf("failed to mount %s: %s", mi.Mountpoint, err)
-	}
-
-	return nil
-}
-
-func cfgRootfsMount(spec *specs.Spec) error {
-	rootfs := spec.Root.Path
-
-	mi, err := mount.GetMountAtPid(uint32(os.Getpid()), rootfs)
-	if err != nil {
-		logrus.Infof("failed to get mount info for rootfs at %s", rootfs)
-		return nil
-	}
-
-	if mi.Fstype == "overlay" {
-		return cfgRootfsOvfsMount(mi)
-	}
-
-	return nil
-}
-
 // cfgMounts configures the system container mounts
 func cfgMounts(spec *specs.Spec, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs, rootfsUidShiftType sh.IDShiftType) error {
 
 	// If we will chown the container's rootfs, then ensure the rootfs mount has
 	// the desired config (e.g., if rootfs is on overlay2, we want metacopy=on).
-
-	if rootfsUidShiftType == sh.Chown {
-		if err := cfgRootfsMount(spec); err != nil {
-			return err
-		}
-	}
 
 	cfgSysboxMounts(spec)
 
