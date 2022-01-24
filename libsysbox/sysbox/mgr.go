@@ -28,9 +28,10 @@ import (
 )
 
 type Mgr struct {
-	Active bool
-	Id     string                  // container-id
-	Config *ipcLib.ContainerConfig // sysbox-mgr mandated container config
+	Active       bool
+	Id           string                  // container-id
+	Config       *ipcLib.ContainerConfig // sysbox-mgr mandated container config
+	clonedRootfs string                  // path to cloned rootfs (used when rootfs needs chown but it's on ovfs without metacopy=on)
 }
 
 func NewMgr(id string, enable bool) *Mgr {
@@ -152,4 +153,25 @@ func (mgr *Mgr) Pause() error {
 		return fmt.Errorf("failed to notify pause to sysbox-mgr: %v", err)
 	}
 	return nil
+}
+
+// ClonedRootfs sends a request to sysbox-mgr to setup an alternate rootfs for the container.
+// It returns the path to the new rootfs.
+func (mgr *Mgr) CloneRootfs(rootfs string) (string, error) {
+
+	newRootfs, err := sysboxMgrGrpc.ReqCloneRootfs(mgr.Id, rootfs)
+	if err != nil {
+		return "", fmt.Errorf("failed to request rootfs cloning from sysbox-mgr: %v", err)
+	}
+
+	mgr.clonedRootfs = newRootfs
+	return newRootfs, nil
+}
+
+func (mgr *Mgr) IsRootfsCloned() bool {
+	return mgr.clonedRootfs != ""
+}
+
+func (mgr *Mgr) GetClonedRootfs() string {
+	return mgr.clonedRootfs
 }

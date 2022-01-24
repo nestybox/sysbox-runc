@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strconv"
+	"time"
 
 	"github.com/nestybox/sysbox-runc/libcontainer/mount"
 	"github.com/opencontainers/runc/libcontainer/apparmor"
@@ -320,7 +321,11 @@ func (l *linuxStandardInit) Init() error {
 	}
 
 	if err := unix.Exec(name, l.config.Args[0:], os.Environ()); err != nil {
-		return newSystemErrorWithCause(err, "exec user process")
+
+		// XXX: DEBUG
+		time.Sleep(1 * time.Hour)
+
+		return newSystemErrorWithCausef(err, "exec user process: name = %v, args = %v, environ = %v", name, l.config.Args[0:], os.Environ())
 	}
 	return nil
 }
