@@ -233,6 +233,9 @@ type Config struct {
 	// FsState slice is utilized to host file-system state (e.g. dir, file, softlinks,
 	// etc) to be created in container's rootfs during initialization.
 	FsState []FsEntry `json:"fs_state,omitempty"`
+
+	// Indicates if the rootfs was cloned by the sysbox-mgr.
+	RootfsCloned bool `json:"rootfs_cloned"`
 }
 
 type HookName string

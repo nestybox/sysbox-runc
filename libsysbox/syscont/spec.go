@@ -703,7 +703,7 @@ func getFileAttrValue(file, attr string) (string, error) {
 // data. This is used to define the container mountpoint on which the host's docker
 // volume (backing this resource) will be mounted on.
 //
-// Notice that even though this code habilitates the custom definition of the data-root's
+// Notice that even though this code abilitates the custom definition of the data-root's
 // location, this will be only honored by Sysbox if this attribute is set prior to the
 // container creation (i.e., at docker-image build time).
 func getInnerDockerDataRootPath(spec *specs.Spec) (string, error) {

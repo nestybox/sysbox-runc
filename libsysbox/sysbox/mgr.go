@@ -168,6 +168,18 @@ func (mgr *Mgr) CloneRootfs(rootfs string) (string, error) {
 	return newRootfs, nil
 }
 
+// Sends a requests to sysbox-mgr to chown a cloned rootfs, using the
+// given uid and gid offsets. Must call after CloneRootfs().
+func (mgr *Mgr) ChownClonedRootfs(uidOffset, gidOffset int32) error {
+	return sysboxMgrGrpc.ChownClonedRootfs(mgr.Id, uidOffset, gidOffset)
+}
+
+// Sends a requests to sysbox-mgr to revert the chown of a cloned rootfs.
+// Must call after ChownClonedRootfs().
+func (mgr *Mgr) RevertClonedRootfsChown() error {
+	return sysboxMgrGrpc.RevertClonedRootfsChown(mgr.Id)
+}
+
 func (mgr *Mgr) IsRootfsCloned() bool {
 	return mgr.clonedRootfs != ""
 }
