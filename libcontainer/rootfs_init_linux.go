@@ -297,7 +297,9 @@ func (l *linuxRootfsInit) Init() error {
 				}
 
 				if err := sh.IDMapMount(usernsPath, target); err != nil {
-					return newSystemErrorWithCausef(err, "setting up ID-mapped mount on userns %s, path %s", usernsPath, target)
+					return newSystemErrorWithCausef(err,
+						"setting up ID-mapped mount on userns %s, path %s (likely means idmapped mounts are not supported on the filesystem at this path)",
+						usernsPath, target)
 				}
 			}
 		}

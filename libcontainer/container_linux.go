@@ -292,15 +292,24 @@ func (c *linuxContainer) Start(process *Process) error {
 			}
 
 			if cloneRootfs {
-				newRootfs, err := c.sysMgr.CloneRootfs(c.config.Rootfs)
+				_, err := c.sysMgr.CloneRootfs(c.config.Rootfs)
 				if err != nil {
 					return newSystemErrorWithCause(err, "failed to clone rootfs")
 				}
-				c.config.Rootfs = newRootfs
-			}
 
-			if err := c.chownRootfs(); err != nil {
-				return err
+				c.config.RootfsCloned = true
+
+				uidOffset := int32(c.config.UidMappings[0].HostID)
+				gidOffset := int32(c.config.GidMappings[0].HostID)
+
+				if err := c.sysMgr.ChownClonedRootfs(uidOffset, gidOffset); err != nil {
+					return newSystemErrorWithCause(err, "failed to chown rootfs clone")
+				}
+
+			} else {
+				if err := c.chownRootfs(); err != nil {
+					return err
+				}
 			}
 		}
 
@@ -758,8 +767,15 @@ func (c *linuxContainer) Destroy() error {
 
 	// If the rootfs was chowned, revert it back to its original uid & gid
 	if c.config.RootfsUidShiftType == sh.Chown {
-		if err2 := c.revertRootfsChown(); err == nil {
-			err = err2
+
+		if c.config.RootfsCloned {
+			if err2 := c.sysMgr.RevertClonedRootfsChown(); err != nil {
+				err = err2
+			}
+		} else {
+			if err2 := c.revertRootfsChown(); err == nil {
+				err = err2
+			}
 		}
 	}
 
@@ -802,8 +818,14 @@ func (c *linuxContainer) Pause() error {
 		}
 
 		if c.config.RootfsUidShiftType == sh.Chown {
-			if err := c.revertRootfsChown(); err == nil {
-				return err
+			if c.config.RootfsCloned {
+				if err := c.sysMgr.RevertClonedRootfsChown(); err != nil {
+					return err
+				}
+			} else {
+				if err := c.revertRootfsChown(); err == nil {
+					return err
+				}
 			}
 		}
 
@@ -831,8 +853,18 @@ func (c *linuxContainer) Resume() error {
 	}
 
 	if c.config.RootfsUidShiftType == sh.Chown {
-		if err := c.chownRootfs(); err != nil {
-			return err
+
+		if c.config.RootfsCloned {
+			uidOffset := int32(c.config.UidMappings[0].HostID)
+			gidOffset := int32(c.config.GidMappings[0].HostID)
+
+			if err := c.sysMgr.ChownClonedRootfs(uidOffset, gidOffset); err != nil {
+				return err
+			}
+		} else {
+			if err := c.chownRootfs(); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -2719,11 +2751,7 @@ func (c *linuxContainer) rootfsCloningRequired() (bool, error) {
 	rootfs := c.config.Rootfs
 
 	mi, err := mount.GetMountAtPid(uint32(os.Getpid()), rootfs)
-	if err != nil {
-		return false, fmt.Errorf("failed to get mount info for rootfs at %s: %s", rootfs, err)
-	}
-
-	if mi.Fstype == "overlay" && !strings.Contains(mi.Opts, "metacopy=on") {
+	if err == nil && mi.Fstype == "overlay" && !strings.Contains(mi.Opts, "metacopy=on") {
 		return true, nil
 	}
 
@@ -2823,6 +2851,14 @@ func skipIDMapMountBindSource(source string) bool {
 			return true
 		}
 	}
+
+	// id-mapped mounts are not (yet) supported on overlayfs
+	var fs unix.Statfs_t
+	err := unix.Statfs(source, &fs)
+	if err == nil && fs.Type == unix.OVERLAYFS_SUPER_MAGIC {
+		return true
+	}
+
 	return false
 }
 
