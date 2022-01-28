@@ -981,7 +981,7 @@ func cfgSeccomp(seccomp *specs.LinuxSeccomp) error {
 
 	supportedArch := false
 	for _, arch := range seccomp.Architectures {
-		if arch == specs.ArchX86_64 {
+		if arch == specs.ArchX86_64 || arch == specs.ArchAARCH64 || arch == specs.ArchARM {
 			supportedArch = true
 		}
 	}

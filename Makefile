@@ -67,15 +67,16 @@ ifeq ($(shell $(GO) env GOOS),linux)
 	endif
 endif
 
-ifeq ($(ARCH),armel)
-	GO_XCOMPILE := CGO_ENABLED=1 GOOS=linux GOARCH=arm GOARM=6 CC=arm-linux-gnueabi-gcc
-else ifeq ($(ARCH),armhf)
-	GO_XCOMPILE := CGO_ENABLED=1 GOOS=linux GOARCH=arm GOARM=7 CC=arm-linux-gnueabihf-gcc
-else ifeq ($(ARCH),arm64)
-	GO_XCOMPILE = CGO_ENABLED=1 GOOS=linux GOARCH=arm64 CC=aarch64-linux-gnu-gcc
-else
-	GO_XCOMPILE = GOARCH=amd64
-endif
+#ifeq ($(ARCH),armel)
+#	GO_XCOMPILE := CGO_ENABLED=1 GOOS=linux GOARCH=arm GOARM=6 CC=arm-linux-gnueabi-gcc
+#else ifeq ($(ARCH),armhf)
+#	GO_XCOMPILE := CGO_ENABLED=1 GOOS=linux GOARCH=arm GOARM=7 CC=arm-linux-gnueabihf-gcc
+#else ifeq ($(ARCH),arm64)
+#	GO_XCOMPILE = CGO_ENABLED=1 GOOS=linux GOARCH=arm64 CC=aarch64-linux-gnu-gcc
+#else
+#	GO_XCOMPILE = GOARCH=amd64
+#	GO_XCOMPILE = GOARCH=arm64
+#endif
 
 GO_BUILD := $(GO_XCOMPILE) $(GO) build $(GO_BUILDMODE) $(EXTRA_FLAGS) -tags "$(BUILDTAGS)" \
 	-ldflags $(LDFLAGS) $(EXTRA_LDFLAGS)
