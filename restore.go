@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 package main
@@ -103,6 +104,7 @@ using the sysbox-runc checkpoint command.`,
 			spec                *specs.Spec
 			rootfsUidShiftType  sh.IDShiftType
 			bindMntUidShiftType sh.IDShiftType
+			rootfsCloned        bool
 			status              int
 		)
 
@@ -142,7 +144,7 @@ using the sysbox-runc checkpoint command.`,
 			}
 		}
 
-		rootfsUidShiftType, bindMntUidShiftType, err = syscont.ConvertSpec(context, sysMgr, sysFs, spec)
+		rootfsUidShiftType, bindMntUidShiftType, rootfsCloned, err = syscont.ConvertSpec(context, sysMgr, sysFs, spec)
 		if err != nil {
 			return fmt.Errorf("error in the container spec: %v", err)
 		}
@@ -151,7 +153,7 @@ using the sysbox-runc checkpoint command.`,
 		if err = setEmptyNsMask(context, options); err != nil {
 			return err
 		}
-		status, err = startContainer(context, spec, CT_ACT_RESTORE, options, rootfsUidShiftType, bindMntUidShiftType, sysMgr, sysFs)
+		status, err = startContainer(context, spec, CT_ACT_RESTORE, options, rootfsUidShiftType, bindMntUidShiftType, rootfsCloned, sysMgr, sysFs)
 		if err != nil {
 			sysFs.Unregister()
 			return err

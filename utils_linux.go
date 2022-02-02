@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 package main
@@ -274,6 +275,7 @@ func createContainer(context *cli.Context,
 	spec *specs.Spec,
 	rootfsUidShiftType, bindMntUidShiftType sh.IDShiftType,
 	switchDockerDns bool,
+	rootfsCloned bool,
 	sysMgr *sysbox.Mgr,
 	sysFs *sysbox.Fs) (libcontainer.Container, error) {
 
@@ -293,6 +295,7 @@ func createContainer(context *cli.Context,
 		RootfsUidShiftType:  rootfsUidShiftType,
 		BindMntUidShiftType: bindMntUidShiftType,
 		SwitchDockerDns:     switchDockerDns,
+		RootfsCloned:        rootfsCloned,
 	})
 	if err != nil {
 		return nil, err
@@ -485,6 +488,7 @@ func startContainer(context *cli.Context,
 	action CtAct,
 	criuOpts *libcontainer.CriuOpts,
 	rootfsUidShiftType, bindMntUidShiftType sh.IDShiftType,
+	rootfsCloned bool,
 	sysMgr *sysbox.Mgr,
 	sysFs *sysbox.Fs) (int, error) {
 
@@ -509,7 +513,7 @@ func startContainer(context *cli.Context,
 		}
 	}
 
-	container, err := createContainer(context, id, spec, rootfsUidShiftType, bindMntUidShiftType, switchDockerDns, sysMgr, sysFs)
+	container, err := createContainer(context, id, spec, rootfsUidShiftType, bindMntUidShiftType, switchDockerDns, rootfsCloned, sysMgr, sysFs)
 	if err != nil {
 		return -1, err
 	}

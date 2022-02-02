@@ -18,9 +18,11 @@ package syscont
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
+	"github.com/opencontainers/runc/libcontainer/mount"
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
@@ -153,4 +155,32 @@ func mergeIDMappings(idMappings []specs.LinuxIDMapping) ([]specs.LinuxIDMapping,
 	}
 
 	return []specs.LinuxIDMapping{mergedMapping}, nil
+}
+
+func rootfsCloningRequired(rootfs string) (bool, error) {
+
+	// If the rootfs is on an overlayfs mount, then chown can be very slow unless
+	// the overlay was mounted with "metacopy=on" (in the order of many seconds
+	// because it triggers a "copy-up" of every file). If metacopy is disabled
+	// then we need a solution. Note that Docker does not set metacopy=on because
+	// it breaks container snapshots via "docker commit" or "docker build".
+	//
+	// A simple solution would be to add "metacopy=on" to the existing overlayfs
+	// mount on the rootfs via a remount. However, this is not supported by
+	// overlayfs. We could unmount and then remount, but the unmount may break
+	// the container manager that set up the mount. We tried, it did not work
+	// (Docker/containerd did not like it).
+	//
+	// The solution we came up with is to ask the sysbox-mgr to clone the rootfs
+	// at a separate location, using two stacked overlayfs mounts, one with
+	// metacopy=on to enable fast chown, the other without it to ensure container
+	// snapshots work properly. Once the rootfs is cloned, we then setup the
+	// container using this cloned rootfs.
+
+	mi, err := mount.GetMountAtPid(uint32(os.Getpid()), rootfs)
+	if err == nil && mi.Fstype == "overlay" && !strings.Contains(mi.Opts, "metacopy=on") {
+		return true, nil
+	}
+
+	return false, nil
 }

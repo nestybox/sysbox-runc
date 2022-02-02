@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 package main
@@ -74,6 +75,7 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 			spec                *specs.Spec
 			rootfsUidShiftType  sh.IDShiftType
 			bindMntUidShiftType sh.IDShiftType
+			rootfsCloned        bool
 			status              int
 			profiler            interface{ Stop() }
 		)
@@ -130,7 +132,7 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 			}
 		}
 
-		rootfsUidShiftType, bindMntUidShiftType, err = syscont.ConvertSpec(context, sysMgr, sysFs, spec)
+		rootfsUidShiftType, bindMntUidShiftType, rootfsCloned, err = syscont.ConvertSpec(context, sysMgr, sysFs, spec)
 		if err != nil {
 			return fmt.Errorf("error in the container spec: %v", err)
 		}
@@ -147,7 +149,7 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 			}()
 		}
 
-		status, err = startContainer(context, spec, CT_ACT_RUN, nil, rootfsUidShiftType, bindMntUidShiftType, sysMgr, sysFs)
+		status, err = startContainer(context, spec, CT_ACT_RUN, nil, rootfsUidShiftType, bindMntUidShiftType, rootfsCloned, sysMgr, sysFs)
 		if err == nil {
 
 			// note: defer func() to stop profiler won't execute on os.Exit(); must explicitly stop it.

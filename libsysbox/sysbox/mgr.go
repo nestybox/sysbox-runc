@@ -20,6 +20,7 @@ package sysbox
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/nestybox/sysbox-ipc/sysboxMgrGrpc"
 	ipcLib "github.com/nestybox/sysbox-ipc/sysboxMgrLib"
@@ -52,6 +53,11 @@ func (mgr *Mgr) Register(spec *specs.Spec) error {
 	var userns string
 	var netns string
 
+	rootfs, err := filepath.Abs(spec.Root.Path)
+	if err != nil {
+		return err
+	}
+
 	for _, ns := range spec.Linux.Namespaces {
 		if ns.Type == specs.UserNamespace && ns.Path != "" {
 			userns = ns.Path
@@ -63,6 +69,7 @@ func (mgr *Mgr) Register(spec *specs.Spec) error {
 
 	regInfo := &ipcLib.RegistrationInfo{
 		Id:          mgr.Id,
+		Rootfs:      rootfs,
 		Userns:      userns,
 		Netns:       netns,
 		UidMappings: spec.Linux.UIDMappings,
@@ -121,8 +128,8 @@ func (mgr *Mgr) PrepMounts(uid, gid uint32, prepList []ipcLib.MountPrepInfo) err
 }
 
 // ReqMounts sends a request to sysbox-mgr for container mounts; all paths must be absolute.
-func (mgr *Mgr) ReqMounts(rootfs string, uid, gid uint32, reqList []ipcLib.MountReqInfo) ([]specs.Mount, error) {
-	mounts, err := sysboxMgrGrpc.ReqMounts(mgr.Id, rootfs, uid, gid, reqList)
+func (mgr *Mgr) ReqMounts(uid, gid uint32, reqList []ipcLib.MountReqInfo) ([]specs.Mount, error) {
+	mounts, err := sysboxMgrGrpc.ReqMounts(mgr.Id, uid, gid, reqList)
 	if err != nil {
 		return nil, fmt.Errorf("failed to request mounts from sysbox-mgr: %v", err)
 	}
@@ -157,9 +164,9 @@ func (mgr *Mgr) Pause() error {
 
 // ClonedRootfs sends a request to sysbox-mgr to setup an alternate rootfs for the container.
 // It returns the path to the new rootfs.
-func (mgr *Mgr) CloneRootfs(rootfs string) (string, error) {
+func (mgr *Mgr) CloneRootfs() (string, error) {
 
-	newRootfs, err := sysboxMgrGrpc.ReqCloneRootfs(mgr.Id, rootfs)
+	newRootfs, err := sysboxMgrGrpc.ReqCloneRootfs(mgr.Id)
 	if err != nil {
 		return "", fmt.Errorf("failed to request rootfs cloning from sysbox-mgr: %v", err)
 	}
