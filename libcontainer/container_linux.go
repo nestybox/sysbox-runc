@@ -285,27 +285,12 @@ func (c *linuxContainer) Start(process *Process) error {
 		}
 
 		if c.config.RootfsUidShiftType == sh.Chown {
-
-			cloneRootfs, err := c.rootfsCloningRequired()
-			if err != nil {
-				return err
-			}
-
-			if cloneRootfs {
-				_, err := c.sysMgr.CloneRootfs(c.config.Rootfs)
-				if err != nil {
-					return newSystemErrorWithCause(err, "failed to clone rootfs")
-				}
-
-				c.config.RootfsCloned = true
-
+			if c.config.RootfsCloned {
 				uidOffset := int32(c.config.UidMappings[0].HostID)
 				gidOffset := int32(c.config.GidMappings[0].HostID)
-
 				if err := c.sysMgr.ChownClonedRootfs(uidOffset, gidOffset); err != nil {
 					return newSystemErrorWithCause(err, "failed to chown rootfs clone")
 				}
-
 			} else {
 				if err := c.chownRootfs(); err != nil {
 					return err
@@ -767,7 +752,6 @@ func (c *linuxContainer) Destroy() error {
 
 	// If the rootfs was chowned, revert it back to its original uid & gid
 	if c.config.RootfsUidShiftType == sh.Chown {
-
 		if c.config.RootfsCloned {
 			if err2 := c.sysMgr.RevertClonedRootfsChown(); err != nil {
 				err = err2
@@ -853,7 +837,6 @@ func (c *linuxContainer) Resume() error {
 	}
 
 	if c.config.RootfsUidShiftType == sh.Chown {
-
 		if c.config.RootfsCloned {
 			uidOffset := int32(c.config.UidMappings[0].HostID)
 			gidOffset := int32(c.config.GidMappings[0].HostID)

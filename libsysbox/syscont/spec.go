@@ -907,7 +907,7 @@ func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, rootfsUidShiftType sh.
 		reqList = append(reqList, info)
 	}
 
-	m, err := mgr.ReqMounts(rootPath, uid, gid, reqList)
+	m, err := mgr.ReqMounts(uid, gid, reqList)
 	if err != nil {
 		return err
 	}
@@ -1086,6 +1086,27 @@ func cfgSeccomp(seccomp *specs.LinuxSeccomp) error {
 	return nil
 }
 
+// Configures rootfs cloning (when required)
+func cfgRootfsCloning(spec *specs.Spec, sysMgr *sysbox.Mgr) (bool, error) {
+
+	if !sysMgr.Enabled() {
+		return false, nil
+	}
+
+	cloneRootfs, err := rootfsCloningRequired(spec.Root.Path)
+	if err != nil || !cloneRootfs {
+		return false, err
+	}
+
+	newRootfs, err := sysMgr.CloneRootfs()
+	if err != nil {
+		return false, err
+	}
+
+	spec.Root.Path = newRootfs
+	return true, nil
+}
+
 // cfgAppArmor sets up the apparmor config for sys containers
 func cfgAppArmor(p *specs.Process) error {
 
@@ -1146,28 +1167,36 @@ func ConvertProcessSpec(p *specs.Process) error {
 func ConvertSpec(context *cli.Context,
 	sysMgr *sysbox.Mgr,
 	sysFs *sysbox.Fs,
-	spec *specs.Spec) (sh.IDShiftType, sh.IDShiftType, error) {
+	spec *specs.Spec) (sh.IDShiftType, sh.IDShiftType, bool, error) {
 
 	if err := checkSpec(spec); err != nil {
-		return sh.NoShift, sh.NoShift, fmt.Errorf("invalid or unsupported container spec: %v", err)
+		return sh.NoShift, sh.NoShift, false, fmt.Errorf("invalid or unsupported container spec: %v", err)
 	}
 
 	if err := cfgNamespaces(sysMgr, spec); err != nil {
-		return sh.NoShift, sh.NoShift, fmt.Errorf("invalid namespace config: %v", err)
+		return sh.NoShift, sh.NoShift, false, fmt.Errorf("invalid namespace config: %v", err)
 	}
 
 	if err := cfgIDMappings(sysMgr, spec); err != nil {
-		return sh.NoShift, sh.NoShift, fmt.Errorf("invalid user/group ID config: %v", err)
+		return sh.NoShift, sh.NoShift, false, fmt.Errorf("invalid user/group ID config: %v", err)
 	}
 
 	// Must do this after cfgIDMappings()
 	rootfsUidShiftType, bindMntUidShiftType, err := sysbox.CheckUidShifting(sysMgr, spec)
 	if err != nil {
-		return sh.NoShift, sh.NoShift, err
+		return sh.NoShift, sh.NoShift, false, err
+	}
+
+	rootfsCloned := false
+	if rootfsUidShiftType == sh.Chown {
+		rootfsCloned, err = cfgRootfsCloning(spec, sysMgr)
+		if err != nil {
+			return sh.NoShift, sh.NoShift, false, err
+		}
 	}
 
 	if err := cfgMounts(spec, sysMgr, sysFs, rootfsUidShiftType); err != nil {
-		return sh.NoShift, sh.NoShift, fmt.Errorf("invalid mount config: %v", err)
+		return sh.NoShift, sh.NoShift, false, fmt.Errorf("invalid mount config: %v", err)
 	}
 
 	cfgMaskedPaths(spec)
@@ -1175,12 +1204,12 @@ func ConvertSpec(context *cli.Context,
 	cfgOomScoreAdj(spec)
 
 	if err := cfgSeccomp(spec.Linux.Seccomp); err != nil {
-		return sh.NoShift, sh.NoShift, fmt.Errorf("failed to configure seccomp: %v", err)
+		return sh.NoShift, sh.NoShift, false, fmt.Errorf("failed to configure seccomp: %v", err)
 	}
 
 	if err := ConvertProcessSpec(spec.Process); err != nil {
-		return sh.NoShift, sh.NoShift, fmt.Errorf("failed to configure process spec: %v", err)
+		return sh.NoShift, sh.NoShift, false, fmt.Errorf("failed to configure process spec: %v", err)
 	}
 
-	return rootfsUidShiftType, bindMntUidShiftType, nil
+	return rootfsUidShiftType, bindMntUidShiftType, rootfsCloned, nil
 }

@@ -62,6 +62,7 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 			spec                *specs.Spec
 			rootfsUidShiftType  sh.IDShiftType
 			bindMntUidShiftType sh.IDShiftType
+			rootfsCloned        bool
 			status              int
 		)
 
@@ -104,7 +105,7 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 			}
 		}
 
-		rootfsUidShiftType, bindMntUidShiftType, err = syscont.ConvertSpec(context, sysMgr, sysFs, spec)
+		rootfsUidShiftType, bindMntUidShiftType, rootfsCloned, err = syscont.ConvertSpec(context, sysMgr, sysFs, spec)
 		if err != nil {
 			return fmt.Errorf("error in the container spec: %v", err)
 		}
@@ -121,7 +122,7 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 			}()
 		}
 
-		status, err = startContainer(context, spec, CT_ACT_CREATE, nil, rootfsUidShiftType, bindMntUidShiftType, sysMgr, sysFs)
+		status, err = startContainer(context, spec, CT_ACT_CREATE, nil, rootfsUidShiftType, bindMntUidShiftType, rootfsCloned, sysMgr, sysFs)
 		if err != nil {
 			return err
 		}

@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 // Package specconv implements conversion of specifications to libcontainer
@@ -204,6 +205,7 @@ type CreateOpts struct {
 	RootfsUidShiftType  sh.IDShiftType
 	BindMntUidShiftType sh.IDShiftType
 	SwitchDockerDns     bool
+	RootfsCloned        bool
 }
 
 // CreateLibcontainerConfig creates a new libcontainer configuration from a
@@ -242,6 +244,7 @@ func CreateLibcontainerConfig(opts *CreateOpts) (*configs.Config, error) {
 		RootfsUidShiftType:  opts.RootfsUidShiftType,
 		BindMntUidShiftType: opts.BindMntUidShiftType,
 		SwitchDockerDns:     opts.SwitchDockerDns,
+		RootfsCloned:        opts.RootfsCloned,
 	}
 
 	for _, m := range spec.Mounts {
