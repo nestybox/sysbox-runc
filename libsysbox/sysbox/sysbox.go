@@ -188,86 +188,72 @@ func needUidShiftOnRootfs(spec *specs.Spec) (bool, error) {
 	return false, nil
 }
 
-// Checks if the kernel supports filesystem user-ID shifting and whether the
-// shifting works on the container's rootfs (e.g., on top of overlayfs). If the
-// kernel supports multiple UID shifting mechanisms, it prioritizes
-// ID-mapped-mounts.
-func kernelSupportsUidShifting(noShiftfs, noIDMappedMount bool) (sh.IDShiftType, bool, error) {
-
-	idMapMntSupported, err := libutils.KernelSupportsIDMappedMounts()
-	if err != nil {
-		return sh.NoShift, false, err
-	}
-
-	if idMapMntSupported && !noIDMappedMount {
-
-		// ID-mapped mounts on top of the container's rootfs are not supported
-		// (ID-mapped mount for overlayfs, aufs, and the like is not yet supported
-		// as of 01/2022).
-
-		return sh.IDMappedMount, false, nil
-
-	} else {
-
-		shiftfsSupported, err := libutils.KernelModSupported("shiftfs")
-		if err != nil {
-			return sh.NoShift, false, err
-		}
-
-		if shiftfsSupported && !noShiftfs {
-			// Shiftfs does work on top of the container's rootfs
-			return sh.Shiftfs, true, nil
-		}
-	}
-
-	return sh.NoShift, false, nil
-}
-
 // checkUidShifting returns the type of UID shifting needed (if any) for the
 // container. The first return value indicates the type of UID shifting needed
 // for the container's rootfs, while the second indicates the type of UID
 // shifting for bind-mounts.
 func CheckUidShifting(sysMgr *Mgr, spec *specs.Spec) (sh.IDShiftType, sh.IDShiftType, error) {
+
 	var (
-		kernelShiftType          sh.IDShiftType
-		kernelShiftWorksOnRootfs bool
-		needShiftOnRootfs        bool
-		err                      error
+		idMapMntSupported bool
+		shiftfsSupported  bool
+		needShiftOnRootfs bool
+		err               error
 	)
 
-	kernelShiftType, kernelShiftWorksOnRootfs, err = kernelSupportsUidShifting(
-		sysMgr.Config.NoShiftfs, sysMgr.Config.NoIDMappedMount)
+	// shiftfsSupported (kernel supports it and not disabled)
+	// idmappedMntSupported (kernel supports it and not disabled)
+	// needUidShiftOnRootfs
 
-	if err != nil {
-		return sh.NoShift, sh.NoShift, fmt.Errorf("failed to check kernel uid shifting support: %s", err)
+	if !sysMgr.Config.NoIDMappedMount {
+		idMapMntSupported, err = libutils.KernelSupportsIDMappedMounts()
+		if err != nil {
+			return sh.NoShift, sh.NoShift, fmt.Errorf("failed to check kernel idmapped-mount support: %s", err)
+		}
+	}
+
+	if !sysMgr.Config.NoShiftfs {
+		shiftfsSupported, err = libutils.KernelModSupported("shiftfs")
+		if err != nil {
+			return sh.NoShift, sh.NoShift, fmt.Errorf("failed to check kernel shiftfs support: %s", err)
+		}
 	}
 
 	needShiftOnRootfs, err = needUidShiftOnRootfs(spec)
 	if err != nil {
-		return sh.NoShift, sh.NoShift, fmt.Errorf("failed to check uid shifting requirement on rootfs: %s", err)
+		return sh.NoShift, sh.NoShift, fmt.Errorf("failed to check uid-shifting requirement on rootfs: %s", err)
 	}
 
-	// For UID shifting is needed on the rootfs, we do it via the kernel's ID
-	// shift mechanism (e.g., shiftfs, when available) or by chown'ing the rootfs
-	// hierarchy. Chowning is fairly safe since the container's rootfs is
+	// Check uid shifting type to be used for the container's rootfs.
+	//
+	// We do it via shiftfs (if available) or by chown'ing the rootfs
+	// hierarchy. We don't use idmapped mounts because they are not supported on
+	// overlayfs (yet). Chowning is fairly safe since the container's rootfs is
 	// dedicated to the container (no other entity in the system will use it
 	// while the container is running).
 	rootfsShiftType := sh.NoShift
 
 	if needShiftOnRootfs {
-		if kernelShiftWorksOnRootfs {
-			rootfsShiftType = kernelShiftType
+		if shiftfsSupported {
+			rootfsShiftType = sh.Shiftfs
 		} else {
 			rootfsShiftType = sh.Chown
 		}
 	}
 
-	// For bind mounts into the container, we rely on the kernel ID shift
-	// mechanism (i.e., shiftfs or ID-mapped mounts) and never chown. Chowning
-	// for bind mounts is not a good idea since we don't know what's being bind
-	// mounted (e.g., the bind mount could be a user's home dir, a critical
-	// system file, etc.).
-	bindMountShiftType := kernelShiftType
+	// Check uid shifting type to be used for the container's bind mounts.
+	//
+	// For bind mounts, we rely on the kernel ID shift mechanism (i.e., shiftfs
+	// or ID-mapped mounts) and never chown. Chowning for bind mounts is not a
+	// good idea since we don't know what's being bind mounted (e.g., the bind
+	// mount could be a user's home dir, a critical system file, etc.).
+	bindMountShiftType := sh.NoShift
+
+	if idMapMntSupported {
+		bindMountShiftType = sh.IDMappedMount
+	} else if shiftfsSupported {
+		bindMountShiftType = sh.Shiftfs
+	}
 
 	return rootfsShiftType, bindMountShiftType, nil
 }
