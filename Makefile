@@ -1,9 +1,8 @@
 CONTAINER_ENGINE := docker
 GO := go
-ARCH := amd64
 
 RUNC_BUILDROOT := build
-RUNC_BUILDDIR := $(RUNC_BUILDROOT)/$(ARCH)
+RUNC_BUILDDIR := $(RUNC_BUILDROOT)/$(TARGET_ARCH)
 RUNC_TARGET := sysbox-runc
 RUNC_DEBUG_TARGET := sysbox-runc-debug
 RUNC_STATIC_TARGET := sysbox-runc-static
@@ -67,14 +66,17 @@ ifeq ($(shell $(GO) env GOOS),linux)
 	endif
 endif
 
-ifeq ($(ARCH),armel)
-	GO_XCOMPILE := CGO_ENABLED=1 GOOS=linux GOARCH=arm GOARM=6 CC=arm-linux-gnueabi-gcc
-else ifeq ($(ARCH),armhf)
-	GO_XCOMPILE := CGO_ENABLED=1 GOOS=linux GOARCH=arm GOARM=7 CC=arm-linux-gnueabihf-gcc
-else ifeq ($(ARCH),arm64)
-	GO_XCOMPILE = CGO_ENABLED=1 GOOS=linux GOARCH=arm64 CC=aarch64-linux-gnu-gcc
-else
-	GO_XCOMPILE = GOARCH=amd64
+# Set cross-compilation flags if applicable.
+ifneq ($(SYS_ARCH),$(TARGET_ARCH))
+	ifeq ($(TARGET_ARCH),armel)
+		GO_XCOMPILE := CGO_ENABLED=1 GOOS=linux GOARCH=arm GOARM=6 CC=arm-linux-gnueabi-gcc
+	else ifeq ($(TARGET_ARCH),armhf)
+		GO_XCOMPILE := CGO_ENABLED=1 GOOS=linux GOARCH=arm GOARM=7 CC=arm-linux-gnueabihf-gcc
+	else ifeq ($(TARGET_ARCH),arm64)
+		GO_XCOMPILE = CGO_ENABLED=1 GOOS=linux GOARCH=arm64 CC=aarch64-linux-gnu-gcc
+	else ifeq ($(TARGET_ARCH),amd64)
+		GO_XCOMPILE = CGO_ENABLED=1 GOOS=linux GOARCH=amd64 CC=x86_64-linux-gnu-gcc
+	endif
 endif
 
 GO_BUILD := $(GO_XCOMPILE) $(GO) build $(GO_BUILDMODE) $(EXTRA_FLAGS) -tags "$(BUILDTAGS)" \
@@ -193,7 +195,7 @@ uninstall-bash:
 	rm -f $(PREFIX)/share/bash-completion/completions/$(RUNC_TARGET)
 
 clean:
-	rm -rf $(RUNC_BUILDROOT)/$(RUNC_TARGET)
+	rm -rf $(RUNC_BUILDDIR)/$(RUNC_TARGET)
 	rm -f contrib/cmd/recvtty/recvtty
 	rm -rf release
 	rm -rf man/man8
