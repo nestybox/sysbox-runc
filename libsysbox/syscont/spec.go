@@ -1086,10 +1086,10 @@ func cfgSeccomp(seccomp *specs.LinuxSeccomp) error {
 	return nil
 }
 
-// Configures rootfs cloning (when required)
+// Configures rootfs cloning (when required); returns true if rootfs was cloned.
 func cfgRootfsCloning(spec *specs.Spec, sysMgr *sysbox.Mgr) (bool, error) {
 
-	if !sysMgr.Enabled() {
+	if !sysMgr.Enabled() || sysMgr.Config.NoRootfsCloning {
 		return false, nil
 	}
 
