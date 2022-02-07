@@ -12,7 +12,6 @@ RUN echo 'deb https://download.opensuse.org/repositories/devel:/tools:/criu/Debi
     && dpkg --add-architecture armel \
     && dpkg --add-architecture armhf \
     && dpkg --add-architecture arm64 \
-    && dpkg --add-architecture ppc64el \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
         build-essential \
@@ -20,7 +19,6 @@ RUN echo 'deb https://download.opensuse.org/repositories/devel:/tools:/criu/Debi
         crossbuild-essential-arm64 \
         crossbuild-essential-armel \
         crossbuild-essential-armhf \
-        crossbuild-essential-ppc64el \
         curl \
         gawk \
         iptables \
@@ -30,7 +28,6 @@ RUN echo 'deb https://download.opensuse.org/repositories/devel:/tools:/criu/Debi
         libseccomp-dev:arm64 \
         libseccomp-dev:armel \
         libseccomp-dev:armhf \
-        libseccomp-dev:ppc64el \
         libseccomp2 \
         lsb-release \
         pkg-config \
