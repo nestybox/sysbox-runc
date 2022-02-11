@@ -19,8 +19,6 @@ RUNC_IMAGE := runc_dev$(if $(GIT_BRANCH_CLEAN),:$(GIT_BRANCH_CLEAN))
 NBOX := /root/nestybox
 RUNC := $(NBOX)/sysbox-runc
 
-#PROJECT := nestybox/sysbox-runc
-BUILDTAGS ?= seccomp
 COMMIT_NO := $(shell git rev-parse HEAD 2> /dev/null || true)
 COMMIT ?= $(if $(shell git status --porcelain --untracked-files=no),$(COMMIT_NO)-dirty,$(COMMIT_NO))
 BUILT_AT := $(shell date)
@@ -41,12 +39,32 @@ LDFLAGS := -X 'main.edition=${EDITION}' -X main.version=${VERSION} \
 		-X main.commitId=$(COMMIT) -X 'main.builtAt=$(BUILT_AT)' \
 		-X 'main.builtBy=$(BUILT_BY)'
 
+KERNEL_REL := $(shell uname -r)
+KERNEL_REL_MAJ := $(shell echo $(KERNEL_REL) | cut -d'.' -f1)
+KERNEL_REL_MIN := $(shell echo $(KERNEL_REL) | cut -d'.' -f2)
+
+# idmapped mount is supported in kernels >= 5.12
+ifeq ($(shell test $(KERNEL_REL_MAJ) -gt 5; echo $$?),0)
+	IDMAPPED_MNT := 1
+endif
+
+ifeq ($(shell test $(KERNEL_REL_MAJ) -eq 5; echo $$?),0)
+	ifeq ($(shell test $(KERNEL_REL_MIN) -ge 12; echo $$?),0)
+		IDMAPPED_MNT := 1
+	endif
+endif
+
+ifeq ($(IDMAPPED_MNT),1)
+	BUILDTAGS ?= seccomp apparmor idmapped_mnt
+else
+	BUILDTAGS ?= seccomp apparmor
+endif
+
 # Identify kernel-headers path if not previously defined. Notice that this logic is already
 # present in Sysbox's Makefile; we are duplicating it here to keep sysbox-runc as independent
 # as possible. If KERNEL_HEADERS is not already defined, we will assume that the same applies
 # to all related variables declared below.
 ifeq ($(KERNEL_HEADERS),)
-	KERNEL_REL := $(shell uname -r)
 	IMAGE_BASE_DISTRO := $(shell lsb_release -is | tr '[:upper:]' '[:lower:]')
 	ifeq ($(IMAGE_BASE_DISTRO),$(filter $(IMAGE_BASE_DISTRO),centos fedora redhat))
 		KERNEL_HEADERS := kernels/$(KERNEL_REL)
