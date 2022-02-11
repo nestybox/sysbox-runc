@@ -35,9 +35,9 @@ LIBSECCOMP_SRC := $(shell find $(LIBSECCOMP_DIR) 2>&1 | grep -E '.*\.(go)')
 
 SHIFTFS_MODULE_PRESENT = $(shell lsmod | grep shiftfs)
 
-LDFLAGS := '-X "main.edition=${EDITION}" -X main.version=${VERSION} \
-		-X main.commitId=$(COMMIT) -X "main.builtAt=$(BUILT_AT)" \
-		-X "main.builtBy=$(BUILT_BY)"'
+LDFLAGS := -X 'main.edition=${EDITION}' -X main.version=${VERSION} \
+		-X main.commitId=$(COMMIT) -X 'main.builtAt=$(BUILT_AT)' \
+		-X 'main.builtBy=$(BUILT_BY)'
 
 # Identify kernel-headers path if not previously defined. Notice that this logic is already
 # present in Sysbox's Makefile; we are duplicating it here to keep sysbox-runc as independent
@@ -79,12 +79,14 @@ ifneq ($(SYS_ARCH),$(TARGET_ARCH))
 	endif
 endif
 
-GO_BUILD := $(GO_XCOMPILE) $(GO) build $(GO_BUILDMODE) $(EXTRA_FLAGS) -tags "$(BUILDTAGS)" \
-	-ldflags $(LDFLAGS) $(EXTRA_LDFLAGS)
-GO_BUILD_STATIC := CGO_ENABLED=1 $(GO_XCOMPILE) $(GO) build $(EXTRA_FLAGS) -tags "$(BUILDTAGS) netgo osusergo" \
-	-ldflags "-w -extldflags -static" -ldflags $(LDFLAGS) $(EXTRA_LDFLAGS)
-GO_BUILD_DEBUG := $(GO_XCOMPILE) $(GO) build --buildmode=exe $(EXTRA_FLAGS) -tags "$(BUILDTAGS)" \
-	-ldflags $(LDFLAGS) $(EXTRA_LDFLAGS) -gcflags="all=-N -l"
+GO_BUILD := $(GO_XCOMPILE) $(GO) build $(GO_BUILDMODE) -trimpath $(EXTRA_FLAGS) \
+		-tags "$(BUILDTAGS)" -ldflags "${LDFLAGS}"
+
+GO_BUILD_STATIC := CGO_ENABLED=1 $(GO_XCOMPILE) $(GO) build -trimpath $(EXTRA_FLAGS) \
+		-tags "$(BUILDTAGS) netgo osusergo" -ldflags "-extldflags -static ${LDFLAGS}"
+
+GO_BUILD_DEBUG := $(GO_XCOMPILE) $(GO) build --buildmode=exe -trimpath $(EXTRA_FLAGS) \
+		-tags "$(BUILDTAGS)" -gcflags="all=-N -l" -ldflags "${LDFLAGS}"
 
 RUN_TEST_CONT := $(CONTAINER_ENGINE) run ${DOCKER_RUN_PROXY} \
 		-t --privileged --rm \
