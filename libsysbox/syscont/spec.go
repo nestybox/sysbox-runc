@@ -703,7 +703,7 @@ func getFileAttrValue(file, attr string) (string, error) {
 // data. This is used to define the container mountpoint on which the host's docker
 // volume (backing this resource) will be mounted on.
 //
-// Notice that even though this code abilitates the custom definition of the data-root's
+// Notice that even though this code habilitates the custom definition of the data-root's
 // location, this will be only honored by Sysbox if this attribute is set prior to the
 // container creation (i.e., at docker-image build time).
 func getInnerDockerDataRootPath(spec *specs.Spec) (string, error) {
@@ -788,12 +788,12 @@ func getSpecialDirs(spec *specs.Spec) (map[string]ipcLib.MntKind, error) {
 
 	// These directories in the sys container are bind-mounted from host dirs managed by sysbox-mgr
 	specialDirMap := map[string]ipcLib.MntKind{
-		innerDockerDataRoot:    ipcLib.MntVarLibDocker,
-		"/var/lib/kubelet":     ipcLib.MntVarLibKubelet,
-		"/var/lib/k0s":         ipcLib.MntVarLibK0s,
-		innerK3sDataDir:        ipcLib.MntVarLibRancherK3s,
-		innerRke2DataDir:       ipcLib.MntVarLibRancherRke2,
-		"/var/lib/buildkit":    ipcLib.MntVarLibBuildkit,
+		innerDockerDataRoot: ipcLib.MntVarLibDocker,
+		"/var/lib/kubelet":  ipcLib.MntVarLibKubelet,
+		"/var/lib/k0s":      ipcLib.MntVarLibK0s,
+		innerK3sDataDir:     ipcLib.MntVarLibRancherK3s,
+		innerRke2DataDir:    ipcLib.MntVarLibRancherRke2,
+		"/var/lib/buildkit": ipcLib.MntVarLibBuildkit,
 		"/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs": ipcLib.MntVarLibContainerdOvfs,
 	}
 

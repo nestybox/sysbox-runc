@@ -256,6 +256,7 @@ func (l *linuxRootfsInit) Init() error {
 		}
 
 		initPid := l.reqs[0].InitPid
+		usernsPath := fmt.Sprintf("/proc/%d/ns/user", initPid)
 
 		for _, req := range l.reqs {
 			m := &req.Mount
@@ -290,7 +291,6 @@ func (l *linuxRootfsInit) Init() error {
 			if m.IDMappedMount {
 
 				// Note: arguments to IDMapMount() must be absolute.
-				usernsPath := fmt.Sprintf("/proc/%d/ns/user", initPid)
 				target, err := securejoin.SecureJoin(rootfs, m.Destination)
 				if err != nil {
 					return err

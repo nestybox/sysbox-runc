@@ -676,11 +676,7 @@ func bindMountDeviceNode(dest string, node *devices.Device) error {
 		f.Close()
 	}
 
-	if err := unix.Mount(node.Path, dest, "bind", unix.MS_BIND, ""); err != nil {
-		return err
-	}
-
-	return nil
+	return unix.Mount(node.Path, dest, "bind", unix.MS_BIND, "")
 }
 
 // Creates the device node in the rootfs of the container.

@@ -753,13 +753,9 @@ func (c *linuxContainer) Destroy() error {
 	// If the rootfs was chowned, revert it back to its original uid & gid
 	if c.config.RootfsUidShiftType == sh.Chown {
 		if c.config.RootfsCloned {
-			if err2 := c.sysMgr.RevertClonedRootfsChown(); err != nil {
-				err = err2
-			}
+			err = c.sysMgr.RevertClonedRootfsChown()
 		} else {
-			if err2 := c.revertRootfsChown(); err == nil {
-				err = err2
-			}
+			err = c.revertRootfsChown()
 		}
 	}
 
