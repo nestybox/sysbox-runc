@@ -17,6 +17,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
+	utils "github.com/nestybox/sysbox-libs/utils"
 )
 
 type linuxRootfsInit struct {
@@ -297,9 +298,10 @@ func (l *linuxRootfsInit) Init() error {
 				}
 
 				if err := sh.IDMapMount(usernsPath, target); err != nil {
+					fsName, _ := utils.GetFsName(target)
 					return newSystemErrorWithCausef(err,
-						"setting up ID-mapped mount on userns %s, path %s (likely means idmapped mounts are not supported on the filesystem at this path)",
-						usernsPath, target)
+						"setting up ID-mapped mount on userns %s, path %s (likely means idmapped mounts are not supported on the filesystem at this path (%s))",
+						usernsPath, target, fsName)
 				}
 			}
 		}
