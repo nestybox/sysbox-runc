@@ -1,6 +1,25 @@
 CONTAINER_ENGINE := docker
 GO := go
 
+# Obtain the current system architecture.
+ifeq ($(SYS_ARCH),)
+	UNAME_M := $(shell uname -m)
+	ifeq ($(UNAME_M),x86_64)
+		SYS_ARCH := amd64
+	else ifeq ($(UNAME_M),aarch64)
+		SYS_ARCH := arm64
+	else ifeq ($(UNAME_M),arm)
+		SYS_ARCH := armhf
+	else ifeq ($(UNAME_M),armel)
+		SYS_ARCH := armel
+	endif
+endif
+
+# Set target architecture if not explicitly defined by user.
+ifeq ($(TARGET_ARCH),)
+	TARGET_ARCH := $(SYS_ARCH)
+endif
+
 RUNC_BUILDROOT := build
 RUNC_BUILDDIR := $(RUNC_BUILDROOT)/$(TARGET_ARCH)
 RUNC_TARGET := sysbox-runc
@@ -60,24 +79,35 @@ else
 	BUILDTAGS ?= seccomp apparmor
 endif
 
+IMAGE_BASE_DISTRO := $(shell lsb_release -is | tr '[:upper:]' '[:lower:]')
+
 # Identify kernel-headers path if not previously defined. Notice that this logic is already
 # present in Sysbox's Makefile; we are duplicating it here to keep sysbox-runc as independent
 # as possible. If KERNEL_HEADERS is not already defined, we will assume that the same applies
 # to all related variables declared below.
-ifeq ($(KERNEL_HEADERS),)
-	IMAGE_BASE_DISTRO := $(shell lsb_release -is | tr '[:upper:]' '[:lower:]')
-	ifeq ($(IMAGE_BASE_DISTRO),$(filter $(IMAGE_BASE_DISTRO),centos fedora redhat))
-		KERNEL_HEADERS := kernels/$(KERNEL_REL)
-	else
-		KERNEL_HEADERS := linux-headers-$(KERNEL_REL)
-		KERNEL_HEADERS_BASE := $(shell find /usr/src/$(KERNEL_HEADERS) -maxdepth 1 -type l -exec readlink {} \; | cut -d"/" -f2 | egrep -v "^\.\." | head -1)
+ifeq ($(IMAGE_BASE_DISTRO),$(filter $(IMAGE_BASE_DISTRO),centos fedora redhat))
+	IMAGE_BASE_RELEASE := $(shell lsb_release -ds | tr -dc '0-9.' | cut -d'.' -f1)
+	KERNEL_HEADERS := kernels/$(KERNEL_REL)
+else
+	IMAGE_BASE_RELEASE := $(shell lsb_release -cs)
+	ifeq ($(IMAGE_BASE_DISTRO),linuxmint)
+		IMAGE_BASE_DISTRO := ubuntu
+		ifeq ($(IMAGE_BASE_RELEASE),$(filter $(IMAGE_BASE_RELEASE),ulyana ulyssa uma))
+			IMAGE_BASE_RELEASE := focal
+		endif
+		ifeq ($(IMAGE_BASE_RELEASE),$(filter $(IMAGE_BASE_RELEASE),tara tessa tina tricia))
+			IMAGE_BASE_RELEASE := bionic
+		endif
 	endif
-	ifeq ($(KERNEL_HEADERS_BASE), )
-		KERNEL_HEADERS_MOUNTS := -v /usr/src/$(KERNEL_HEADERS):/usr/src/$(KERNEL_HEADERS):ro
-	else
-		KERNEL_HEADERS_MOUNTS := -v /usr/src/$(KERNEL_HEADERS):/usr/src/$(KERNEL_HEADERS):ro \
-					 -v /usr/src/$(KERNEL_HEADERS_BASE):/usr/src/$(KERNEL_HEADERS_BASE):ro
-	endif
+	KERNEL_HEADERS := linux-headers-$(KERNEL_REL)
+	KERNEL_HEADERS_BASE := $(shell find /usr/src/$(KERNEL_HEADERS) -maxdepth 1 -type l -exec readlink {} \; | cut -d"/" -f2 | egrep -v "^\.\." | head -1)
+endif
+
+ifeq ($(KERNEL_HEADERS_BASE), )
+	KERNEL_HEADERS_MOUNTS := -v /usr/src/$(KERNEL_HEADERS):/usr/src/$(KERNEL_HEADERS):ro
+else
+	KERNEL_HEADERS_MOUNTS := -v /usr/src/$(KERNEL_HEADERS):/usr/src/$(KERNEL_HEADERS):ro \
+				 -v /usr/src/$(KERNEL_HEADERS_BASE):/usr/src/$(KERNEL_HEADERS_BASE):ro
 endif
 
 ifeq ($(shell $(GO) env GOOS),linux)
@@ -109,8 +139,10 @@ GO_BUILD_DEBUG := $(GO_XCOMPILE) $(GO) build --buildmode=exe -trimpath $(EXTRA_F
 		-tags "$(BUILDTAGS)" -gcflags="all=-N -l" -ldflags "${LDFLAGS}"
 
 RUN_TEST_CONT := $(CONTAINER_ENGINE) run ${DOCKER_RUN_PROXY} \
-		-t --privileged --rm \
-		-v $(CURDIR):$(RUNC)                                 \
+		-t --privileged --rm                         \
+		-e SYS_ARCH=$(SYS_ARCH)                      \
+		-e TARGET_ARCH=$(TARGET_ARCH)                \
+		-v $(CURDIR):$(RUNC)                         \
 		-v $(CURDIR)/../sysbox-ipc:$(NBOX)/sysbox-ipc        \
 		-v $(CURDIR)/../sysbox-libs:$(NBOX)/sysbox-libs      \
 		-v /lib/modules/$(KERNEL_REL):/lib/modules/$(KERNEL_REL):ro \
@@ -194,7 +226,9 @@ endif
 
 shell: runcimage
 	$(CONTAINER_ENGINE) run ${DOCKER_RUN_PROXY} \
-		-it --privileged --rm \
+		-it --privileged --rm               \
+		-e SYS_ARCH=$(SYS_ARCH)             \
+		-e TARGET_ARCH=$(TARGET_ARCH)       \
 		-v $(CURDIR):$(RUNC)                                 \
 		-v $(CURDIR)/../sysbox-ipc:$(NBOX)/sysbox-ipc        \
 		-v $(CURDIR)/../sysbox-libs:$(NBOX)/sysbox-libs      \
