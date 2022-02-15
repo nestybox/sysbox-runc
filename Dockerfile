@@ -1,14 +1,14 @@
-ARG GO_VERSION=1.15
+ARG GO_VERSION=1.16
 ARG BATS_VERSION=v1.2.1
 ARG UMOCI_VERSION=v0.4.6
 
-FROM golang:${GO_VERSION}-buster
+FROM golang:${GO_VERSION}-bullseye
 ARG DEBIAN_FRONTEND=noninteractive
 
-RUN echo 'deb https://download.opensuse.org/repositories/devel:/tools:/criu/Debian_10/ /' > /etc/apt/sources.list.d/criu.list \
-    && wget -nv https://download.opensuse.org/repositories/devel:/tools:/criu/Debian_10/Release.key -O- | apt-key add - \
-    && echo 'deb http://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/Debian_10/ /' > /etc/apt/sources.list.d/skopeo.list \
-    && wget -nv https://download.opensuse.org/repositories/devel:kubic:libcontainers:stable/Debian_10/Release.key -O- | apt-key add - \
+RUN echo 'deb https://download.opensuse.org/repositories/devel:/tools:/criu/Debian_11/ /' > /etc/apt/sources.list.d/criu.list \
+    && wget -nv https://download.opensuse.org/repositories/devel:/tools:/criu/Debian_11/Release.key -O- | apt-key add - \
+    && echo 'deb http://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/Debian_11/ /' > /etc/apt/sources.list.d/skopeo.list \
+    && wget -nv https://download.opensuse.org/repositories/devel:kubic:libcontainers:stable/Debian_11/Release.key -O- | apt-key add - \
     && dpkg --add-architecture armel \
     && dpkg --add-architecture armhf \
     && dpkg --add-architecture arm64 \
@@ -31,7 +31,7 @@ RUN echo 'deb https://download.opensuse.org/repositories/devel:/tools:/criu/Debi
         libseccomp2 \
         lsb-release \
         pkg-config \
-        python-minimal \
+        python2-minimal \
         skopeo \
         sudo \
         uidmap \
