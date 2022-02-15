@@ -2802,7 +2802,12 @@ func (c *linuxContainer) setupIDMappedMounts() error {
 	for _, m := range config.Mounts {
 		if m.Device == "bind" {
 
-			if skipIDMapMountBindSource(m.Source) {
+			idMapMntAllowed, err := sh.IDMapMountSupportedOnPath(m.Source)
+			if err != nil {
+				return newSystemErrorWithCausef(err, "checking for ID-mapped mount support on bind source %s", m.Source)
+			}
+
+			if !idMapMntAllowed {
 				continue
 			}
 
@@ -2816,29 +2821,6 @@ func (c *linuxContainer) setupIDMappedMounts() error {
 	}
 
 	return nil
-}
-
-// The following are host directories where we never ID-map-mount as it causes
-// functional problems (i.e., the kernel does not allow ID-maps over them).
-var idMapMountBlackList = []string{"/dev/null"}
-
-// sysbox-runc: skipIDMapMountBindSource indicates if ID-mapped mounting should
-// be skipped on the given file.
-func skipIDMapMountBindSource(source string) bool {
-	for _, m := range idMapMountBlackList {
-		if source == m {
-			return true
-		}
-	}
-
-	// id-mapped mounts are not (yet) supported on overlayfs
-	var fs unix.Statfs_t
-	err := unix.Statfs(source, &fs)
-	if err == nil && fs.Type == unix.OVERLAYFS_SUPER_MAGIC {
-		return true
-	}
-
-	return false
 }
 
 // needUidShiftOnBindSrc checks if uid/gid shifting on the given bind mount source path is
