@@ -41,8 +41,8 @@ function teardown() {
 	runc spec "$UID_MAP" "$GID_MAP" "$ID_MAP_SIZE"
 	[ -e config.json ]
 
-	go get github.com/xeipuuv/gojsonschema
-	go build runtime-spec/schema/validate.go
+	GO111MODULE=auto go get github.com/xeipuuv/gojsonschema
+	GO111MODULE=auto go build runtime-spec/schema/validate.go
 
 	./validate "$SCHEMA" config.json
 }
