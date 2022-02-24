@@ -1086,6 +1086,14 @@ func cfgSeccomp(seccomp *specs.LinuxSeccomp) error {
 	return nil
 }
 
+// Configures which syscalls are trapped by Sysbox inside the container
+func cfgSyscallTraps(sysMgr *sysbox.Mgr) {
+	if sysMgr.Config.IgnoreSysfsChown {
+		chownSyscalls := []string{"chown", "fchown", "fchownat"}
+		syscontSyscallTrapList = append(syscontSyscallTrapList, chownSyscalls...)
+	}
+}
+
 // Configures rootfs cloning (when required); returns true if rootfs was cloned.
 func cfgRootfsCloning(spec *specs.Spec, sysMgr *sysbox.Mgr) (bool, error) {
 
@@ -1206,6 +1214,8 @@ func ConvertSpec(context *cli.Context,
 	if err := cfgSeccomp(spec.Linux.Seccomp); err != nil {
 		return sh.NoShift, sh.NoShift, false, fmt.Errorf("failed to configure seccomp: %v", err)
 	}
+
+	cfgSyscallTraps(sysMgr)
 
 	if err := ConvertProcessSpec(spec.Process); err != nil {
 		return sh.NoShift, sh.NoShift, false, fmt.Errorf("failed to configure process spec: %v", err)
