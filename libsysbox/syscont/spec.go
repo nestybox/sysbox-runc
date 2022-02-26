@@ -1088,9 +1088,22 @@ func cfgSeccomp(seccomp *specs.LinuxSeccomp) error {
 
 // Configures which syscalls are trapped by Sysbox inside the container
 func cfgSyscallTraps(sysMgr *sysbox.Mgr) {
+
 	if sysMgr.Config.IgnoreSysfsChown {
-		chownSyscalls := []string{"chown", "fchown", "fchownat"}
+		chownSyscalls := []string{
+			"chown", "fchown", "fchownat",
+		}
 		syscontSyscallTrapList = append(syscontSyscallTrapList, chownSyscalls...)
+	}
+
+	if sysMgr.Config.AllowTrustedXattr {
+		xattrSyscalls := []string{
+			"setxattr", "lsetxattr", "fsetxattr",
+			"getxattr", "lgetxattr", "fgetxattr",
+			"removexattr", "lremovexattr", "fremovexattr",
+			"listxattr", "llistxattr", "flistxattr",
+		}
+		syscontSyscallTrapList = append(syscontSyscallTrapList, xattrSyscalls...)
 	}
 }
 
