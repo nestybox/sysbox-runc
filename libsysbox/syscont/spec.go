@@ -966,6 +966,65 @@ func checkSpec(spec *specs.Spec) error {
 	return nil
 }
 
+// getSysboxEnvVarConfigs retrieves the SYSBOX_* env vars passed to the container.
+func getSysboxEnvVarConfigs(sysMgr *sysbox.Mgr, spec *specs.Spec) error {
+	var (
+		envVar string
+		val    string
+		err    error
+		found  bool
+	)
+
+	envVar = "SYSBOX_IGNORE_SYSFS_CHOWN"
+
+	found, val, err = parseSysboxEnvVar(spec, envVar)
+	if err != nil {
+		return err
+	}
+
+	if found {
+		if val == "TRUE" {
+			sysMgr.Config.IgnoreSysfsChown = true
+		} else if val == "FALSE" {
+			sysMgr.Config.IgnoreSysfsChown = false
+		} else {
+			return fmt.Errorf("env var %s has invalid value; expect [TRUE|FALSE].", envVar)
+		}
+	}
+
+	envVar = "SYSBOX_ALLOW_TRUSTED_XATTR"
+
+	found, val, err = parseSysboxEnvVar(spec, envVar)
+	if err != nil {
+		return err
+	}
+
+	if found {
+		if val == "TRUE" {
+			sysMgr.Config.AllowTrustedXattr = true
+		} else if val == "FALSE" {
+			sysMgr.Config.AllowTrustedXattr = false
+		} else {
+			return fmt.Errorf("env var %s has invalid value; expect [TRUE|FALSE].", envVar)
+		}
+	}
+
+	return nil
+}
+
+// removeSysboxEnvVars removes the SYSBOX_* env vars from the given process spec
+func removeSysboxEnvVars(p *specs.Process) {
+	env := []string{}
+	for _, envVar := range p.Env {
+		if !strings.HasPrefix(envVar, "SYSBOX_IGNORE_SYSFS_CHOWN=") &&
+			!strings.HasPrefix(envVar, "SYSBOX_ALLOW_TRUSTED_XATTR=") {
+			env = append(env, envVar)
+		}
+	}
+
+	p.Env = env
+}
+
 func cfgOomScoreAdj(spec *specs.Spec) {
 
 	// For sys containers we don't allow -1000 for the OOM score value, as this
@@ -1169,7 +1228,11 @@ func systemdInit(p *specs.Process) bool {
 }
 
 // Configure the container's process spec for system containers
-func ConvertProcessSpec(p *specs.Process) error {
+func ConvertProcessSpec(p *specs.Process, keepSysboxEnvVars bool) error {
+
+	if !keepSysboxEnvVars {
+		removeSysboxEnvVars(p)
+	}
 
 	cfgCapabilities(p)
 
@@ -1192,6 +1255,10 @@ func ConvertSpec(context *cli.Context,
 
 	if err := checkSpec(spec); err != nil {
 		return sh.NoShift, sh.NoShift, false, fmt.Errorf("invalid or unsupported container spec: %v", err)
+	}
+
+	if err := getSysboxEnvVarConfigs(sysMgr, spec); err != nil {
+		return sh.NoShift, sh.NoShift, false, fmt.Errorf("failed to get Sysbox env variable configs: %v", err)
 	}
 
 	if err := cfgNamespaces(sysMgr, spec); err != nil {
@@ -1230,7 +1297,7 @@ func ConvertSpec(context *cli.Context,
 
 	cfgSyscallTraps(sysMgr)
 
-	if err := ConvertProcessSpec(spec.Process); err != nil {
+	if err := ConvertProcessSpec(spec.Process, true); err != nil {
 		return sh.NoShift, sh.NoShift, false, fmt.Errorf("failed to configure process spec: %v", err)
 	}
 
