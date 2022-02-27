@@ -184,3 +184,18 @@ func rootfsCloningRequired(rootfs string) (bool, error) {
 
 	return false, nil
 }
+
+// parseSysboxEnvVar parses the container's env vars for the given variable and
+// returns the triplet (found, value, error).
+func parseSysboxEnvVar(spec *specs.Spec, envVar string) (bool, string, error) {
+	for _, ev := range spec.Process.Env {
+		if strings.HasPrefix(ev, envVar+"=") {
+			tokens := strings.Split(ev, "=")
+			if len(tokens) != 2 {
+				return false, "", fmt.Errorf("env var %s has incorrect format; expected VAR=VALUE.", ev)
+			}
+			return true, tokens[1], nil
+		}
+	}
+	return false, "", nil
+}

@@ -173,8 +173,10 @@ func getProcess(context *cli.Context, bundle string) (*specs.Process, error) {
 		if err := validateProcessSpec(&p); err != nil {
 			return nil, err
 		}
-		// sysbox-runc: convert the process spec for system containers
-		return &p, syscont.ConvertProcessSpec(&p)
+		// sysbox-runc: convert the process spec for system containers; drop SYSBOX_*
+		// env vars on exec (their effect is set at container start time and can't be
+		// changed thereafter).
+		return &p, syscont.ConvertProcessSpec(&p, false)
 	}
 	// process via cli flags
 	if err := os.Chdir(bundle); err != nil {
@@ -244,8 +246,10 @@ func getProcess(context *cli.Context, bundle string) (*specs.Process, error) {
 		return nil, err
 	}
 
-	// sysbox-runc: convert the process spec for system containers
-	if err := syscont.ConvertProcessSpec(p); err != nil {
+	// sysbox-runc: convert the process spec for system containers; drop SYSBOX_*
+	// env vars on exec (their effect is set at container start time and can't be
+	// changed thereafter).
+	if err := syscont.ConvertProcessSpec(p, false); err != nil {
 		return nil, err
 	}
 	return p, nil
