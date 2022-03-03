@@ -11,6 +11,7 @@ import (
 
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/utils"
+	"github.com/opencontainers/runc/libsysbox/sysbox"
 	"github.com/opencontainers/runc/libsysbox/syscont"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -133,8 +134,9 @@ func execProcess(context *cli.Context) (int, error) {
 	if err != nil {
 		return -1, err
 	}
+
 	bundle := utils.SearchLabels(state.Config.Labels, "bundle")
-	p, err := getProcess(context, bundle)
+	p, err := getProcess(context, bundle, &state.SysMgr)
 	if err != nil {
 		return -1, err
 	}
@@ -159,7 +161,7 @@ func execProcess(context *cli.Context) (int, error) {
 	return r.run(p)
 }
 
-func getProcess(context *cli.Context, bundle string) (*specs.Process, error) {
+func getProcess(context *cli.Context, bundle string, sysMgr *sysbox.Mgr) (*specs.Process, error) {
 	if path := context.String("process"); path != "" {
 		f, err := os.Open(path)
 		if err != nil {
@@ -176,7 +178,7 @@ func getProcess(context *cli.Context, bundle string) (*specs.Process, error) {
 		// sysbox-runc: convert the process spec for system containers; drop SYSBOX_*
 		// env vars on exec (their effect is set at container start time and can't be
 		// changed thereafter).
-		return &p, syscont.ConvertProcessSpec(&p, false)
+		return &p, syscont.ConvertProcessSpec(&p, sysMgr, true)
 	}
 	// process via cli flags
 	if err := os.Chdir(bundle); err != nil {
@@ -249,7 +251,7 @@ func getProcess(context *cli.Context, bundle string) (*specs.Process, error) {
 	// sysbox-runc: convert the process spec for system containers; drop SYSBOX_*
 	// env vars on exec (their effect is set at container start time and can't be
 	// changed thereafter).
-	if err := syscont.ConvertProcessSpec(p, false); err != nil {
+	if err := syscont.ConvertProcessSpec(p, sysMgr, true); err != nil {
 		return nil, err
 	}
 	return p, nil
