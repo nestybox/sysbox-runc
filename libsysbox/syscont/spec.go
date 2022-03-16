@@ -968,62 +968,45 @@ func checkSpec(spec *specs.Spec) error {
 
 // applySysboxEnvVarConfigs applies the effect of the SYSBOX_* env vars passed to the container.
 func applySysboxEnvVarConfigs(p *specs.Process, sysMgr *sysbox.Mgr) error {
-	var (
-		envVar string
-		val    string
-		err    error
-		found  bool
-	)
 
-	envVar = "SYSBOX_IGNORE_SYSFS_CHOWN"
-
-	found, val, err = parseSysboxEnvVar(p, envVar)
-	if err != nil {
-		return err
+	knownEnvVars := []string{
+		"SYSBOX_IGNORE_SYSFS_CHOWN",
+		"SYSBOX_ALLOW_TRUSTED_XATTR",
+		"SYSBOX_HONOR_CAPS",
 	}
 
-	if found {
-		if val == "TRUE" {
-			sysMgr.Config.IgnoreSysfsChown = true
-		} else if val == "FALSE" {
-			sysMgr.Config.IgnoreSysfsChown = false
-		} else {
-			return fmt.Errorf("env var %s has invalid value; expect [TRUE|FALSE].", envVar)
+	for _, ev := range p.Env {
+
+		if !strings.HasPrefix(ev, "SYSBOX_") {
+			continue
 		}
-	}
 
-	envVar = "SYSBOX_ALLOW_TRUSTED_XATTR"
-
-	found, val, err = parseSysboxEnvVar(p, envVar)
-	if err != nil {
-		return err
-	}
-
-	if found {
-		if val == "TRUE" {
-			sysMgr.Config.AllowTrustedXattr = true
-		} else if val == "FALSE" {
-			sysMgr.Config.AllowTrustedXattr = false
-		} else {
-			return fmt.Errorf("env var %s has invalid value; expect [TRUE|FALSE].", envVar)
+		tokens := strings.Split(ev, "=")
+		if len(tokens) != 2 {
+			return fmt.Errorf("env var %s has incorrect format; expected VAR=VALUE.", ev)
 		}
-	}
 
-	envVar = "SYSBOX_HONOR_CAPS"
+		evName := tokens[0]
+		evVal := tokens[1]
 
-	found, val, err = parseSysboxEnvVar(p, envVar)
-	if err != nil {
-		return err
-	}
-
-	if found {
-		if val == "TRUE" {
-			sysMgr.Config.HonorCaps = true
-		} else if val == "FALSE" {
-			sysMgr.Config.HonorCaps = false
-		} else {
-			return fmt.Errorf("env var %s has invalid value; expect [TRUE|FALSE].", envVar)
+		// If a SYSBOX_* env var is specified, it must be one of the supported ones.
+		if !utils.StringSliceContains(knownEnvVars, evName) {
+			return fmt.Errorf("invalid env var %s; must be one of %v", evName, knownEnvVars)
 		}
+
+		if evVal != "TRUE" && evVal != "FALSE" {
+			return fmt.Errorf("env var %s has invalid value %s; expect [TRUE|FALSE].", evName, evVal)
+		}
+
+		switch evName {
+		case "SYSBOX_IGNORE_SYSFS_CHOWN":
+			sysMgr.Config.IgnoreSysfsChown = (evVal == "TRUE")
+		case "SYSBOX_ALLOW_TRUSTED_XATTR":
+			sysMgr.Config.AllowTrustedXattr = (evVal == "TRUE")
+		case "SYSBOX_HONOR_CAPS":
+			sysMgr.Config.HonorCaps = (evVal == "TRUE")
+		}
+
 	}
 
 	return nil
