@@ -2583,11 +2583,31 @@ func (c *linuxContainer) setupShiftfsMarks() error {
 					continue
 				}
 
-				// shiftfs mounts must be on directories (not on files). But this does
-				// not mean that the directory on which shiftfs is mounted is
-				// necessarily fully exposed inside the container; it may be that only
-				// a file in that directory is exposed inside the container (via
-				// bind-mounts when setting up the container rootfs).
+				// If the mount source is a file, it may itself be a bind-mount from
+				// another file. In this case, we need to mount shiftfs over the
+				// orig file (i.e., the source of the bind mount).
+				if !m.BindSrcInfo.IsDir {
+
+					mi, err := mount.GetMounts()
+					if err != nil {
+						return fmt.Errorf("failed to read mountinfo: %s", err)
+					}
+
+					isBindMnt, origSrc, err := fileIsBindMount(mi, m.Source)
+					if err != nil {
+						return fmt.Errorf("failed to check if %s is a bind-mount: %s", m.Source, err)
+					}
+
+					if isBindMnt {
+						m.Source = origSrc
+					}
+				}
+
+				// shiftfs mounts must be on directories (not on files). But this
+				// does not mean that the directory on which shiftfs is mounted is
+				// necessarily fully exposed inside the container; it may be that
+				// only a file in that directory is exposed inside the container
+				// (via bind-mounts when setting up the container rootfs).
 
 				var dir string
 				if !m.BindSrcInfo.IsDir {
@@ -2862,4 +2882,64 @@ func needUidShiftOnBindSrc(mount *configs.Mount, config *configs.Config) (bool, 
 	}
 
 	return true, nil
+}
+
+// Checks if the file at the given path is a bind-mount; if so, returns true and
+// the path to the bind-mount's source.
+func fileIsBindMount(mounts []*mount.Info, fpath string) (bool, string, error) {
+	var fpathMi *mount.Info
+
+	// Since path corresponds to a file (not a directory), if it's a mountpoint
+	// then it must be a bind-mount (i.e., file mountpoints are only allowed for
+	// bind mounts).
+	for _, mi := range mounts {
+		if mi.Mountpoint == fpath {
+			fpathMi = mi
+			break
+		}
+	}
+
+	// If file is not a mountpoint, we are done
+	if fpathMi == nil {
+		return false, "", nil
+	}
+
+	// Find the source of that bind mount. This is not as simple as looking at
+	// the fpathMi.Root, because the root itself may be a bind-mount. To resolve
+	// this, we find the device that backs the file, then find where that device
+	// is mounted at (the device's root mountpoint), and then use it to replace
+	// the correponding prefix in the fpathMi.Root.
+	//
+	// For example: say fpath = /mnt/scratch/t1/f1 and the mount tree looks like:
+	//
+	// 1232 1303 0:60 / /mnt/scratch/tmpfs rw,relatime - tmpfs tmpfs rw,size=10240k
+	// 1233 1303 0:60 /f1-tmpfs /mnt/scratch/t1/f1 rw,relatime - tmpfs tmpfs rw,size=10240k
+	//
+	// Then we see that mount 1232 is the root mount for the device and it's mounted at "/mnt/scratch/tmpfs".
+	// Thus, we replace /f1-tmpfs -> /mnt/scratch/tmpfs/f1-tmpfs.
+	//
+	// Another example: say fpath = /mnt/scratch/t1/f3 and the mount tree looks like:
+	//
+	// 1302 1282 8:2 /var/tmp/sysbox-test-var-run /run rw,relatime - ext4 /dev/sda2 rw
+	// 1303 1282 8:2 /var/tmp/sysbox-test-scratch /mnt/scratch rw,relatime - ext4 /dev/sda2 rw
+	// 1234 1303 8:2 /var/tmp/sysbox-test-scratch/t1/f4 /mnt/scratch/t1/f3 rw,relatime - ext4 /dev/sda2 rw
+	//
+	// Then we see that mount 1303 is the root mount for the device and it's mounted at "/mnt/scratch".
+	// Thus, we replace /var/tmp/sysbox-test-scratch/t1/f4 -> /mnt/scratch/t1/f4.
+
+	devRoot := fpathMi.Root
+	devMp := ""
+
+	for _, mi := range mounts {
+		if mi.Major == fpathMi.Major && mi.Minor == fpathMi.Minor {
+			if strings.HasPrefix(devRoot, mi.Root) {
+				devRoot = mi.Root
+				devMp = mi.Mountpoint
+			}
+		}
+	}
+
+	// The extra "/" ensures we have a path separator in the resulting path
+	fpathMi.Root = strings.Replace(fpathMi.Root, devRoot, devMp+"/", 1)
+	return true, fpathMi.Root, nil
 }
