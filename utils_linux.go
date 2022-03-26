@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/nestybox/sysbox-libs/dockerUtils"
 	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
@@ -212,15 +213,37 @@ func setupIO(process *libcontainer.Process, rootuid, rootgid int, createTTY, det
 		// suite), then this may not be kosher (see Sysbox issue #707 for an
 		// example).
 
-		if err := unix.Fchown(int(os.Stdin.Fd()), rootuid, rootgid); err != nil {
-			return nil, fmt.Errorf("failed to chown stdin")
+		link, err := os.Readlink(fmt.Sprintf("/proc/self/fd/%d", os.Stdin.Fd()))
+		if err != nil {
+			return nil, err
 		}
 
-		if err := unix.Fchown(int(os.Stdout.Fd()), rootuid, rootgid); err != nil {
-			return nil, fmt.Errorf("failed to chown stdout")
+		if !strings.HasPrefix(link, "/dev") {
+			if err := unix.Fchown(int(os.Stdin.Fd()), rootuid, rootgid); err != nil {
+				return nil, fmt.Errorf("failed to chown stdin")
+			}
 		}
-		if err := unix.Fchown(int(os.Stderr.Fd()), rootuid, rootgid); err != nil {
-			return nil, fmt.Errorf("failed to chown stderr")
+
+		link, err = os.Readlink(fmt.Sprintf("/proc/self/fd/%d", os.Stdout.Fd()))
+		if err != nil {
+			return nil, err
+		}
+
+		if !strings.HasPrefix(link, "/dev") {
+			if err := unix.Fchown(int(os.Stdout.Fd()), rootuid, rootgid); err != nil {
+				return nil, fmt.Errorf("failed to chown stdout")
+			}
+		}
+
+		link, err = os.Readlink(fmt.Sprintf("/proc/self/fd/%d", os.Stderr.Fd()))
+		if err != nil {
+			return nil, err
+		}
+
+		if !strings.HasPrefix(link, "/dev") {
+			if err := unix.Fchown(int(os.Stderr.Fd()), rootuid, rootgid); err != nil {
+				return nil, fmt.Errorf("failed to chown stderr")
+			}
 		}
 
 		if err := inheritStdio(process); err != nil {
@@ -376,6 +399,7 @@ func (r *runner) run(config *specs.Process) (int, error) {
 	var (
 		detach = r.detach || (r.action == CT_ACT_CREATE)
 	)
+
 	// Setting up IO is a two stage process. We need to modify process to deal
 	// with detaching containers, and then we get a tty after the container has
 	// started.
@@ -555,5 +579,6 @@ func startContainer(context *cli.Context,
 		init:            true,
 		logLevel:        logLevel,
 	}
+
 	return r.run(spec.Process)
 }
