@@ -18,7 +18,6 @@ package syscont
 
 import (
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
@@ -177,7 +176,12 @@ func rootfsCloningRequired(rootfs string) (bool, error) {
 	// snapshots work properly. Once the rootfs is cloned, we then setup the
 	// container using this cloned rootfs.
 
-	mi, err := mount.GetMountAtPid(uint32(os.Getpid()), rootfs)
+	mounts, err := mount.GetMounts()
+	if err != nil {
+		return false, err
+	}
+
+	mi, err := mount.GetMountAt(rootfs, mounts)
 	if err == nil && mi.Fstype == "overlay" && !strings.Contains(mi.Opts, "metacopy=on") {
 		return true, nil
 	}

@@ -300,7 +300,13 @@ func (c *linuxContainer) Start(process *Process) error {
 
 		if c.config.RootfsUidShiftType == sh.Shiftfs ||
 			c.config.BindMntUidShiftType == sh.Shiftfs {
-			if err := c.setupShiftfsMarks(); err != nil {
+
+			mounts, err := mount.GetMounts()
+			if err != nil {
+				return fmt.Errorf("failed to read mountinfo: %s", err)
+			}
+
+			if err := c.setupShiftfsMarks(mounts); err != nil {
 				return err
 			}
 		}
@@ -776,7 +782,12 @@ func (c *linuxContainer) Destroy() error {
 	} else {
 		// If sysbox-mgr is not present (i.e., unit testing), then we teardown
 		// shiftfs marks here.
-		if err2 := c.teardownShiftfsMarkLocal(); err == nil {
+		mounts, err := mount.GetMounts()
+		if err != nil {
+			return fmt.Errorf("failed to read mountinfo: %s", err)
+		}
+
+		if err2 := c.teardownShiftfsMarkLocal(mounts); err == nil {
 			err = err2
 		}
 	}
@@ -2558,7 +2569,7 @@ func (c *linuxContainer) procSeccompInit(pid int, fd int32) error {
 }
 
 // sysbox-runc: sets up the shiftfs marks for the container
-func (c *linuxContainer) setupShiftfsMarks() error {
+func (c *linuxContainer) setupShiftfsMarks(mi []*mount.Info) error {
 
 	config := c.config
 	shiftfsMounts := []configs.ShiftfsMount{}
@@ -2587,11 +2598,6 @@ func (c *linuxContainer) setupShiftfsMarks() error {
 				// another file. In this case, we need to mount shiftfs over the
 				// orig file (i.e., the source of the bind mount).
 				if !m.BindSrcInfo.IsDir {
-
-					mi, err := mount.GetMounts()
-					if err != nil {
-						return fmt.Errorf("failed to read mountinfo: %s", err)
-					}
 
 					isBindMnt, origSrc, err := fileIsBindMount(mi, m.Source)
 					if err != nil {
@@ -2686,15 +2692,15 @@ func (c *linuxContainer) setupShiftfsMarks() error {
 
 	} else {
 		config.ShiftfsMounts = shiftfsMounts
-		return c.setupShiftfsMarkLocal()
+		return c.setupShiftfsMarkLocal(mi)
 	}
 }
 
 // Setup shiftfs marks; meant for testing only
-func (c *linuxContainer) setupShiftfsMarkLocal() error {
+func (c *linuxContainer) setupShiftfsMarkLocal(mi []*mount.Info) error {
 
 	for _, m := range c.config.ShiftfsMounts {
-		mounted, err := mount.MountedWithFs(m.Source, "shiftfs")
+		mounted, err := mount.MountedWithFs(m.Source, "shiftfs", mi)
 		if err != nil {
 			return newSystemErrorWithCausef(err, "checking for shiftfs mount at %s", m.Source)
 		}
@@ -2709,10 +2715,10 @@ func (c *linuxContainer) setupShiftfsMarkLocal() error {
 }
 
 // Teardown shiftfs marks; meant for testing only
-func (c *linuxContainer) teardownShiftfsMarkLocal() error {
+func (c *linuxContainer) teardownShiftfsMarkLocal(mi []*mount.Info) error {
 
 	for _, m := range c.config.ShiftfsMounts {
-		mounted, err := mount.MountedWithFs(m.Source, "shiftfs")
+		mounted, err := mount.MountedWithFs(m.Source, "shiftfs", mi)
 		if err != nil {
 			return newSystemErrorWithCausef(err, "checking for shiftfs mount at %s", m.Source)
 		}
@@ -2748,8 +2754,9 @@ func (c *linuxContainer) rootfsCloningRequired() (bool, error) {
 	}
 
 	rootfs := c.config.Rootfs
+	mounts, err := mount.GetMounts()
 
-	mi, err := mount.GetMountAtPid(uint32(os.Getpid()), rootfs)
+	mi, err := mount.GetMountAt(rootfs, mounts)
 	if err == nil && mi.Fstype == "overlay" && !strings.Contains(mi.Opts, "metacopy=on") {
 		return true, nil
 	}

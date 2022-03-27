@@ -23,29 +23,13 @@ func FindMount(mountpoint string, mounts []*Info) bool {
 	return false
 }
 
-// Mounted looks at /proc/self/mountinfo to determine if the specified
-// mountpoint has been mounted
-func Mounted(mountpoint string) (bool, error) {
-	mounts, err := parseMountTable()
-	if err != nil {
-		return false, err
-	}
-
-	isMounted := FindMount(mountpoint, mounts)
-	return isMounted, nil
-}
-
 // MountedWithFs looks at /proc/self/mountinfo to determine if the specified
 // mountpoint has been mounted with the given filesystem type.
-func MountedWithFs(mountpoint string, fs string) (bool, error) {
-	entries, err := parseMountTable()
-	if err != nil {
-		return false, err
-	}
+func MountedWithFs(mountpoint string, fs string, mounts []*Info) (bool, error) {
 
 	// Search the table for the mountpoint
-	for _, e := range entries {
-		if e.Mountpoint == mountpoint && e.Fstype == fs {
+	for _, m := range mounts {
+		if m.Mountpoint == mountpoint && m.Fstype == fs {
 			return true, nil
 		}
 	}
@@ -53,31 +37,12 @@ func MountedWithFs(mountpoint string, fs string) (bool, error) {
 }
 
 // GetMountAt returns information about the given mountpoint.
-func GetMountAt(mountpoint string) (*Info, error) {
-	entries, err := parseMountTable()
-	if err != nil {
-		return nil, err
-	}
+func GetMountAt(mountpoint string, mounts []*Info) (*Info, error) {
+
 	// Search the table for the given mountpoint
-	for _, e := range entries {
-		if e.Mountpoint == mountpoint {
-			return e, nil
-		}
-	}
-	return nil, fmt.Errorf("%s is not a mountpoint", mountpoint)
-}
-
-// GetMountAtPid returns information about the given mountpoint and pid.
-func GetMountAtPid(pid uint32, mountpoint string) (*Info, error) {
-	entries, err := parseMountTableForPid(pid)
-	if err != nil {
-		return nil, err
-	}
-
-	// Search the table for the given mountpoint.
-	for _, e := range entries {
-		if e.Mountpoint == mountpoint {
-			return e, nil
+	for _, m := range mounts {
+		if m.Mountpoint == mountpoint {
+			return m, nil
 		}
 	}
 	return nil, fmt.Errorf("%s is not a mountpoint", mountpoint)

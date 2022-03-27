@@ -56,10 +56,11 @@ func Unmount(path string) error {
 
 // Returns a boolean indicating if the given path has a shiftfs mount
 // on it (mark or actual mount).
-func Mounted(path string) (bool, error) {
+func Mounted(path string, mounts []*mount.Info) (bool, error) {
 	realPath, err := filepath.EvalSymlinks(path)
 	if err != nil {
 		return false, err
 	}
-	return mount.MountedWithFs(realPath, "shiftfs")
+
+	return mount.MountedWithFs(realPath, "shiftfs", mounts)
 }

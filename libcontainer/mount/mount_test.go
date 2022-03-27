@@ -1,9 +1,6 @@
 package mount
 
 import (
-	"io/ioutil"
-	"log"
-	"os"
 	"testing"
 )
 
@@ -26,52 +23,39 @@ func TestGetMounts(t *testing.T) {
 	}
 }
 
-func TestMounted(t *testing.T) {
-	ok, err := Mounted("/proc")
-	if err != nil || !ok {
-		t.Fatalf("Mounted() failed: %v, %v", ok, err)
-	}
-	ok, err = Mounted("/sys")
-	if err != nil || !ok {
-		t.Fatalf("Mounted() failed: %v, %v", ok, err)
-	}
-
-	// negative testing
-	dir, err := ioutil.TempDir("", "TestMounted")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-
-	ok, err = Mounted("dir")
-	if err != nil || ok {
-		t.Fatalf("Mounted() failed: %v, %v", ok, err)
-	}
-}
-
 func TestMountedWithFs(t *testing.T) {
-	ok, err := MountedWithFs("/proc", "proc")
+	allMounts, err := GetMounts()
+	if err != nil {
+		t.Fatalf("GetMounts() failed: %v", err)
+	}
+
+	ok, err := MountedWithFs("/proc", "proc", allMounts)
 	if err != nil || !ok {
 		t.Fatalf("MountedWithFs() failed: %v, %v", ok, err)
 	}
-	ok, err = MountedWithFs("/sys", "sysfs")
+	ok, err = MountedWithFs("/sys", "sysfs", allMounts)
 	if err != nil || !ok {
 		t.Fatalf("MountedWithFs() failed: %v, %v", ok, err)
 	}
 
 	// negative testing
-	ok, err = MountedWithFs("/proc", "sysfs")
+	ok, err = MountedWithFs("/proc", "sysfs", allMounts)
 	if err != nil || ok {
 		t.Fatalf("MountedWithFs() failed: %v, %v", ok, err)
 	}
-	ok, err = MountedWithFs("/sys", "procfs")
+	ok, err = MountedWithFs("/sys", "procfs", allMounts)
 	if err != nil || ok {
 		t.Fatalf("MountedWithFs() failed: %v, %v", ok, err)
 	}
 }
 
 func TestGetMountAt(t *testing.T) {
-	m, err := GetMountAt("/proc")
+	allMounts, err := GetMounts()
+	if err != nil {
+		t.Fatalf("GetMounts() failed: %v", err)
+	}
+
+	m, err := GetMountAt("/proc", allMounts)
 	if err != nil {
 		t.Fatalf("GetMountAt() failed: %v", err)
 	}
@@ -81,7 +65,7 @@ func TestGetMountAt(t *testing.T) {
 		}
 	}
 
-	m, err = GetMountAt("/sys")
+	m, err = GetMountAt("/sys", allMounts)
 	if err != nil {
 		t.Fatalf("GetMountAt() failed: %v", err)
 	}
