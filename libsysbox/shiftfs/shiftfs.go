@@ -24,6 +24,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+const SHIFTFS_MAGIC int64 = 0x6a656a62
+
 // Mark performs a shiftfs mark-mount for path on the given markPath
 // (e.g., Mark("/a/b", "/c/d") causes "b" to be mounted on "d" and
 // "d" to have a shiftfs mark).

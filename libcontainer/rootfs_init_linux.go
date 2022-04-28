@@ -18,6 +18,7 @@ import (
 
 	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
 	utils "github.com/nestybox/sysbox-libs/utils"
+	libcontainerUtils "github.com/opencontainers/runc/libcontainer/utils"
 )
 
 type linuxRootfsInit struct {
@@ -75,7 +76,7 @@ func iptablesRestoreHasWait() (bool, error) {
 	return verConstraint.Check(ver), nil
 }
 
-func doBindMount(m *configs.Mount) error {
+func doBindMount(rootfs string, m *configs.Mount) error {
 
 	// sysbox-runc: For some reason, when the rootfs is on shiftfs, we
 	// need to do an Lstat() of the source path prior to doing the
@@ -91,26 +92,38 @@ func doBindMount(m *configs.Mount) error {
 	if !m.BindSrcInfo.IsDir {
 		src = filepath.Dir(m.Source)
 	}
-
 	os.Lstat(src)
-	if err := unix.Mount(m.Source, m.Destination, "", unix.MS_BIND|unix.MS_REC, ""); err != nil {
 
-		// We've noticed that the lstat and/or mount syscall fails with EPERM when
-		// bind-mounting a source dir that is on a shiftfs mount on top of a tmpfs
-		// mount. For some reason the Linux "mount" command does not fail in this case,
-		// so let's try it.
+	// Bind-mount with procfd to mitigate symlink exchange attacks.
 
-		cmd := exec.Command("/bin/mount", "--rbind", m.Source, m.Destination)
-		err := cmd.Run()
-		if err != nil {
-			return fmt.Errorf("bind-mount of %s to %s failed: %v", m.Source, m.Destination, err)
+	if err := libcontainerUtils.WithProcfd(rootfs, m.Destination, func(procfd string) error {
+		if err := unix.Mount(m.Source, procfd, "", unix.MS_BIND|unix.MS_REC, ""); err != nil {
+
+			// We've noticed that the lstat and/or mount syscall fails with EPERM when
+			// bind-mounting a source dir that is on a shiftfs mount on top of a tmpfs
+			// mount. For some reason the Linux "mount" command does not fail in this case,
+			// so let's try it.
+			cmd := exec.Command("/bin/mount", "--rbind", m.Source, procfd)
+			err := cmd.Run()
+			if err != nil {
+				realpath, _ := os.Readlink(procfd)
+				return fmt.Errorf("bind-mount of %s to %s failed: %v", m.Source, realpath, err)
+			}
 		}
+		return nil
+	}); err != nil {
+		return fmt.Errorf("bind mount through procfd of %s -> %s: %w", m.Source, m.Destination, err)
 	}
 
-	for _, pflag := range m.PropagationFlags {
-		if err := unix.Mount("", m.Destination, "", uintptr(pflag), ""); err != nil {
-			return err
+	if err := libcontainerUtils.WithProcfd(rootfs, m.Destination, func(procfd string) error {
+		for _, pflag := range m.PropagationFlags {
+			if err := unix.Mount("", procfd, "", uintptr(pflag), ""); err != nil {
+				return err
+			}
 		}
+		return nil
+	}); err != nil {
+		return fmt.Errorf("change bind mount propagation through procfd: %w", err)
 	}
 
 	return nil
@@ -246,7 +259,6 @@ func (l *linuxRootfsInit) Init() error {
 
 	// If multiple requests are passed in the slice, they must all be
 	// of the same type.
-
 	switch l.reqs[0].Op {
 
 	case bind:
@@ -256,14 +268,21 @@ func (l *linuxRootfsInit) Init() error {
 			return newSystemErrorWithCausef(err, "chdir to rootfs %s", rootfs)
 		}
 
-		initPid := l.reqs[0].InitPid
-		usernsPath := fmt.Sprintf("/proc/%d/ns/user", initPid)
+		// We are in the pid and mount ns of the container's init process; remount
+		// /proc so that it picks up this fact.
+		os.Lstat("/proc")
+		if err := unix.Mount("proc", "/proc", "proc", 0, ""); err != nil {
+			return newSystemErrorWithCause(err, "re-mounting procfs")
+		}
+		defer unix.Unmount("/proc", unix.MNT_DETACH)
+
+		usernsPath := "/proc/1/ns/user"
 
 		for _, req := range l.reqs {
 			m := &req.Mount
 			mountLabel := req.Label
 
-			if err := doBindMount(m); err != nil {
+			if err := doBindMount(rootfs, m); err != nil {
 				return newSystemErrorWithCausef(err, "bind mounting %s to %s", m.Source, m.Destination)
 			}
 
@@ -290,18 +309,17 @@ func (l *linuxRootfsInit) Init() error {
 
 			// Set up the ID-mapping as needed
 			if m.IDMappedMount {
-
-				// Note: arguments to IDMapMount() must be absolute.
-				target, err := securejoin.SecureJoin(rootfs, m.Destination)
-				if err != nil {
-					return err
-				}
-
-				if err := sh.IDMapMount(usernsPath, target); err != nil {
-					fsName, _ := utils.GetFsName(target)
-					return newSystemErrorWithCausef(err,
-						"setting up ID-mapped mount on userns %s, path %s (likely means idmapped mounts are not supported on the filesystem at this path (%s))",
-						usernsPath, target, fsName)
+				if err := libcontainerUtils.WithProcfd(rootfs, m.Destination, func(procfd string) error {
+					if err := sh.IDMapMount(usernsPath, procfd); err != nil {
+						fsName, _ := utils.GetFsName(procfd)
+						realpath, _ := os.Readlink(procfd)
+						return newSystemErrorWithCausef(err,
+							"setting up ID-mapped mount on path %s (likely means idmapped mounts are not supported on the filesystem at this path (%s))",
+							realpath, fsName)
+					}
+					return nil
+				}); err != nil {
+					return newSystemErrorWithCausef(err, "ID-map mount on %s", m.Destination)
 				}
 			}
 		}

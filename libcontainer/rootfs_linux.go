@@ -33,6 +33,7 @@ import (
 
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/opencontainers/selinux/go-selinux/label"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )
 
@@ -249,23 +250,32 @@ func mountCgroupV1(m *configs.Mount, enableCgroupns bool, config *configs.Config
 	}
 	for _, b := range binds {
 		if enableCgroupns {
+
 			// sysbox-runc: use relative path (as otherwise we may not have permission to mkdir)
-			subsystemPath := b.Destination
+			subsystemPath, err := securejoin.SecureJoin(".", b.Destination)
+			if err != nil {
+				return err
+			}
+
 			if err := mkdirall(subsystemPath, 0755, config, pipe); err != nil {
 				return err
 			}
-			flags := defaultMountFlags
-			if m.Flags&unix.MS_RDONLY != 0 {
-				flags = flags | unix.MS_RDONLY
-			}
-			cgroupmount := &configs.Mount{
-				Source:      "cgroup",
-				Device:      "cgroup", // this is actually fstype
-				Destination: subsystemPath,
-				Flags:       flags,
-				Data:        filepath.Base(subsystemPath),
-			}
-			if err := mountNewCgroup(cgroupmount); err != nil {
+
+			if err := utils.WithProcfd(".", subsystemPath, func(procfd string) error {
+				flags := defaultMountFlags
+				if m.Flags&unix.MS_RDONLY != 0 {
+					flags = flags | unix.MS_RDONLY
+				}
+				var (
+					source = "cgroup"
+					data   = filepath.Base(subsystemPath)
+				)
+				if data == "systemd" {
+					data = cgroups.CgroupNamePrefix + data
+					source = "systemd"
+				}
+				return unix.Mount(source, procfd, "cgroup", uintptr(flags), data)
+			}); err != nil {
 				return err
 			}
 		} else {
@@ -288,21 +298,71 @@ func mountCgroupV1(m *configs.Mount, enableCgroupns bool, config *configs.Config
 }
 
 func mountCgroupV2(m *configs.Mount, enableCgroupns bool, config *configs.Config, pipe io.ReadWriter) error {
+
+	// sysbox-runc: use relative path (as otherwise we may not have permission to mkdir)
 	cgroupPath, err := securejoin.SecureJoin(".", m.Destination)
 	if err != nil {
 		return err
 	}
+
 	if err := mkdirall(cgroupPath, 0755, config, pipe); err != nil {
 		return err
 	}
-	if err := unix.Mount(m.Source, cgroupPath, "cgroup2", uintptr(m.Flags), m.Data); err != nil {
-		// when we are in UserNS but CgroupNS is not unshared, we cannot mount cgroup2 (#2158)
-		if err == unix.EPERM || err == unix.EBUSY {
-			return unix.Mount("/sys/fs/cgroup", cgroupPath, "", uintptr(m.Flags)|unix.MS_BIND, "")
+
+	return utils.WithProcfd(".", cgroupPath, func(procfd string) error {
+		if err := unix.Mount(m.Source, procfd, "cgroup2", uintptr(m.Flags), m.Data); err != nil {
+			// when we are in UserNS but CgroupNS is not unshared, we cannot mount cgroup2 (#2158)
+			if err == unix.EPERM || err == unix.EBUSY {
+				return unix.Mount("/sys/fs/cgroup", procfd, "", uintptr(m.Flags)|unix.MS_BIND, "")
+			}
+			return nil
 		}
+		return nil
+	})
+}
+
+func doTmpfsCopyUp(m *configs.Mount, rootfs, mountLabel string) (Err error) {
+	// Set up a scratch dir for the tmpfs on the host.
+	tmpdir, err := prepareTmp("/tmp")
+	if err != nil {
+		return newSystemErrorWithCause(err, "tmpcopyup: failed to setup tmpdir")
+	}
+	defer cleanupTmp(tmpdir)
+	tmpDir, err := ioutil.TempDir(tmpdir, "runctmpdir")
+	if err != nil {
+		return newSystemErrorWithCause(err, "tmpcopyup: failed to create tmpdir")
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Configure the *host* tmpdir as if it's the container mount. We change
+	// m.Destination since we are going to mount *on the host*.
+	oldDest := m.Destination
+	m.Destination = tmpDir
+	err = mountPropagate(m, "/", mountLabel)
+	m.Destination = oldDest
+	if err != nil {
 		return err
 	}
-	return nil
+	defer func() {
+		if Err != nil {
+			if err := unix.Unmount(tmpDir, unix.MNT_DETACH); err != nil {
+				logrus.Warnf("tmpcopyup: failed to unmount tmpdir on error: %v", err)
+			}
+		}
+	}()
+	return utils.WithProcfd(".", m.Destination, func(procfd string) (Err error) {
+		// Copy the container data to the host tmpdir. We append "/" to force
+		// CopyDirectory to resolve the symlink rather than trying to copy the
+		// symlink itself.
+		if err := fileutils.CopyDirectory(procfd+"/", tmpDir); err != nil {
+			return fmt.Errorf("tmpcopyup: failed to copy %s to %s (%s): %w", m.Destination, procfd, tmpDir, err)
+		}
+		// Now move the mount into the container.
+		if err := unix.Mount(tmpDir, procfd, "", unix.MS_MOVE, ""); err != nil {
+			return fmt.Errorf("tmpcopyup: failed to move mount %s to %s (%s): %w", tmpDir, procfd, m.Destination, err)
+		}
+		return nil
+	})
 }
 
 // mkdirall calls into os.Mkdirall(), but precedes the call with an open of the current
@@ -349,14 +409,17 @@ func mkdirall(path string, mode os.FileMode, config *configs.Config, pipe io.Rea
 }
 
 func mountToRootfs(m *configs.Mount, config *configs.Config, enableCgroupns bool, pipe io.ReadWriter) error {
-	var (
-		mountLabel = config.MountLabel
-		dest       = m.Destination
-	)
 
-	// This function assumes cwd is the container's rootfs
-	dest = filepath.Join(".", dest)
-	m.Destination = dest
+	mountLabel := config.MountLabel
+
+	// sysbox-runc: use relative path for the rootfs as we may not have access to it via the abs path.
+	rootfs := "."
+
+	// Verify the mount destination is within the container's rootfs
+	dest, err := securejoin.SecureJoin(rootfs, m.Destination)
+	if err != nil {
+		return err
+	}
 
 	switch m.Device {
 	case "proc", "sysfs":
@@ -376,62 +439,29 @@ func mountToRootfs(m *configs.Mount, config *configs.Config, enableCgroupns bool
 			return fmt.Errorf("failed to created dir for %s mount: %v", m.Device, err)
 		}
 		// Selinux kernels do not support labeling of /proc or /sys
-		return mountPropagate(m, "")
+		return mountPropagate(m, ".", "")
 	case "mqueue":
 		if err := mkdirall(dest, 0755, config, pipe); err != nil {
 			return err
 		}
-		if err := mountPropagate(m, ""); err != nil {
+		if err := mountPropagate(m, rootfs, ""); err != nil {
 			return err
 		}
 		return label.SetFileLabel(dest, mountLabel)
 	case "tmpfs":
-		copyUp := m.Extensions&configs.EXT_COPYUP == configs.EXT_COPYUP
-		tmpDir := ""
-		// dest might be an absolute symlink, so it needs
-		// to be resolved under rootfs.
-		dest, err := securejoin.SecureJoin(".", m.Destination)
-		if err != nil {
-			return err
-		}
-		m.Destination = dest
 		stat, err := os.Stat(dest)
 		if err != nil {
 			if err := mkdirall(dest, 0755, config, pipe); err != nil {
 				return err
 			}
 		}
-		if copyUp {
-			tmpdir, err := prepareTmp("/tmp")
-			if err != nil {
-				return newSystemErrorWithCause(err, "tmpcopyup: failed to setup tmpdir")
-			}
-			defer cleanupTmp(tmpdir)
-			tmpDir, err = ioutil.TempDir(tmpdir, "runctmpdir")
-			if err != nil {
-				return newSystemErrorWithCause(err, "tmpcopyup: failed to create tmpdir")
-			}
-			defer os.RemoveAll(tmpDir)
-			m.Destination = tmpDir
+		if m.Extensions&configs.EXT_COPYUP == configs.EXT_COPYUP {
+			err = doTmpfsCopyUp(m, rootfs, mountLabel)
+		} else {
+			err = mountPropagate(m, rootfs, mountLabel)
 		}
-		if err := mountPropagate(m, mountLabel); err != nil {
+		if err != nil {
 			return err
-		}
-		if copyUp {
-			if err := fileutils.CopyDirectory(dest, tmpDir); err != nil {
-				errMsg := fmt.Errorf("tmpcopyup: failed to copy %s to %s: %v", dest, tmpDir, err)
-				if err1 := unix.Unmount(tmpDir, unix.MNT_DETACH); err1 != nil {
-					return newSystemErrorWithCausef(err1, "tmpcopyup: %v: failed to unmount", errMsg)
-				}
-				return errMsg
-			}
-			if err := unix.Mount(tmpDir, dest, "", unix.MS_MOVE, ""); err != nil {
-				errMsg := fmt.Errorf("tmpcopyup: failed to move mount %s to %s: %v", tmpDir, dest, err)
-				if err1 := unix.Unmount(tmpDir, unix.MNT_DETACH); err1 != nil {
-					return newSystemErrorWithCausef(err1, "tmpcopyup: %v: failed to unmount", errMsg)
-				}
-				return errMsg
-			}
 		}
 		if stat != nil {
 			if err = os.Chmod(dest, stat.Mode()); err != nil {
@@ -458,7 +488,7 @@ func mountToRootfs(m *configs.Mount, config *configs.Config, enableCgroupns bool
 		if err := mkdirall(dest, 0755, config, pipe); err != nil {
 			return err
 		}
-		return mountPropagate(m, mountLabel)
+		return mountPropagate(m, rootfs, mountLabel)
 	}
 }
 
@@ -667,7 +697,7 @@ func createDevices(config *configs.Config, pipe io.ReadWriter) error {
 	return nil
 }
 
-func bindMountDeviceNode(dest string, node *devices.Device) error {
+func bindMountDeviceNode(rootfs, dest string, node *devices.Device) error {
 	f, err := os.Create(dest)
 	if err != nil && !os.IsExist(err) {
 		return err
@@ -675,8 +705,9 @@ func bindMountDeviceNode(dest string, node *devices.Device) error {
 	if f != nil {
 		f.Close()
 	}
-
-	return unix.Mount(node.Path, dest, "bind", unix.MS_BIND, "")
+	return utils.WithProcfd(rootfs, dest, func(procfd string) error {
+		return unix.Mount(node.Path, procfd, "bind", unix.MS_BIND, "")
+	})
 }
 
 // Creates the device node in the rootfs of the container.
@@ -685,19 +716,26 @@ func createDeviceNode(node *devices.Device, bind bool, config *configs.Config, p
 		// The node only exists for cgroup reasons, ignore it here.
 		return nil
 	}
-	dest := filepath.Join(".", node.Path)
 
+	// sysbox-runc: use relative path for the rootfs as we may not have access to it via the abs path.
+	rootfs := "."
+
+	// Verify the device node path is within the container's rootfs
+	dest, err := securejoin.SecureJoin(rootfs, node.Path)
+	if err != nil {
+		return err
+	}
 	if err := mkdirall(filepath.Dir(dest), 0755, config, pipe); err != nil {
 		return err
 	}
 	if bind {
-		return bindMountDeviceNode(dest, node)
+		return bindMountDeviceNode(rootfs, dest, node)
 	}
 	if err := mknodDevice(dest, node); err != nil {
 		if os.IsExist(err) {
 			return nil
 		} else if os.IsPermission(err) {
-			return bindMountDeviceNode(dest, node)
+			return bindMountDeviceNode(rootfs, dest, node)
 		}
 		return err
 	}
@@ -1057,55 +1095,48 @@ func remount(m *configs.Mount) error {
 	}
 	flags |= uintptr(s.Flags)
 
-	if err := unix.Mount("", m.Destination, "", flags, ""); err != nil {
-		return fmt.Errorf("failed to remount %s with flags %#x", m.Destination, int(flags))
-	}
-
-	return nil
+	return utils.WithProcfd(".", m.Destination, func(procfd string) error {
+		return unix.Mount("", procfd, "", flags, "")
+	})
 }
 
 // Do the mount operation followed by additional mounts required to take care
-// of propagation flags.
-func mountPropagate(m *configs.Mount, mountLabel string) error {
+// of propagation flags. This will always be scoped inside the container rootfs.
+func mountPropagate(m *configs.Mount, rootfs string, mountLabel string) error {
 	var (
-		dest  = m.Destination
 		data  = label.FormatMountLabel(m.Data, mountLabel)
 		flags = m.Flags
 	)
-	if dest == "dev" {
+
+	// Delay mounting the filesystem read-only if we need to do further
+	// operations on it. We need to set up files in "/dev" and tmpfs mounts may
+	// need to be chmod-ed after mounting. The mount will be remounted ro later
+	// in finalizeRootfs() if necessary.
+	if libcontainerUtils.CleanPath(m.Destination) == "/dev" || m.Device == "tmpfs" {
 		flags &= ^unix.MS_RDONLY
 	}
 
-	// Mount it rw to allow chmod operation. A remount will be performed
-	// later to make it ro if set.
-	if m.Device == "tmpfs" {
-		flags &= ^unix.MS_RDONLY
+	// Because the destination is inside a container path which might be
+	// mutating underneath us, we verify that we are actually going to mount
+	// inside the container with WithProcfd() -- mounting through a procfd
+	// mounts on the target.
+	if err := utils.WithProcfd(rootfs, m.Destination, func(procfd string) error {
+		return unix.Mount(m.Source, procfd, m.Device, uintptr(flags), data)
+	}); err != nil {
+		return fmt.Errorf("mount through procfd: %w", err)
 	}
-
-	if err := unix.Mount(m.Source, dest, m.Device, uintptr(flags), data); err != nil {
-		return err
-	}
-
-	for _, pflag := range m.PropagationFlags {
-		if err := unix.Mount("", dest, "", uintptr(pflag), ""); err != nil {
-			return err
+	// We have to apply mount propagation flags in a separate WithProcfd() call
+	// because the previous call invalidates the passed procfd -- the mount
+	// target needs to be re-opened.
+	if err := utils.WithProcfd(rootfs, m.Destination, func(procfd string) error {
+		for _, pflag := range m.PropagationFlags {
+			if err := unix.Mount("", procfd, "", uintptr(pflag), ""); err != nil {
+				return err
+			}
 		}
-	}
-
-	return nil
-}
-
-func mountNewCgroup(m *configs.Mount) error {
-	var (
-		data   = m.Data
-		source = m.Source
-	)
-	if data == "systemd" {
-		data = cgroups.CgroupNamePrefix + data
-		source = "systemd"
-	}
-	if err := unix.Mount(source, m.Destination, m.Device, uintptr(m.Flags), data); err != nil {
-		return err
+		return nil
+	}); err != nil {
+		return fmt.Errorf("change mount propagation through procfd: %w", err)
 	}
 	return nil
 }
