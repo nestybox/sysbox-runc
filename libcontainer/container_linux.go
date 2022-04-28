@@ -2474,6 +2474,7 @@ func (c *linuxContainer) handleOp(op opReqType, childPid int, reqs []opReq) erro
 	case bind, chown, mkdir:
 		namespaces = append(namespaces,
 			fmt.Sprintf("mnt:/proc/%d/ns/mnt", childPid),
+			fmt.Sprintf("pid:/proc/%d/ns/pid", childPid),
 		)
 	case switchDockerDns:
 		namespaces = append(namespaces,
