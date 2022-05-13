@@ -246,6 +246,7 @@ func mountCgroupV1(m *configs.Mount, enableCgroupns bool, config *configs.Config
 	if err := mountToRootfs(tmpfs, config, enableCgroupns, pipe); err != nil {
 		return err
 	}
+
 	for _, b := range binds {
 		if enableCgroupns {
 
@@ -287,7 +288,11 @@ func mountCgroupV1(m *configs.Mount, enableCgroupns bool, config *configs.Config
 			// symlink(2) is very dumb, it will just shove the path into
 			// the link and doesn't do any checks or relative path
 			// conversion. Also, don't error out if the cgroup already exists.
-			if err := os.Symlink(mc, filepath.Join(m.Destination, ss)); err != nil && !os.IsExist(err) {
+			dest, err := securejoin.SecureJoin(".", filepath.Join(m.Destination, ss))
+			if err != nil {
+				return err
+			}
+			if err := os.Symlink(mc, dest); err != nil && !os.IsExist(err) {
 				return err
 			}
 		}
