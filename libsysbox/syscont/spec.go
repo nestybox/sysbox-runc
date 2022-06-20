@@ -67,27 +67,6 @@ var syscontMounts = []specs.Mount{
 		Type:        "cgroup",
 		Options:     []string{"noexec", "nosuid", "nodev"},
 	},
-	// we don't yet virtualize configfs; create a dummy one.
-	specs.Mount{
-		Destination: "/sys/kernel/config",
-		Source:      "tmpfs",
-		Type:        "tmpfs",
-		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "size=1m"},
-	},
-	// we don't virtualize debugfs; create a dummy one.
-	specs.Mount{
-		Destination: "/sys/kernel/debug",
-		Source:      "tmpfs",
-		Type:        "tmpfs",
-		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "size=1m"},
-	},
-	// we don't virtualize tracefs; create a dummy one.
-	specs.Mount{
-		Destination: "/sys/kernel/tracing",
-		Source:      "tmpfs",
-		Type:        "tmpfs",
-		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "size=1m"},
-	},
 	specs.Mount{
 		Destination: "/proc",
 		Source:      "proc",
@@ -194,8 +173,14 @@ var sysboxFsMounts = []specs.Mount{
 	// sysfs mounts
 	//
 	specs.Mount{
+		Destination: "/sys/kernel",
+		Source:      filepath.Join(SysboxFsDir, "sys/kernel"),
+		Type:        "bind",
+		Options:     []string{"rbind", "rprivate"},
+	},
+	specs.Mount{
 		Destination: "/sys/devices/virtual/dmi/id/product_uuid",
-		Source:      filepath.Join(SysboxFsDir, "/sys/devices/virtual/dmi/id/product_uuid"),
+		Source:      filepath.Join(SysboxFsDir, "sys/devices/virtual/dmi/id/product_uuid"),
 		Type:        "bind",
 		Options:     []string{"rbind", "rprivate"},
 	},
@@ -247,7 +232,7 @@ var syscontExposedPaths = []string{
 
 	// Some apps need these to be exposed (or more accurately need them to not be masked
 	// via a bind-mount from /dev/null, as described in sysbox issue #511). It's not a
-	// security concern to expose these in sys containers, as they are either not accesible
+	// security concern to expose these in sys containers, as they are either not accessible
 	// or don't provide meaningful info (due to the sys container's user-ns).
 	"/proc/kcore",
 	"/proc/kallsyms",
@@ -260,9 +245,7 @@ var syscontSystemdExposedPaths = []string{
 	"/run",
 	"/run/lock",
 	"/tmp",
-	"/sys/kernel/config",
-	"/sys/kernel/debug",
-	"/sys/kernel/tracing",
+	"/sys/kernel",
 }
 
 // syscontRwPaths list the paths within the sys container's rootfs
@@ -271,9 +254,7 @@ var syscontSystemdRwPaths = []string{
 	"/run",
 	"/run/lock",
 	"/tmp",
-	"/sys/kernel/config",
-	"/sys/kernel/debug",
-	"/sys/kernel/tracing",
+	"/sys/kernel",
 }
 
 // linuxCaps is the full list of Linux capabilities
