@@ -201,10 +201,6 @@ func CheckUidShifting(sysMgr *Mgr, spec *specs.Spec) (sh.IDShiftType, sh.IDShift
 		err               error
 	)
 
-	// shiftfsSupported (kernel supports it and not disabled)
-	// idmappedMntSupported (kernel supports it and not disabled)
-	// needUidShiftOnRootfs
-
 	if !sysMgr.Config.NoIDMappedMount {
 		idMapMntSupported, err = libutils.KernelSupportsIDMappedMounts()
 		if err != nil {
@@ -249,7 +245,9 @@ func CheckUidShifting(sysMgr *Mgr, spec *specs.Spec) (sh.IDShiftType, sh.IDShift
 	// mount could be a user's home dir, a critical system file, etc.).
 	bindMountShiftType := sh.NoShift
 
-	if idMapMntSupported {
+	if idMapMntSupported && shiftfsSupported {
+		bindMountShiftType = sh.IDMappedMountOrShiftfs
+	} else if idMapMntSupported {
 		bindMountShiftType = sh.IDMappedMount
 	} else if shiftfsSupported {
 		bindMountShiftType = sh.Shiftfs

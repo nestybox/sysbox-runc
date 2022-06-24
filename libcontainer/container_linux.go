@@ -284,6 +284,8 @@ func (c *linuxContainer) Start(process *Process) error {
 			return err
 		}
 
+		// Set up ID-shifting for rootfs and bind-mounts
+
 		if c.config.RootfsUidShiftType == sh.Chown {
 			if c.config.RootfsCloned {
 				uidOffset := int32(c.config.UidMappings[0].HostID)
@@ -298,21 +300,22 @@ func (c *linuxContainer) Start(process *Process) error {
 			}
 		}
 
-		if c.config.RootfsUidShiftType == sh.Shiftfs ||
-			c.config.BindMntUidShiftType == sh.Shiftfs {
+		if c.config.BindMntUidShiftType == sh.IDMappedMount ||
+			c.config.BindMntUidShiftType == sh.IDMappedMountOrShiftfs {
+			if err := c.setupIDMappedMounts(); err != nil {
+				return err
+			}
+		}
 
+		if c.config.RootfsUidShiftType == sh.Shiftfs ||
+			c.config.BindMntUidShiftType == sh.Shiftfs ||
+			c.config.BindMntUidShiftType == sh.IDMappedMountOrShiftfs {
 			mounts, err := mount.GetMounts()
 			if err != nil {
 				return fmt.Errorf("failed to read mountinfo: %s", err)
 			}
 
 			if err := c.setupShiftfsMarks(mounts); err != nil {
-				return err
-			}
-		}
-
-		if c.config.BindMntUidShiftType == sh.IDMappedMount {
-			if err := c.setupIDMappedMounts(); err != nil {
 				return err
 			}
 		}
@@ -2581,10 +2584,15 @@ func (c *linuxContainer) setupShiftfsMarks(mi []*mount.Info) error {
 
 	// Determine if other host directories mounted into the container's rootfs
 	// need uid shifting.
+	if config.BindMntUidShiftType == sh.Shiftfs ||
+		config.BindMntUidShiftType == sh.IDMappedMountOrShiftfs {
 
-	if config.BindMntUidShiftType == sh.Shiftfs {
 		for _, m := range config.Mounts {
 			if m.Device == "bind" {
+
+				if m.IDMappedMount {
+					continue
+				}
 
 				needShiftfs, err := needUidShiftOnBindSrc(m, config)
 				if err != nil {
