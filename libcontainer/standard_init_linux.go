@@ -154,6 +154,28 @@ func (l *linuxStandardInit) Init() error {
 		return errors.Wrap(err, "apply apparmor profile")
 	}
 
+	// Notify rootfs readiness to parent so that sysbox-fs registration can be
+	// completed.
+	if err := syncParentRootfsReady(l.pipe); err != nil {
+		return errors.Wrap(err, "send immutable list to parent")
+	}
+
+	// The instructions that follow and that precede the 'parentReady' signal
+	// notification, must all execute after the container has been properly
+	// registered with sysbox-fs.
+	if l.config.Config.SwitchDockerDns {
+		if err := switchDockerDnsIP(l.config.Config, l.pipe); err != nil {
+			return errors.Wrap(err, "switching Docker DNS")
+		}
+	}
+
+	// Config the sysctls
+	for key, value := range l.config.Config.Sysctl {
+		if err := writeSystemProperty(key, value); err != nil {
+			return errors.Wrapf(err, "write sysctl key %s", key)
+		}
+	}
+
 	// Handle read-only paths
 	if len(l.config.Config.ReadonlyPaths) > 0 {
 		mounts, err := mount.GetMounts()
@@ -172,26 +194,6 @@ func (l *linuxStandardInit) Init() error {
 	for _, path := range l.config.Config.MaskPaths {
 		if err := maskPath(path, l.config.Config.MountLabel); err != nil {
 			return errors.Wrapf(err, "mask path %s", path)
-		}
-	}
-
-	// Notify rootfs readiness to parent so that sysbox-fs registration can be
-	// completed.
-	if err := syncParentRootfsReady(l.pipe); err != nil {
-		return errors.Wrap(err, "send immutable list to parent")
-	}
-
-	// The instructions that follow and that precede the 'parentReady' signal
-	// notification, must all execute after the container has been properly
-	// registered with sysbox-fs.
-	if l.config.Config.SwitchDockerDns {
-		if err := switchDockerDnsIP(l.config.Config, l.pipe); err != nil {
-			return errors.Wrap(err, "switching Docker DNS")
-		}
-	}
-	for key, value := range l.config.Config.Sysctl {
-		if err := writeSystemProperty(key, value); err != nil {
-			return errors.Wrapf(err, "write sysctl key %s", key)
 		}
 	}
 
