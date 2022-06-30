@@ -54,7 +54,7 @@ var (
 )
 
 // System container "must-have" mounts
-var sysboxMounts = []specs.Mount{
+var syscontMounts = []specs.Mount{
 	specs.Mount{
 		Destination: "/sys",
 		Source:      "sysfs",
@@ -109,7 +109,7 @@ var sysboxMounts = []specs.Mount{
 	},
 }
 
-// system container mounts virtualized by sysbox-fs
+// container mounts virtualized by sysbox-fs
 var sysboxFsMounts = []specs.Mount{
 	//
 	// procfs mounts
@@ -207,8 +207,8 @@ var sysboxFsMounts = []specs.Mount{
 	},
 }
 
-// sysbox's systemd mount requirements
-var sysboxSystemdMounts = []specs.Mount{
+// sys container systemd mount requirements
+var syscontSystemdMounts = []specs.Mount{
 	specs.Mount{
 		Destination: "/run",
 		Source:      "tmpfs",
@@ -223,8 +223,8 @@ var sysboxSystemdMounts = []specs.Mount{
 	},
 }
 
-// sysbox's systemd env-vars requirements
-var sysboxSystemdEnvVars = []string{
+// sys container systemd env-vars requirements
+var syscontSystemdEnvVars = []string{
 
 	// Allow systemd to identify the virtualization mode to operate on (container
 	// with user-namespace). See 'ConditionVirtualization' attribute here:
@@ -232,16 +232,16 @@ var sysboxSystemdEnvVars = []string{
 	"container=private-users",
 }
 
-// sysboxRwPaths list the paths within the sys container's rootfs
+// syscontRwPaths list the paths within the sys container's rootfs
 // that must have read-write permission
-var sysboxRwPaths = []string{
+var syscontRwPaths = []string{
 	"/proc",
 	"/proc/sys",
 }
 
-// sysboxExposedPaths list the paths within the sys container's rootfs
+// syscontExposedPaths list the paths within the sys container's rootfs
 // that must not be masked
-var sysboxExposedPaths = []string{
+var syscontExposedPaths = []string{
 	"/proc",
 	"/proc/sys",
 
@@ -254,9 +254,9 @@ var sysboxExposedPaths = []string{
 	"/proc/kmsg",
 }
 
-// sysboxSystemdExposedPaths list the paths within the sys container's rootfs
+// syscontSystemdExposedPaths list the paths within the sys container's rootfs
 // that must not be masked when the sys container runs systemd
-var sysboxSystemdExposedPaths = []string{
+var syscontSystemdExposedPaths = []string{
 	"/run",
 	"/run/lock",
 	"/tmp",
@@ -265,9 +265,9 @@ var sysboxSystemdExposedPaths = []string{
 	"/sys/kernel/tracing",
 }
 
-// sysboxRwPaths list the paths within the sys container's rootfs
+// syscontRwPaths list the paths within the sys container's rootfs
 // that must have read-write permission
-var sysboxSystemdRwPaths = []string{
+var syscontSystemdRwPaths = []string{
 	"/run",
 	"/run/lock",
 	"/tmp",
@@ -519,27 +519,26 @@ func cfgCapabilities(p *specs.Process) {
 // sysbox-fs will handle accesses.
 func cfgMaskedPaths(spec *specs.Spec) {
 	if systemdInit(spec.Process) {
-		spec.Linux.MaskedPaths = utils.StringSliceRemove(spec.Linux.MaskedPaths, sysboxSystemdExposedPaths)
+		spec.Linux.MaskedPaths = utils.StringSliceRemove(spec.Linux.MaskedPaths, syscontSystemdExposedPaths)
 	}
-	spec.Linux.MaskedPaths = utils.StringSliceRemove(spec.Linux.MaskedPaths, sysboxExposedPaths)
+	spec.Linux.MaskedPaths = utils.StringSliceRemove(spec.Linux.MaskedPaths, syscontExposedPaths)
 }
 
 // cfgReadonlyPaths removes from the container's config any read-only paths
 // that must be read-write in the system container
 func cfgReadonlyPaths(spec *specs.Spec) {
 	if systemdInit(spec.Process) {
-		spec.Linux.ReadonlyPaths = utils.StringSliceRemove(spec.Linux.ReadonlyPaths, sysboxSystemdRwPaths)
+		spec.Linux.ReadonlyPaths = utils.StringSliceRemove(spec.Linux.ReadonlyPaths, syscontSystemdRwPaths)
 	}
-	spec.Linux.ReadonlyPaths = utils.StringSliceRemove(spec.Linux.ReadonlyPaths, sysboxRwPaths)
+	spec.Linux.ReadonlyPaths = utils.StringSliceRemove(spec.Linux.ReadonlyPaths, syscontRwPaths)
 }
 
 // cfgMounts configures the system container mounts
 func cfgMounts(spec *specs.Spec, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs, rootfsUidShiftType sh.IDShiftType) error {
 
-	// If we will chown the container's rootfs, then ensure the rootfs mount has
-	// the desired config (e.g., if rootfs is on overlay2, we want metacopy=on).
-
-	cfgSysboxMounts(spec)
+	if sysMgr.Config.SyscontMode {
+		cfgSyscontMounts(spec)
+	}
 
 	if sysFs.Enabled() {
 		cfgSysboxFsMounts(spec, sysFs)
@@ -551,7 +550,7 @@ func cfgMounts(spec *specs.Spec, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs, rootfsUid
 		}
 	}
 
-	if systemdInit(spec.Process) {
+	if systemdInit(spec.Process) && sysMgr.Config.SyscontMode {
 		cfgSystemdMounts(spec)
 	}
 
@@ -560,9 +559,9 @@ func cfgMounts(spec *specs.Spec, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs, rootfsUid
 	return nil
 }
 
-// cfgSysboxMounts adds Sysbox required mounts to the sys container's spec; if the spec
-// has conflicting mounts, these are replaced with Sysbox's mounts.
-func cfgSysboxMounts(spec *specs.Spec) {
+// cfgSyscontMounts adds mounts required by sys containers; if the spec
+// has conflicting mounts, these are replaced with the required ones.
+func cfgSyscontMounts(spec *specs.Spec) {
 
 	// Disallow mounts under the container's /sys/fs/cgroup/* (i.e., Sysbox sets those up)
 	var cgroupMounts = []specs.Mount{
@@ -576,7 +575,7 @@ func cfgSysboxMounts(spec *specs.Spec) {
 	})
 
 	// Remove other conflicting mounts
-	spec.Mounts = utils.MountSliceRemove(spec.Mounts, sysboxMounts, func(m1, m2 specs.Mount) bool {
+	spec.Mounts = utils.MountSliceRemove(spec.Mounts, syscontMounts, func(m1, m2 specs.Mount) bool {
 		return m1.Destination == m2.Destination
 	})
 
@@ -585,22 +584,23 @@ func cfgSysboxMounts(spec *specs.Spec) {
 	if spec.Root.Readonly {
 		tmpMounts := []specs.Mount{}
 		rwOpt := []string{"rw"}
-		for _, m := range sysboxMounts {
+		for _, m := range syscontMounts {
 			if strings.HasPrefix(m.Destination, "/sys") {
 				m.Options = utils.StringSliceRemove(m.Options, rwOpt)
 				m.Options = append(m.Options, "ro")
 			}
 			tmpMounts = append(tmpMounts, m)
 		}
-		sysboxMounts = tmpMounts
+		syscontMounts = tmpMounts
 	}
 
 	// Add sysbox mounts
-	spec.Mounts = append(spec.Mounts, sysboxMounts...)
+	spec.Mounts = append(spec.Mounts, syscontMounts...)
 }
 
-// cfgSysboxFsMounts adds the sysbox-fs mounts to the containers config.
+// cfgSysboxFsMounts adds the sysbox-fs mounts to the container's config.
 func cfgSysboxFsMounts(spec *specs.Spec, sysFs *sysbox.Fs) {
+
 	spec.Mounts = utils.MountSliceRemove(spec.Mounts, sysboxFsMounts, func(m1, m2 specs.Mount) bool {
 		return m1.Destination == m2.Destination
 	})
@@ -645,15 +645,15 @@ func cfgSystemdMounts(spec *specs.Spec) {
 	// already has tmpfs mounts over any of these directories, we honor the spec mounts
 	// (i.e., these override the sysbox mount).
 
-	spec.Mounts = utils.MountSliceRemove(spec.Mounts, sysboxSystemdMounts, func(m1, m2 specs.Mount) bool {
+	spec.Mounts = utils.MountSliceRemove(spec.Mounts, syscontSystemdMounts, func(m1, m2 specs.Mount) bool {
 		return m1.Destination == m2.Destination && m1.Type != "tmpfs"
 	})
 
-	sysboxSystemdMounts = utils.MountSliceRemove(sysboxSystemdMounts, spec.Mounts, func(m1, m2 specs.Mount) bool {
+	syscontSystemdMounts = utils.MountSliceRemove(syscontSystemdMounts, spec.Mounts, func(m1, m2 specs.Mount) bool {
 		return m1.Destination == m2.Destination && m2.Type == "tmpfs"
 	})
 
-	spec.Mounts = append(spec.Mounts, sysboxSystemdMounts...)
+	spec.Mounts = append(spec.Mounts, syscontSystemdMounts...)
 }
 
 // Function parses any given 'file' looking for an 'attr' field. For the parsing
@@ -800,7 +800,7 @@ func getSpecialDirs(spec *specs.Spec) (map[string]ipcLib.MntKind, error) {
 	return specialDirMap, nil
 }
 
-// sysMgrSetupMounts requests the sysbox-mgr to setup special sys container mounts.
+// sysMgrSetupMounts requests the sysbox-mgr to setup special container mounts.
 func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, rootfsUidShiftType sh.IDShiftType) error {
 
 	// Obtain map of Sysbox's special directories.
@@ -839,8 +839,14 @@ func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, rootfsUidShiftType sh.
 		}
 	}
 
-	// Otherwise, add the special dir to the list of mounts that we will request
-	// sysbox-mgr to setup. Sysbox-mgr will setup host dirs to back the mounts in the
+	// If we are not in sys container mode, skip setting up the implicit sysbox-mgr
+	// mounts.
+	if !mgr.Config.SyscontMode {
+		return nil
+	}
+
+	// Add the special dirs to the list of mounts that we will request sysbox-mgr
+	// to setup. Sysbox-mgr will setup host dirs to back the mounts in the
 	// request list; it will also send us any other mounts it needs.
 
 	rootPath, err := filepath.Abs(spec.Root.Path)
@@ -966,13 +972,14 @@ func checkSpec(spec *specs.Spec) error {
 	return nil
 }
 
-// applySysboxEnvVarConfigs applies the effect of the SYSBOX_* env vars passed to the container.
-func applySysboxEnvVarConfigs(p *specs.Process, sysMgr *sysbox.Mgr) error {
+// getSysboxEnvVarConfigs collects the SYSBOX_* env vars passed to the container.
+func getSysboxEnvVarConfigs(p *specs.Process, sysMgr *sysbox.Mgr) error {
 
 	knownEnvVars := []string{
 		"SYSBOX_IGNORE_SYSFS_CHOWN",
 		"SYSBOX_ALLOW_TRUSTED_XATTR",
 		"SYSBOX_HONOR_CAPS",
+		"SYSBOX_SYSCONT_MODE",
 	}
 
 	for _, ev := range p.Env {
@@ -1005,20 +1012,22 @@ func applySysboxEnvVarConfigs(p *specs.Process, sysMgr *sysbox.Mgr) error {
 			sysMgr.Config.AllowTrustedXattr = (evVal == "TRUE")
 		case "SYSBOX_HONOR_CAPS":
 			sysMgr.Config.HonorCaps = (evVal == "TRUE")
+		case "SYSBOX_SYSCONT_MODE":
+			sysMgr.Config.SyscontMode = (evVal == "TRUE")
 		}
-
 	}
 
 	return nil
 }
 
-// removeSysboxEnvVarsForExec removes the SYSBOX_* env vars meant to be
-// per-container (rather than per-process) from the given process spec
+// removeSysboxEnvVarsForExec removes the SYSBOX_* env vars from the process spec.
+// It only does this for env vars meant to be per-container (rather than per-process).
 func removeSysboxEnvVarsForExec(p *specs.Process) {
 	env := []string{}
 	for _, envVar := range p.Env {
 		if !strings.HasPrefix(envVar, "SYSBOX_IGNORE_SYSFS_CHOWN=") &&
-			!strings.HasPrefix(envVar, "SYSBOX_ALLOW_TRUSTED_XATTR=") {
+			!strings.HasPrefix(envVar, "SYSBOX_ALLOW_TRUSTED_XATTR=") &&
+			!strings.HasPrefix(envVar, "SYSBOX_SYSCONT_MODE=") {
 			env = append(env, envVar)
 		}
 	}
@@ -1211,7 +1220,7 @@ func cfgSystemdEnv(p *specs.Process) {
 		if err != nil {
 			return false
 		}
-		for _, sysboxSysdEnvVar := range sysboxSystemdEnvVars {
+		for _, sysboxSysdEnvVar := range syscontSystemdEnvVars {
 			sname, _, err := utils.GetEnvVarInfo(sysboxSysdEnvVar)
 			if err == nil && name == sname {
 				return true
@@ -1220,7 +1229,7 @@ func cfgSystemdEnv(p *specs.Process) {
 		return false
 	})
 
-	p.Env = append(p.Env, sysboxSystemdEnvVars...)
+	p.Env = append(p.Env, syscontSystemdEnvVars...)
 }
 
 // systemdInit returns true if the sys container is running systemd
@@ -1233,21 +1242,22 @@ func ConvertProcessSpec(p *specs.Process, sysMgr *sysbox.Mgr, isExec bool) error
 
 	if isExec {
 		removeSysboxEnvVarsForExec(p)
+		if err := getSysboxEnvVarConfigs(p, sysMgr); err != nil {
+			return err
+		}
 	}
 
-	if err := applySysboxEnvVarConfigs(p, sysMgr); err != nil {
-		return err
-	}
-
-	if !sysMgr.Config.HonorCaps {
+	if sysMgr.Config.SyscontMode && !sysMgr.Config.HonorCaps {
 		cfgCapabilities(p)
 	}
 
-	if err := cfgAppArmor(p); err != nil {
-		return fmt.Errorf("failed to configure AppArmor profile: %v", err)
+	if sysMgr.Config.SyscontMode {
+		if err := cfgAppArmor(p); err != nil {
+			return fmt.Errorf("failed to configure AppArmor profile: %v", err)
+		}
 	}
 
-	if systemdInit(p) {
+	if systemdInit(p) && sysMgr.Config.SyscontMode {
 		cfgSystemdEnv(p)
 	}
 
@@ -1259,6 +1269,10 @@ func ConvertSpec(context *cli.Context,
 	sysMgr *sysbox.Mgr,
 	sysFs *sysbox.Fs,
 	spec *specs.Spec) (sh.IDShiftType, sh.IDShiftType, bool, error) {
+
+	if err := getSysboxEnvVarConfigs(spec.Process, sysMgr); err != nil {
+		return sh.NoShift, sh.NoShift, false, err
+	}
 
 	if err := checkSpec(spec); err != nil {
 		return sh.NoShift, sh.NoShift, false, fmt.Errorf("invalid or unsupported container spec: %v", err)
@@ -1290,16 +1304,21 @@ func ConvertSpec(context *cli.Context,
 		return sh.NoShift, sh.NoShift, false, fmt.Errorf("invalid mount config: %v", err)
 	}
 
-	cfgMaskedPaths(spec)
-	cfgReadonlyPaths(spec)
+	if sysMgr.Config.SyscontMode {
+		cfgMaskedPaths(spec)
+		cfgReadonlyPaths(spec)
+	}
+
 	cfgOomScoreAdj(spec)
 
 	if err := ConvertProcessSpec(spec.Process, sysMgr, false); err != nil {
 		return sh.NoShift, sh.NoShift, false, fmt.Errorf("failed to configure process spec: %v", err)
 	}
 
-	if err := cfgSeccomp(spec.Linux.Seccomp); err != nil {
-		return sh.NoShift, sh.NoShift, false, fmt.Errorf("failed to configure seccomp: %v", err)
+	if sysMgr.Config.SyscontMode {
+		if err := cfgSeccomp(spec.Linux.Seccomp); err != nil {
+			return sh.NoShift, sh.NoShift, false, fmt.Errorf("failed to configure seccomp: %v", err)
+		}
 	}
 
 	cfgSyscallTraps(sysMgr)
