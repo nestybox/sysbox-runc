@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 package libcontainer
@@ -223,6 +224,7 @@ func prepareBindDest(m *configs.Mount, absDestPath bool, config *configs.Config,
 }
 
 func mountCgroupV1(m *configs.Mount, enableCgroupns bool, config *configs.Config, pipe io.ReadWriter) error {
+
 	binds, err := getCgroupMounts(m)
 	if err != nil {
 		return err
