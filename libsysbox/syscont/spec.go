@@ -343,7 +343,7 @@ func cfgNamespaces(sysMgr *sysbox.Mgr, spec *specs.Spec) error {
 	}
 
 	if !reqNsSet.IsSubset(specNsSet) {
-		return fmt.Errorf("container spec missing namespaces %v", reqNsSet.Difference(specNsSet))
+		return fmt.Errorf("sysbox containers can't share namespaces %v with the host (because they use the linux user-namespace for isolation)", reqNsSet.Difference(specNsSet).ToSlice())
 	}
 
 	addNsSet := allNsSet.Difference(specNsSet)
@@ -1279,7 +1279,7 @@ func ConvertSpec(context *cli.Context,
 	}
 
 	if err := cfgNamespaces(sysMgr, spec); err != nil {
-		return sh.NoShift, sh.NoShift, false, fmt.Errorf("invalid namespace config: %v", err)
+		return sh.NoShift, sh.NoShift, false, fmt.Errorf("invalid or unsupported container spec: %v", err)
 	}
 
 	if err := cfgIDMappings(sysMgr, spec); err != nil {
