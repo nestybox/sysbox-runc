@@ -14,6 +14,7 @@
 // limitations under the License.
 //
 
+//go:build linux
 // +build linux
 
 package syscont
@@ -366,26 +367,32 @@ var syscontSyscallAllowRestrList = []string{
 	"personality",
 }
 
-// List of syscalls trapped & emulated inside a system container
+// Base list of syscalls that are always trapped & emulated inside a Sysbox
+// container (regardless of whether it's operating in sys container mode or
+// not); more syscalls may be added when Sysbox operates in system container
+// mode (see cfgSyscontSyscallTraps() in spec.go).
 //
-// NOTE: all of these must also be in the syscontSyscallWhitelist, as otherwise seccomp
-// will block them.
-var syscontSyscallTrapList = []string{
+// NOTE: the seccomp filter that blocks syscalls has precedence over the seccomp
+// filter that traps them. For example, when syscontMode=false, mount and
+// umount2 are typically blocked by containers managers (e.g., Docker) so they
+// won't be trapped; but when syscontMode=true, then the syscontSyscallWhitelist
+// above will unblock them and therefore they will be trapped by Sysbox.
+var syscallTrapList = []string{
 	"mount",
 	"umount2",
 }
 
-// AddSyscallTraps modifies the given libcontainer config to add seccomp notification
-// actions for syscall trapping
+// AddSyscallTraps modifies the given libcontainer config to add seccomp-notification
+// actions (for syscall trapping)
 func AddSyscallTraps(config *configs.Config) error {
 
 	if config.SeccompNotif != nil {
 		return fmt.Errorf("conflicting seccomp notification config found.")
 	}
 
-	if len(syscontSyscallTrapList) > 0 {
+	if len(syscallTrapList) > 0 {
 		list := []*configs.Syscall{}
-		for _, call := range syscontSyscallTrapList {
+		for _, call := range syscallTrapList {
 			s := &configs.Syscall{
 				Name:   call,
 				Action: configs.Notify,

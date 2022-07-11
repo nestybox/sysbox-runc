@@ -1155,14 +1155,14 @@ func cfgSeccomp(seccomp *specs.LinuxSeccomp) error {
 	return nil
 }
 
-// Configures which syscalls are trapped by Sysbox inside the container
-func cfgSyscallTraps(sysMgr *sysbox.Mgr) {
+// Configures which syscalls are trapped by Sysbox inside a system container
+func cfgSyscontSyscallTraps(sysMgr *sysbox.Mgr) {
 
 	if sysMgr.Config.IgnoreSysfsChown {
 		chownSyscalls := []string{
 			"chown", "fchown", "fchownat",
 		}
-		syscontSyscallTrapList = append(syscontSyscallTrapList, chownSyscalls...)
+		syscallTrapList = append(syscallTrapList, chownSyscalls...)
 	}
 
 	if sysMgr.Config.AllowTrustedXattr {
@@ -1172,7 +1172,7 @@ func cfgSyscallTraps(sysMgr *sysbox.Mgr) {
 			"removexattr", "lremovexattr", "fremovexattr",
 			"listxattr", "llistxattr", "flistxattr",
 		}
-		syscontSyscallTrapList = append(syscontSyscallTrapList, xattrSyscalls...)
+		syscallTrapList = append(syscallTrapList, xattrSyscalls...)
 	}
 }
 
@@ -1321,7 +1321,9 @@ func ConvertSpec(context *cli.Context,
 		}
 	}
 
-	cfgSyscallTraps(sysMgr)
+	if sysMgr.Config.SyscontMode {
+		cfgSyscontSyscallTraps(sysMgr)
+	}
 
 	return rootfsUidShiftType, bindMntUidShiftType, rootfsCloned, nil
 }
