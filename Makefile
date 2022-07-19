@@ -79,17 +79,17 @@ else
 	BUILDTAGS ?= seccomp apparmor
 endif
 
-IMAGE_BASE_DISTRO := $(shell lsb_release -is | tr '[:upper:]' '[:lower:]')
+IMAGE_BASE_DISTRO := $(shell cat /etc/os-release | grep "^ID=" | cut -d "=" -f2 | tr -d '"')
 
 # Identify kernel-headers path if not previously defined. Notice that this logic is already
 # present in Sysbox's Makefile; we are duplicating it here to keep sysbox-runc as independent
 # as possible. If KERNEL_HEADERS is not already defined, we will assume that the same applies
 # to all related variables declared below.
 ifeq ($(IMAGE_BASE_DISTRO),$(filter $(IMAGE_BASE_DISTRO),centos fedora redhat almalinux rocky))
-	IMAGE_BASE_RELEASE := $(shell lsb_release -ds | tr -dc '0-9.' | cut -d'.' -f1)
+	IMAGE_BASE_RELEASE := $(shell cat /etc/os-release | grep "^VERSION_ID" | cut -d "=" -f2 | tr -d '"' | cut -d "." -f1)
 	KERNEL_HEADERS := kernels/$(KERNEL_REL)
 else
-	IMAGE_BASE_RELEASE := $(shell lsb_release -cs)
+	IMAGE_BASE_RELEASE := $(shell cat /etc/os-release | grep "^VERSION_CODENAME" | cut -d "=" -f2)
 	ifeq ($(IMAGE_BASE_DISTRO),linuxmint)
 		IMAGE_BASE_DISTRO := ubuntu
 		ifeq ($(IMAGE_BASE_RELEASE),$(filter $(IMAGE_BASE_RELEASE),ulyana ulyssa uma))
