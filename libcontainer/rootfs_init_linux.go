@@ -359,8 +359,10 @@ func (l *linuxRootfsInit) Init() error {
 		defer unix.Unmount("/proc", unix.MNT_DETACH)
 
 		usernsPath := "/proc/1/ns/user"
+		fsuidMapFailOnErr := l.reqs[0].FsuidMapFailOnErr
 
 		for _, req := range l.reqs {
+
 			m := &req.Mount
 			mountLabel := req.Label
 
@@ -392,12 +394,12 @@ func (l *linuxRootfsInit) Init() error {
 			// Set up the ID-mapping as needed
 			if m.IDMappedMount {
 				if err := libcontainerUtils.WithProcfd(rootfs, m.Destination, func(procfd string) error {
-					if err := idMap.IDMapMount(usernsPath, procfd, true); err != nil {
+					if err := idMap.IDMapMount(usernsPath, procfd, true); err != nil && fsuidMapFailOnErr {
 						fsName, _ := utils.GetFsName(procfd)
 						realpath, _ := os.Readlink(procfd)
-						return newSystemErrorWithCausef(err,
-							"setting up ID-mapped mount on path %s (likely means idmapped mounts are not supported on the filesystem at this path (%s))",
-							realpath, fsName)
+						return fmt.Errorf("setting up ID-mapped mount on path %s failed with %s "+
+							"(likely means idmapped mounts are not supported on the filesystem at this path (%s))",
+							realpath, err, fsName)
 					}
 					return nil
 				}); err != nil {

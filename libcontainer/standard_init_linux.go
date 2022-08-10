@@ -40,9 +40,10 @@ const (
 )
 
 type opReq struct {
-	Op      opReqType `json:"type"`
-	Rootfs  string    `json:"rootfs"`
-	InitPid int       `json:"init_pid"`
+	Op                opReqType `json:"type"`
+	Rootfs            string    `json:"rootfs"`
+	InitPid           int       `json:"init_pid"`
+	FsuidMapFailOnErr bool      `json:"fsuid_map_fail_on_err"`
 
 	// bind
 	Mount configs.Mount `json:"mount"`

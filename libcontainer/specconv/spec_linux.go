@@ -206,6 +206,7 @@ type CreateOpts struct {
 	BindMntUidShiftType sh.IDShiftType
 	SwitchDockerDns     bool
 	RootfsCloned        bool
+	FsuidMapFailOnErr   bool
 }
 
 // CreateLibcontainerConfig creates a new libcontainer configuration from a
@@ -245,6 +246,7 @@ func CreateLibcontainerConfig(opts *CreateOpts) (*configs.Config, error) {
 		BindMntUidShiftType: opts.BindMntUidShiftType,
 		SwitchDockerDns:     opts.SwitchDockerDns,
 		RootfsCloned:        opts.RootfsCloned,
+		FsuidMapFailOnErr:   opts.FsuidMapFailOnErr,
 	}
 
 	for _, m := range spec.Mounts {
