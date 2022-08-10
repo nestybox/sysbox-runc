@@ -236,6 +236,9 @@ type Config struct {
 
 	// Indicates if the rootfs was cloned by the sysbox-mgr.
 	RootfsCloned bool `json:"rootfs_cloned"`
+
+	// Indicates if container setup should fail when we detect a filesystem uid mapping error
+	FsuidMapFailOnErr bool `json:"fsuid_map_fail_on_err"`
 }
 
 type HookName string

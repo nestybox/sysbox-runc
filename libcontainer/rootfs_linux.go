@@ -554,10 +554,11 @@ func doBindMounts(config *configs.Config, pipe io.ReadWriter) error {
 		}
 
 		req := opReq{
-			Op:     bind,
-			Mount:  *m,
-			Label:  config.MountLabel,
-			Rootfs: config.Rootfs,
+			Op:                bind,
+			Mount:             *m,
+			Label:             config.MountLabel,
+			Rootfs:            config.Rootfs,
+			FsuidMapFailOnErr: config.FsuidMapFailOnErr,
 		}
 
 		mntReqs = append(mntReqs, req)

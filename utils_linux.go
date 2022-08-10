@@ -319,6 +319,7 @@ func createContainer(context *cli.Context,
 		BindMntUidShiftType: bindMntUidShiftType,
 		SwitchDockerDns:     switchDockerDns,
 		RootfsCloned:        rootfsCloned,
+		FsuidMapFailOnErr:   sysMgr.Config.FsuidMapFailOnErr,
 	})
 	if err != nil {
 		return nil, err
