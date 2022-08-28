@@ -179,8 +179,8 @@ var sysboxFsMounts = []specs.Mount{
 		Options:     []string{"rbind", "rprivate"},
 	},
 	specs.Mount{
-		Destination: "/sys/devices/virtual/dmi/id/product_uuid",
-		Source:      filepath.Join(SysboxFsDir, "sys/devices/virtual/dmi/id/product_uuid"),
+		Destination: "/sys/devices/virtual/dmi/id",
+		Source:      filepath.Join(SysboxFsDir, "sys/devices/virtual/dmi/id"),
 		Type:        "bind",
 		Options:     []string{"rbind", "rprivate"},
 	},
