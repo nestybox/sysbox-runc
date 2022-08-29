@@ -14,6 +14,7 @@ import (
 	securejoin "github.com/cyphar/filepath-securejoin"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/selinux/go-selinux/label"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
 	"github.com/nestybox/sysbox-libs/idMap"
@@ -394,12 +395,19 @@ func (l *linuxRootfsInit) Init() error {
 			// Set up the ID-mapping as needed
 			if m.IDMappedMount {
 				if err := libcontainerUtils.WithProcfd(rootfs, m.Destination, func(procfd string) error {
-					if err := idMap.IDMapMount(usernsPath, procfd, true); err != nil && fsuidMapFailOnErr {
+					if err := idMap.IDMapMount(usernsPath, procfd, true); err != nil {
 						fsName, _ := utils.GetFsName(procfd)
 						realpath, _ := os.Readlink(procfd)
-						return fmt.Errorf("setting up ID-mapped mount on path %s failed with %s "+
+
+						errMsg := fmt.Sprintf("setting up ID-mapped mount on path %s failed with %s "+
 							"(likely means idmapped mounts are not supported on the filesystem at this path (%s))",
 							realpath, err, fsName)
+
+						if fsuidMapFailOnErr {
+							return fmt.Errorf(errMsg)
+						} else {
+							logrus.Warnf(errMsg)
+						}
 					}
 					return nil
 				}); err != nil {
