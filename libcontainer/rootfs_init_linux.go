@@ -97,7 +97,7 @@ func doBindMount(rootfs string, m *configs.Mount) error {
 	// Bind-mount with procfd to mitigate symlink exchange attacks.
 
 	if err := libcontainerUtils.WithProcfd(rootfs, m.Destination, func(procfd string) error {
-		if err := unix.Mount(m.Source, procfd, "", unix.MS_BIND|unix.MS_REC, ""); err != nil {
+		if err := unix.Mount(m.Source, procfd, "", unix.MS_BIND|unix.MS_REC, ""); os.IsPermission(err) {
 
 			// We've noticed that the lstat and/or mount syscall fails with EPERM when
 			// bind-mounting a source dir that is on a shiftfs mount on top of a tmpfs
@@ -109,6 +109,8 @@ func doBindMount(rootfs string, m *configs.Mount) error {
 				realpath, _ := os.Readlink(procfd)
 				return fmt.Errorf("bind-mount of %s to %s failed: %v", m.Source, realpath, err)
 			}
+		} else if err != nil {
+			return err
 		}
 		return nil
 	}); err != nil {
