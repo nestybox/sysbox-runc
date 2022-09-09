@@ -179,8 +179,8 @@ var sysboxFsMounts = []specs.Mount{
 		Options:     []string{"rbind", "rprivate"},
 	},
 	specs.Mount{
-		Destination: "/sys/devices/virtual/dmi/id",
-		Source:      filepath.Join(SysboxFsDir, "sys/devices/virtual/dmi/id"),
+		Destination: "/sys/devices/virtual",
+		Source:      filepath.Join(SysboxFsDir, "sys/devices/virtual"),
 		Type:        "bind",
 		Options:     []string{"rbind", "rprivate"},
 	},
@@ -645,7 +645,6 @@ func cfgSystemdMounts(spec *specs.Spec) {
 //
 // - Docker -> "data-root": "/var/lib/docker",
 // - RKE2   -> "data-dir": "/var/lib/rancher/rke2",
-//
 func getFileAttrValue(file, attr string) (string, error) {
 
 	f, err := os.Open(file)
