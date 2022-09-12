@@ -88,7 +88,9 @@ var syscontMounts = []specs.Mount{
 	},
 }
 
-// container mounts virtualized by sysbox-fs
+// Container mounts virtualized by sysbox-fs
+//
+// TODO: in the future get these from sysbox-fs via grpc
 var sysboxFsMounts = []specs.Mount{
 	//
 	// procfs mounts
@@ -185,8 +187,8 @@ var sysboxFsMounts = []specs.Mount{
 		Options:     []string{"rbind", "rprivate"},
 	},
 	specs.Mount{
-		Destination: "/sys/module/nf_conntrack/parameters/hashsize",
-		Source:      filepath.Join(SysboxFsDir, "sys/module/nf_conntrack/parameters/hashsize"),
+		Destination: "/sys/module/nf_conntrack/parameters",
+		Source:      filepath.Join(SysboxFsDir, "sys/module/nf_conntrack/parameters"),
 		Type:        "bind",
 		Options:     []string{"rbind", "rprivate"},
 	},
