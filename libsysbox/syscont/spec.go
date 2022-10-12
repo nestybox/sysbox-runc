@@ -564,6 +564,18 @@ func cfgSyscontMounts(spec *specs.Spec) {
 		return m1.Destination == m2.Destination
 	})
 
+	// Remove devices that conflict with sysbox mounts (e.g., /dev/kmsg)
+	specDevs := []specs.LinuxDevice{}
+	for _, dev := range spec.Linux.Devices {
+		m := specs.Mount{Destination: dev.Path}
+		if !utils.MountSliceContains(syscontMounts, m, func(m1, m2 specs.Mount) bool {
+			return m1.Destination == m2.Destination
+		}) {
+			specDevs = append(specDevs, dev)
+		}
+	}
+	spec.Linux.Devices = specDevs
+
 	// If the container's rootfs is read-only, then sysbox mounts of /sys and
 	// below should also be read-only.
 	if spec.Root.Readonly {
