@@ -248,11 +248,11 @@ func doDockerDnsSwitch(oldDns, newDns string) error {
 	return nil
 }
 
-// sysbox-runc:
-// Init performs container's rootfs initialization actions from within specific
-// container namespaces. By virtue of entering to an individual namespace (i.e.
-// 'mount' or 'network' ns), Init has true root-level access to the host and thus
-// can perform operations that the container's init process is not allowed to.
+// sysbox-runc: Init performs container's rootfs initialization actions from
+// within specific container namespaces. By virtue of entering to an individual
+// namespace (e.g.  'mount' or 'network' ns), Init has true root-level access to
+// the host and thus can perform operations that the container's init process
+// may not have permissions to do.
 func (l *linuxRootfsInit) Init() error {
 
 	if len(l.reqs) == 0 {
@@ -262,6 +262,30 @@ func (l *linuxRootfsInit) Init() error {
 	// If multiple requests are passed in the slice, they must all be
 	// of the same type.
 	switch l.reqs[0].Op {
+
+	case rootfsIDMap:
+		// The mount requests assume that the process cwd is the rootfs directory
+		rootfs := l.reqs[0].Rootfs
+		if err := unix.Chdir(rootfs); err != nil {
+			return newSystemErrorWithCausef(err, "chdir to rootfs %s", rootfs)
+		}
+
+		// We are in the pid and mount ns of the container's init process; remount
+		// /proc so that it picks up this fact.
+		os.Lstat("/proc")
+		if err := unix.Mount("proc", "/proc", "proc", 0, ""); err != nil {
+			return newSystemErrorWithCause(err, "re-mounting procfs")
+		}
+		defer unix.Unmount("/proc", unix.MNT_DETACH)
+
+		usernsPath := "/proc/1/ns/user"
+
+		if err := sh.IDMapMount(usernsPath, rootfs); err != nil {
+			fsName, _ := utils.GetFsName(rootfs)
+			return newSystemErrorWithCausef(err,
+				"setting up ID-mapped mount on path %s (likely means idmapped mounts are not supported on the filesystem at this path (%s))",
+				rootfs, fsName)
+		}
 
 	case bind:
 		// The mount requests assume that the process cwd is the rootfs directory

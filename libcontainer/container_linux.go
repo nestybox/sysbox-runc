@@ -275,7 +275,9 @@ func (c *linuxContainer) Start(process *Process) error {
 	c.m.Lock()
 	defer c.m.Unlock()
 
-	if c.config.Cgroups.Resources.SkipDevices {
+	config := c.config
+
+	if config.Cgroups.Resources.SkipDevices {
 		return newGenericError(errors.New("can't start container with SkipDevices set"), ConfigInvalid)
 	}
 
@@ -284,12 +286,15 @@ func (c *linuxContainer) Start(process *Process) error {
 			return err
 		}
 
-		// Set up ID-shifting for rootfs and bind-mounts
+		//
+		// Set up ID-shifting for the rootfs and bind-mounts
+		//
 
-		if c.config.RootfsUidShiftType == sh.Chown {
-			if c.config.RootfsCloned {
-				uidOffset := int32(c.config.UidMappings[0].HostID)
-				gidOffset := int32(c.config.GidMappings[0].HostID)
+		// Chown (rootfs only)
+		if config.RootfsUidShiftType == sh.Chown {
+			if config.RootfsCloned {
+				uidOffset := int32(config.UidMappings[0].HostID)
+				gidOffset := int32(config.GidMappings[0].HostID)
 				if err := c.sysMgr.ChownClonedRootfs(uidOffset, gidOffset); err != nil {
 					return newSystemErrorWithCause(err, "failed to chown rootfs clone")
 				}
@@ -300,24 +305,14 @@ func (c *linuxContainer) Start(process *Process) error {
 			}
 		}
 
-		if c.config.BindMntUidShiftType == sh.IDMappedMount ||
-			c.config.BindMntUidShiftType == sh.IDMappedMountOrShiftfs {
-			if err := c.setupIDMappedMounts(); err != nil {
-				return err
-			}
+		// ID-mapping
+		if err := c.setupIDMappedMounts(); err != nil {
+			return err
 		}
 
-		if c.config.RootfsUidShiftType == sh.Shiftfs ||
-			c.config.BindMntUidShiftType == sh.Shiftfs ||
-			c.config.BindMntUidShiftType == sh.IDMappedMountOrShiftfs {
-			mounts, err := mount.GetMounts()
-			if err != nil {
-				return fmt.Errorf("failed to read mountinfo: %s", err)
-			}
-
-			if err := c.setupShiftfsMarks(mounts); err != nil {
-				return err
-			}
+		// Shiftfs (will only act if mount is not marked for ID-mapping already)
+		if err := c.setupShiftfsMarks(); err != nil {
+			return err
 		}
 	}
 
@@ -2425,7 +2420,7 @@ func (c *linuxContainer) handleReqOp(childPid int, reqs []opReq) error {
 	// of the same type.
 	op := reqs[0].Op
 
-	if op != bind && op != switchDockerDns && op != chown && op != mkdir {
+	if op != bind && op != switchDockerDns && op != chown && op != mkdir && op != rootfsIDMap {
 		return newSystemError(fmt.Errorf("invalid opReq type %d", int(op)))
 	}
 
@@ -2474,7 +2469,7 @@ func (c *linuxContainer) handleOp(op opReqType, childPid int, reqs []opReq) erro
 	namespaces := []string{}
 
 	switch op {
-	case bind, chown, mkdir:
+	case bind, chown, mkdir, rootfsIDMap:
 		namespaces = append(namespaces,
 			fmt.Sprintf("mnt:/proc/%d/ns/mnt", childPid),
 			fmt.Sprintf("pid:/proc/%d/ns/pid", childPid),
@@ -2573,17 +2568,23 @@ func (c *linuxContainer) procSeccompInit(pid int, fd int32) error {
 }
 
 // sysbox-runc: sets up the shiftfs marks for the container
-func (c *linuxContainer) setupShiftfsMarks(mi []*mount.Info) error {
+func (c *linuxContainer) setupShiftfsMarks() error {
+
+	mi, err := mount.GetMounts()
+	if err != nil {
+		return fmt.Errorf("failed to read mountinfo: %s", err)
+	}
 
 	config := c.config
 	shiftfsMounts := []configs.ShiftfsMount{}
 
-	if config.RootfsUidShiftType == sh.Shiftfs {
+	// rootfs
+	if config.RootfsUidShiftType == sh.Shiftfs ||
+		config.RootfsUidShiftType == sh.IDMappedMountOrShiftfs {
 		shiftfsMounts = append(shiftfsMounts, configs.ShiftfsMount{Source: config.Rootfs, Readonly: false})
 	}
 
-	// Determine if other host directories mounted into the container's rootfs
-	// need uid shifting.
+	// bind-mounts
 	if config.BindMntUidShiftType == sh.Shiftfs ||
 		config.BindMntUidShiftType == sh.IDMappedMountOrShiftfs {
 
@@ -2826,33 +2827,47 @@ func skipShiftfsBindSource(source string) bool {
 }
 
 // sysbox-runc: determines which mounts must be ID-mapped; does not actually
-// perform the ID-mapped mounts, simply adds the list of ID-mapped mounts to the
-// config.
+// perform the ID-mapped mounts (that's done inside the container, see
+// rootfs_init_linux.go) but rather marks the mount for ID-mapping only.
 func (c *linuxContainer) setupIDMappedMounts() error {
 
 	config := c.config
 
-	// Determine if other host directories mounted into the container's rootfs
-	// need ID-mapping.
+	// rootfs
+	if config.RootfsUidShiftType == sh.IDMappedMount ||
+		config.RootfsUidShiftType == sh.IDMappedMountOrShiftfs {
+		idMapMountAllowed, err := sh.IDMapMountSupportedOnPath(config.Rootfs)
+		if err != nil {
+			return newSystemErrorWithCausef(err, "checking for ID-mapped mount support on rootfs %s", config.Rootfs)
+		}
+		if idMapMountAllowed {
+			config.RootfsUidShiftType = sh.IDMappedMount
+		}
+	}
 
-	for _, m := range config.Mounts {
-		if m.Device == "bind" {
+	// bind-mounts
+	if config.BindMntUidShiftType == sh.IDMappedMount ||
+		config.BindMntUidShiftType == sh.IDMappedMountOrShiftfs {
 
-			idMapMntAllowed, err := sh.IDMapMountSupportedOnPath(m.Source)
-			if err != nil {
-				return newSystemErrorWithCausef(err, "checking for ID-mapped mount support on bind source %s", m.Source)
+		for _, m := range config.Mounts {
+			if m.Device == "bind" {
+
+				idMapMntAllowed, err := sh.IDMapMountSupportedOnPath(m.Source)
+				if err != nil {
+					return newSystemErrorWithCausef(err, "checking for ID-mapped mount support on bind source %s", m.Source)
+				}
+
+				if !idMapMntAllowed {
+					continue
+				}
+
+				needIDMap, err := needUidShiftOnBindSrc(m, config)
+				if err != nil {
+					return newSystemErrorWithCause(err, "checking uid shifting on bind source")
+				}
+
+				m.IDMappedMount = needIDMap
 			}
-
-			if !idMapMntAllowed {
-				continue
-			}
-
-			needIDMap, err := needUidShiftOnBindSrc(m, config)
-			if err != nil {
-				return newSystemErrorWithCause(err, "checking uid shifting on bind source")
-			}
-
-			m.IDMappedMount = needIDMap
 		}
 	}
 
@@ -2868,13 +2883,13 @@ func needUidShiftOnBindSrc(mount *configs.Mount, config *configs.Config) (bool, 
 		return false, nil
 	}
 
-	// Don't mount shiftfs on bind sources under the container's rootfs
+	// Don't uid shift on bind sources under the container's rootfs
 	if strings.HasPrefix(mount.Source, config.Rootfs+"/") {
 		return false, nil
 	}
 
 	// If the bind source has uid:gid ownership matching the container's user-ns
-	// mappings, shiftfs is not needed.
+	// mappings, uid shifting is not needed.
 
 	var hostUid, hostGid uint32
 	var uidSize, gidSize uint32

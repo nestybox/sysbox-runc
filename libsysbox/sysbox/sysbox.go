@@ -222,15 +222,21 @@ func CheckUidShifting(sysMgr *Mgr, spec *specs.Spec) (sh.IDShiftType, sh.IDShift
 
 	// Check uid shifting type to be used for the container's rootfs.
 	//
-	// We do it via shiftfs (if available) or by chown'ing the rootfs
-	// hierarchy. We don't use idmapped mounts because they are not supported on
-	// overlayfs (yet). Chowning is fairly safe since the container's rootfs is
-	// dedicated to the container (no other entity in the system will use it
-	// while the container is running).
+	// We do it via ID-mapping (preferably), or via shiftfs (if available on the
+	// host), or by chown'ing the rootfs hierarchy. Chowning is the least
+	// preferred and slowest approach, but won't disrupt anything on the host
+	// since the container's rootfs is dedicated to the container (no other
+	// entity in the system will use it while the container is running).
 	rootfsShiftType := sh.NoShift
 
+	// TODO: if rootfs is on ovfs, idmapping only supported on kernel >= 5.19
+
 	if needShiftOnRootfs {
-		if shiftfsSupported {
+		if idMapMntSupported && shiftfsSupported {
+			rootfsShiftType = sh.IDMappedMountOrShiftfs
+		} else if idMapMntSupported {
+			rootfsShiftType = sh.IDMappedMount
+		} else if shiftfsSupported {
 			rootfsShiftType = sh.Shiftfs
 		} else {
 			rootfsShiftType = sh.Chown
@@ -239,10 +245,10 @@ func CheckUidShifting(sysMgr *Mgr, spec *specs.Spec) (sh.IDShiftType, sh.IDShift
 
 	// Check uid shifting type to be used for the container's bind mounts.
 	//
-	// For bind mounts, we rely on the kernel ID shift mechanism (i.e., shiftfs
-	// or ID-mapped mounts) and never chown. Chowning for bind mounts is not a
-	// good idea since we don't know what's being bind mounted (e.g., the bind
-	// mount could be a user's home dir, a critical system file, etc.).
+	// For bind mounts, we use ID-mapping or shiftfs, but never chown. Chowning
+	// for bind mounts is not a good idea since we don't know what's being bind
+	// mounted (e.g., the bind mount could be a user's home dir, a critical
+	// system file, etc.).
 	bindMountShiftType := sh.NoShift
 
 	if idMapMntSupported && shiftfsSupported {
