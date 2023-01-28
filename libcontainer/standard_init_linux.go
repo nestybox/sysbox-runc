@@ -36,6 +36,7 @@ const (
 	switchDockerDns
 	chown
 	mkdir
+	rootfsIDMap
 )
 
 type opReq struct {

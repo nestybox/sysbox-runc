@@ -20,6 +20,7 @@ import (
 	"time"
 
 	securejoin "github.com/cyphar/filepath-securejoin"
+	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
 	"github.com/nestybox/sysbox-runc/libcontainer/mount"
 
 	"github.com/moby/sys/mountinfo"
@@ -57,6 +58,12 @@ func prepareRootfs(pipe io.ReadWriter, iConfig *initConfig) (err error) {
 
 	if err := validateCwd(config.Rootfs); err != nil {
 		return newSystemErrorWithCause(err, "validating cwd")
+	}
+
+	if config.RootfsUidShiftType == sh.IDMappedMount {
+		if err := doRootfsIDMapping(config, pipe); err != nil {
+			return newSystemErrorWithCause(err, "ID-mapping rootfs")
+		}
 	}
 
 	if err := effectRootfsMount(); err != nil {
@@ -1143,6 +1150,22 @@ func mountPropagate(m *configs.Mount, rootfs string, mountLabel string) error {
 	}); err != nil {
 		return fmt.Errorf("change mount propagation through procfd: %w", err)
 	}
+	return nil
+}
+
+// sysbox-runc: doRootfsIDMapping sets up ID-mapping on the container's rootfs
+func doRootfsIDMapping(config *configs.Config, pipe io.ReadWriter) error {
+	reqs := []opReq{
+		{
+			Op:     rootfsIDMap,
+			Rootfs: config.Rootfs,
+		},
+	}
+
+	if err := syncParentDoOp(reqs, pipe); err != nil {
+		return newSystemErrorWithCause(err, "syncing with parent runc to perform rootfs ID-mapping")
+	}
+
 	return nil
 }
 
