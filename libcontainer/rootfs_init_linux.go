@@ -17,6 +17,8 @@ import (
 	"golang.org/x/sys/unix"
 
 	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
+	mount "github.com/nestybox/sysbox-libs/mount"
+	overlayUtils "github.com/nestybox/sysbox-libs/overlayUtils"
 	utils "github.com/nestybox/sysbox-libs/utils"
 	libcontainerUtils "github.com/opencontainers/runc/libcontainer/utils"
 )
@@ -264,10 +266,12 @@ func (l *linuxRootfsInit) Init() error {
 	switch l.reqs[0].Op {
 
 	case rootfsIDMap:
-		// The mount requests assume that the process cwd is the rootfs directory
 		rootfs := l.reqs[0].Rootfs
-		if err := unix.Chdir(rootfs); err != nil {
-			return newSystemErrorWithCausef(err, "chdir to rootfs %s", rootfs)
+		usernsPath := "/proc/1/ns/user"
+
+		// Move current dir away from rootfs since we will remount it
+		if err := unix.Chdir("/"); err != nil {
+			return newSystemErrorWithCause(err, "chdir to /")
 		}
 
 		// We are in the pid and mount ns of the container's init process; remount
@@ -278,13 +282,56 @@ func (l *linuxRootfsInit) Init() error {
 		}
 		defer unix.Unmount("/proc", unix.MNT_DETACH)
 
-		usernsPath := "/proc/1/ns/user"
+		fsName, err := utils.GetFsName(rootfs)
+		if err != nil {
+			return err
+		}
 
-		if err := sh.IDMapMount(usernsPath, rootfs); err != nil {
-			fsName, _ := utils.GetFsName(rootfs)
-			return newSystemErrorWithCausef(err,
-				"setting up ID-mapped mount on path %s (likely means idmapped mounts are not supported on the filesystem at this path (%s))",
-				rootfs, fsName)
+		if fsName == "overlayfs" {
+
+			// Get info about the ovfs mount (layers, mount opts, propagation, etc.)
+			mounts, err := mount.GetMountsPid(uint32(os.Getpid()))
+			if err != nil {
+				return err
+			}
+
+			mi, err := mount.GetMountAt(rootfs, mounts)
+			if err != nil {
+				return err
+			}
+
+			ovfsMntOpts := overlayUtils.GetMountOpt(mi)
+			ovfsLowerLayers := overlayUtils.GetLowerLayers(ovfsMntOpts)
+
+			// Remove the current overlayfs mount
+			if err := unix.Unmount(rootfs, unix.MNT_DETACH); err != nil {
+				return err
+			}
+
+			// ID-map each of the ovfs lower layers
+			for _, layer := range ovfsLowerLayers {
+				if err := sh.IDMapMount(usernsPath, layer, false); err != nil {
+					fsName, _ := utils.GetFsName(layer)
+					return newSystemErrorWithCausef(err,
+						"setting up ID-mapped mount on path %s (likely means idmapped mounts are not supported on the filesystem at this path (%s))",
+						layer, fsName)
+				}
+			}
+
+			// Recreate the rootfs overlayfs mount (using the ID-mapped lower layers)
+			if err := unix.Mount("overlay", rootfs, "overlay", uintptr(ovfsMntOpts.Flags), ovfsMntOpts.Opts); err != nil {
+				return fmt.Errorf("failed to mount %s: %s", rootfs, err)
+			}
+			if err := unix.Mount("", rootfs, "", uintptr(ovfsMntOpts.PropFlags), ""); err != nil {
+				return fmt.Errorf("failed to set mount prop flags %s: %s", rootfs, err)
+			}
+
+		} else {
+			if err := sh.IDMapMount(usernsPath, rootfs, true); err != nil {
+				return newSystemErrorWithCausef(err,
+					"setting up ID-mapped mount on path %s (likely means idmapped mounts are not supported on the filesystem at this path (%s))",
+					rootfs, fsName)
+			}
 		}
 
 	case bind:
@@ -336,7 +383,7 @@ func (l *linuxRootfsInit) Init() error {
 			// Set up the ID-mapping as needed
 			if m.IDMappedMount {
 				if err := libcontainerUtils.WithProcfd(rootfs, m.Destination, func(procfd string) error {
-					if err := sh.IDMapMount(usernsPath, procfd); err != nil {
+					if err := sh.IDMapMount(usernsPath, procfd, true); err != nil {
 						fsName, _ := utils.GetFsName(procfd)
 						realpath, _ := os.Readlink(procfd)
 						return newSystemErrorWithCausef(err,
