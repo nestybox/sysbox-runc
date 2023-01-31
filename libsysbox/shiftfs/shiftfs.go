@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/opencontainers/runc/libcontainer/mount"
+	"github.com/nestybox/sysbox-libs/mount"
 	"golang.org/x/sys/unix"
 )
 

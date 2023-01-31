@@ -21,7 +21,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/opencontainers/runc/libcontainer/mount"
+	"github.com/nestybox/sysbox-libs/mount"
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
 

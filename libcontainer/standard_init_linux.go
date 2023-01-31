@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"strconv"
 
-	"github.com/nestybox/sysbox-runc/libcontainer/mount"
+	"github.com/nestybox/sysbox-libs/mount"
 	"github.com/opencontainers/runc/libcontainer/apparmor"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/keys"
