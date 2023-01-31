@@ -21,7 +21,7 @@ import (
 
 	securejoin "github.com/cyphar/filepath-securejoin"
 	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
-	"github.com/nestybox/sysbox-runc/libcontainer/mount"
+	"github.com/nestybox/sysbox-libs/mount"
 
 	"github.com/moby/sys/mountinfo"
 
@@ -55,10 +55,6 @@ func needsSetupDev(config *configs.Config) bool {
 // rootfs.
 func prepareRootfs(pipe io.ReadWriter, iConfig *initConfig) (err error) {
 	config := iConfig.Config
-
-	if err := validateCwd(config.Rootfs); err != nil {
-		return newSystemErrorWithCause(err, "validating cwd")
-	}
 
 	if config.RootfsUidShiftType == sh.IDMappedMount {
 		if err := doRootfsIDMapping(config, pipe); err != nil {

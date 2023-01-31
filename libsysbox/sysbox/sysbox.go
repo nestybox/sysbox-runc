@@ -194,28 +194,22 @@ func needUidShiftOnRootfs(spec *specs.Spec) (bool, error) {
 // shifting for bind-mounts.
 func CheckUidShifting(sysMgr *Mgr, spec *specs.Spec) (sh.IDShiftType, sh.IDShiftType, error) {
 
-	var (
-		idMapMntSupported bool
-		shiftfsSupported  bool
-		needShiftOnRootfs bool
-		err               error
-	)
+	shiftfsSupported := sysMgr.Config.UseShiftfs
+	idMapMntSupported := sysMgr.Config.UseIDMapping
+	idMapppingOnOverlaySupported := sysMgr.Config.UseIDMappingOnOverlayfs
+	idMapMntSupportedOnRootfs := false
 
-	if !sysMgr.Config.NoIDMappedMount {
-		idMapMntSupported, err = libutils.KernelSupportsIDMappedMounts()
+	if idMapMntSupported {
+		fs, err := libutils.GetFsName(spec.Root.Path)
 		if err != nil {
-			return sh.NoShift, sh.NoShift, fmt.Errorf("failed to check kernel idmapped-mount support: %s", err)
+			return sh.NoShift, sh.NoShift, err
+		}
+		if fs == "overlayfs" && idMapppingOnOverlaySupported {
+			idMapMntSupportedOnRootfs = true
 		}
 	}
 
-	if !sysMgr.Config.NoShiftfs {
-		shiftfsSupported, err = libutils.KernelModSupported("shiftfs")
-		if err != nil {
-			return sh.NoShift, sh.NoShift, fmt.Errorf("failed to check kernel shiftfs support: %s", err)
-		}
-	}
-
-	needShiftOnRootfs, err = needUidShiftOnRootfs(spec)
+	needShiftOnRootfs, err := needUidShiftOnRootfs(spec)
 	if err != nil {
 		return sh.NoShift, sh.NoShift, fmt.Errorf("failed to check uid-shifting requirement on rootfs: %s", err)
 	}
@@ -229,12 +223,10 @@ func CheckUidShifting(sysMgr *Mgr, spec *specs.Spec) (sh.IDShiftType, sh.IDShift
 	// entity in the system will use it while the container is running).
 	rootfsShiftType := sh.NoShift
 
-	// TODO: if rootfs is on ovfs, idmapping only supported on kernel >= 5.19
-
 	if needShiftOnRootfs {
-		if idMapMntSupported && shiftfsSupported {
+		if idMapMntSupportedOnRootfs && shiftfsSupported {
 			rootfsShiftType = sh.IDMappedMountOrShiftfs
-		} else if idMapMntSupported {
+		} else if idMapMntSupportedOnRootfs {
 			rootfsShiftType = sh.IDMappedMount
 		} else if shiftfsSupported {
 			rootfsShiftType = sh.Shiftfs

@@ -33,6 +33,7 @@ type Mgr struct {
 	Id           string                  // container-id
 	Config       *ipcLib.ContainerConfig // sysbox-mgr mandated container config
 	clonedRootfs string                  // path to cloned rootfs (used when rootfs needs chown but it's on ovfs without metacopy=on)
+
 }
 
 func NewMgr(id string, enable bool) *Mgr {
