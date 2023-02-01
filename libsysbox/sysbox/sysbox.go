@@ -25,6 +25,7 @@ import (
 	"unsafe"
 
 	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
+	linuxUtils "github.com/nestybox/sysbox-libs/linuxUtils"
 	libutils "github.com/nestybox/sysbox-libs/utils"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"
@@ -106,12 +107,12 @@ func checkKernelVersion(distro string) error {
 		major, minor   int
 	)
 
-	rel, err := libutils.GetKernelRelease()
+	rel, err := linuxUtils.GetKernelRelease()
 	if err != nil {
 		return err
 	}
 
-	major, minor, err = libutils.ParseKernelRelease(rel)
+	major, minor, err = linuxUtils.ParseKernelRelease(rel)
 	if err != nil {
 		return err
 	}
@@ -258,7 +259,7 @@ func CheckUidShifting(sysMgr *Mgr, spec *specs.Spec) (sh.IDShiftType, sh.IDShift
 // container with sysbox
 func CheckHostConfig(context *cli.Context, spec *specs.Spec) error {
 
-	distro, err := libutils.GetDistro()
+	distro, err := linuxUtils.GetDistro()
 	if err != nil {
 		return err
 	}

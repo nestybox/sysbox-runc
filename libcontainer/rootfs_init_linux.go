@@ -16,7 +16,7 @@ import (
 	"github.com/opencontainers/selinux/go-selinux/label"
 	"golang.org/x/sys/unix"
 
-	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
+	"github.com/nestybox/sysbox-libs/idMap"
 	mount "github.com/nestybox/sysbox-libs/mount"
 	overlayUtils "github.com/nestybox/sysbox-libs/overlayUtils"
 	utils "github.com/nestybox/sysbox-libs/utils"
@@ -310,7 +310,7 @@ func (l *linuxRootfsInit) Init() error {
 
 			// ID-map each of the ovfs lower layers
 			for _, layer := range ovfsLowerLayers {
-				if err := sh.IDMapMount(usernsPath, layer, false); err != nil {
+				if err := idMap.IDMapMount(usernsPath, layer, false); err != nil {
 					fsName, _ := utils.GetFsName(layer)
 					return newSystemErrorWithCausef(err,
 						"setting up ID-mapped mount on path %s (likely means idmapped mounts are not supported on the filesystem at this path (%s))",
@@ -327,7 +327,7 @@ func (l *linuxRootfsInit) Init() error {
 			}
 
 		} else {
-			if err := sh.IDMapMount(usernsPath, rootfs, true); err != nil {
+			if err := idMap.IDMapMount(usernsPath, rootfs, true); err != nil {
 				return newSystemErrorWithCausef(err,
 					"setting up ID-mapped mount on path %s (likely means idmapped mounts are not supported on the filesystem at this path (%s))",
 					rootfs, fsName)
@@ -383,7 +383,7 @@ func (l *linuxRootfsInit) Init() error {
 			// Set up the ID-mapping as needed
 			if m.IDMappedMount {
 				if err := libcontainerUtils.WithProcfd(rootfs, m.Destination, func(procfd string) error {
-					if err := sh.IDMapMount(usernsPath, procfd, true); err != nil {
+					if err := idMap.IDMapMount(usernsPath, procfd, true); err != nil {
 						fsName, _ := utils.GetFsName(procfd)
 						realpath, _ := os.Readlink(procfd)
 						return newSystemErrorWithCausef(err,

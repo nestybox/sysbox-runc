@@ -30,7 +30,6 @@ import (
 	"github.com/opencontainers/runc/libcontainer/logs"
 	"github.com/opencontainers/runc/libcontainer/system"
 	"github.com/opencontainers/runc/libcontainer/utils"
-	"github.com/opencontainers/runc/libsysbox/shiftfs"
 	"github.com/opencontainers/runc/libsysbox/sysbox"
 	"github.com/opencontainers/runc/libsysbox/syscont"
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -46,7 +45,9 @@ import (
 	"github.com/vishvananda/netlink/nl"
 	"golang.org/x/sys/unix"
 
+	"github.com/nestybox/sysbox-libs/idMap"
 	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
+	"github.com/nestybox/sysbox-libs/shiftfs"
 )
 
 const stdioFdCount = 3
@@ -2836,7 +2837,7 @@ func (c *linuxContainer) setupIDMappedMounts() error {
 	// rootfs
 	if config.RootfsUidShiftType == sh.IDMappedMount ||
 		config.RootfsUidShiftType == sh.IDMappedMountOrShiftfs {
-		idMapMountAllowed, err := sh.IDMapMountSupportedOnPath(config.Rootfs)
+		idMapMountAllowed, err := idMap.IDMapMountSupportedOnPath(config.Rootfs)
 		if err != nil {
 			return newSystemErrorWithCausef(err, "checking for ID-mapped mount support on rootfs %s", config.Rootfs)
 		}
@@ -2852,7 +2853,7 @@ func (c *linuxContainer) setupIDMappedMounts() error {
 		for _, m := range config.Mounts {
 			if m.Device == "bind" {
 
-				idMapMntAllowed, err := sh.IDMapMountSupportedOnPath(m.Source)
+				idMapMntAllowed, err := idMap.IDMapMountSupportedOnPath(m.Source)
 				if err != nil {
 					return newSystemErrorWithCausef(err, "checking for ID-mapped mount support on bind source %s", m.Source)
 				}
