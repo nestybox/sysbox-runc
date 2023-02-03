@@ -195,18 +195,29 @@ func needUidShiftOnRootfs(spec *specs.Spec) (bool, error) {
 // shifting for bind-mounts.
 func CheckUidShifting(sysMgr *Mgr, spec *specs.Spec) (sh.IDShiftType, sh.IDShiftType, error) {
 
-	shiftfsSupported := sysMgr.Config.UseShiftfs
-	idMapMntSupported := sysMgr.Config.UseIDMapping
-	idMapppingOnOverlaySupported := sysMgr.Config.UseIDMappingOnOverlayfs
-	idMapMntSupportedOnRootfs := false
+	useShiftfs := sysMgr.Config.UseShiftfs
+	useIDMapping := sysMgr.Config.UseIDMapping
 
-	if idMapMntSupported {
-		fs, err := libutils.GetFsName(spec.Root.Path)
-		if err != nil {
-			return sh.NoShift, sh.NoShift, err
+	useIDMappingOnOvfs := sysMgr.Config.UseIDMappingOnOverlayfs
+	useShiftfsOnOvfs := sysMgr.Config.UseShiftfsOnOverlayfs
+
+	useShiftfsOnRootfs := false
+	useIDMappingOnRootfs := false
+
+	rootPathFs, err := libutils.GetFsName(spec.Root.Path)
+	if err != nil {
+		return sh.NoShift, sh.NoShift, err
+	}
+
+	if useIDMapping {
+		if rootPathFs == "overlayfs" && useIDMappingOnOvfs {
+			useIDMappingOnRootfs = true
 		}
-		if fs == "overlayfs" && idMapppingOnOverlaySupported {
-			idMapMntSupportedOnRootfs = true
+	}
+
+	if useShiftfs {
+		if rootPathFs == "overlayfs" && useShiftfsOnOvfs {
+			useShiftfsOnRootfs = true
 		}
 	}
 
@@ -218,18 +229,20 @@ func CheckUidShifting(sysMgr *Mgr, spec *specs.Spec) (sh.IDShiftType, sh.IDShift
 	// Check uid shifting type to be used for the container's rootfs.
 	//
 	// We do it via ID-mapping (preferably), or via shiftfs (if available on the
-	// host), or by chown'ing the rootfs hierarchy. Chowning is the least
-	// preferred and slowest approach, but won't disrupt anything on the host
-	// since the container's rootfs is dedicated to the container (no other
-	// entity in the system will use it while the container is running).
+	// host), or by chown'ing the rootfs hierarchy. If both ID-mapping and
+	// shiftfs are supported, we will try ID-mapping first and in case it does
+	// not work, use shiftfs. Chowning is the least preferred and slowest
+	// approach, but won't disrupt anything on the host since the container's
+	// rootfs is dedicated to the container (no other entity in the system will
+	// use it while the container is running).
 	rootfsShiftType := sh.NoShift
 
 	if needShiftOnRootfs {
-		if idMapMntSupportedOnRootfs && shiftfsSupported {
+		if useIDMappingOnRootfs && useShiftfsOnRootfs {
 			rootfsShiftType = sh.IDMappedMountOrShiftfs
-		} else if idMapMntSupportedOnRootfs {
+		} else if useIDMappingOnRootfs {
 			rootfsShiftType = sh.IDMappedMount
-		} else if shiftfsSupported {
+		} else if useShiftfsOnRootfs {
 			rootfsShiftType = sh.Shiftfs
 		} else {
 			rootfsShiftType = sh.Chown
@@ -244,11 +257,11 @@ func CheckUidShifting(sysMgr *Mgr, spec *specs.Spec) (sh.IDShiftType, sh.IDShift
 	// system file, etc.).
 	bindMountShiftType := sh.NoShift
 
-	if idMapMntSupported && shiftfsSupported {
+	if useIDMapping && useShiftfs {
 		bindMountShiftType = sh.IDMappedMountOrShiftfs
-	} else if idMapMntSupported {
+	} else if useIDMapping {
 		bindMountShiftType = sh.IDMappedMount
-	} else if shiftfsSupported {
+	} else if useShiftfs {
 		bindMountShiftType = sh.Shiftfs
 	}
 
