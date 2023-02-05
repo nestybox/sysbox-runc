@@ -29,6 +29,7 @@ import (
 
 	mapset "github.com/deckarep/golang-set"
 	ipcLib "github.com/nestybox/sysbox-ipc/sysboxMgrLib"
+	"github.com/nestybox/sysbox-libs/idMap"
 	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
 	utils "github.com/nestybox/sysbox-libs/utils"
 	"github.com/opencontainers/runc/libsysbox/sysbox"
@@ -794,17 +795,29 @@ func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, rootfsUidShiftType sh.
 	uid := spec.Linux.UIDMappings[0].HostID
 	gid := spec.Linux.GIDMappings[0].HostID
 
-	// If the spec has a bind-mount over one of the special dirs, ask the
+	// If the spec has a host bind-mount over one of the special dirs, ask the
 	// sysbox-mgr to prepare the mount source (e.g., chown files to match the
-	// container host uid & gid).
+	// container host uid & gid). Skip if ID-mapping with overlayfs works because
+	// we will instead ID-map this mount.
+
 	prepList := []ipcLib.MountPrepInfo{}
 
 	for i := len(spec.Mounts) - 1; i >= 0; i-- {
-
 		m := spec.Mounts[i]
 		_, isSpecialDir := specialDirMap[m.Destination]
 
 		if m.Type == "bind" && isSpecialDir {
+
+			if mgr.Config.UseIDMappingOnOverlayfs {
+				useIDMap, err := idMap.IDMapMountSupportedOnPath(m.Source)
+				if err != nil {
+					return err
+				}
+				if useIDMap {
+					continue
+				}
+			}
+
 			info := ipcLib.MountPrepInfo{
 				Source:    m.Source,
 				Exclusive: true,
@@ -839,51 +852,51 @@ func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, rootfsUidShiftType sh.
 	reqList := []ipcLib.MountReqInfo{}
 	for dest, kind := range specialDirMap {
 
-		// Check if the special dir requires uid shifting or not
-		path := filepath.Join(rootPath, dest)
+		// Check if the special dir requires uid shifting or not; skip if
+		// overlayfs works with ID-mapping because we will instead ID-map this mount.
+
 		shiftUids := false
+		if !mgr.Config.UseIDMappingOnOverlayfs {
 
-		fi, err := os.Stat(path)
+			path := filepath.Join(rootPath, dest)
+			fi, err := os.Stat(path)
+			if err == nil {
 
-		if err == nil {
+				// If the special dir exists within the container's rootfs, then uid
+				// shifting is required when it's owned by root:root.
 
-			// If the special dir exists within the container's rootfs, then uid
-			// shifting is required when it's owned by root:root.
+				st, _ := fi.Sys().(*syscall.Stat_t)
 
-			st, _ := fi.Sys().(*syscall.Stat_t)
+				if st.Uid != st.Gid {
+					return fmt.Errorf("container rootfs has special dir %s with non-matching uid & gid: %d %d", path, st.Uid, st.Gid)
+				}
+				if st.Uid != 0 && st.Uid != uid {
+					return fmt.Errorf("container rootfs has special dir %s with unexpected uid: %d; want %d or %d", path, st.Uid, 0, uid)
+				}
+				if st.Gid != 0 && st.Gid != gid {
+					return fmt.Errorf("container rootfs has special dir %s with unexpected gid: %d; want %d or %d", path, st.Gid, 0, gid)
+				}
+				if st.Uid == 0 && st.Gid == 0 {
+					shiftUids = true
+				}
 
-			if st.Uid != st.Gid {
-				return fmt.Errorf("container rootfs has special dir %s with non-matching uid & gid: %d %d", path, st.Uid, st.Gid)
+			} else if os.IsNotExist(err) {
+
+				// If the special dir does not exist within the container rootfs, then
+				// uid shifting is not required when the container starts. However,
+				// when the container stops, if the sysbox host volume that backs the
+				// mount over the special dir has data in it, we copy that back to the
+				// container's rootfs. In this case, whether we do uid shifting on the
+				// special dir during the copy depends on whether the container rootfs
+				// itself requires uid shifting or not (i.e., whether the rootfs is
+				// owned by root:root (shifting required) or by the <uid>:<gid> in the
+				// userns map (shifting not required)).
+
+				shiftUids = (rootfsUidShiftType != sh.NoShift)
+
+			} else {
+				return err
 			}
-
-			if st.Uid != 0 && st.Uid != uid {
-				return fmt.Errorf("container rootfs has special dir %s with unexpected uid: %d; want %d or %d", path, st.Uid, 0, uid)
-			}
-
-			if st.Gid != 0 && st.Gid != gid {
-				return fmt.Errorf("container rootfs has special dir %s with unexpected gid: %d; want %d or %d", path, st.Gid, 0, gid)
-			}
-
-			if st.Uid == 0 && st.Gid == 0 {
-				shiftUids = true
-			}
-
-		} else if os.IsNotExist(err) {
-
-			// If the special dir does not exist within the container rootfs, then
-			// uid shifting is not required when the container starts. However,
-			// when the container stops, if the sysbox host volume that backs the
-			// mount over the special dir has data in it, we copy that back to the
-			// container's rootfs. In this case, whether we do uid shifting on the
-			// special dir during the copy depends on whether the container rootfs
-			// itself requires uid shifting or not (i.e., whether the rootfs is
-			// owned by root:root (shifting required) or by the <uid>:<gid> in the
-			// userns map (shifting not required)).
-
-			shiftUids = (rootfsUidShiftType != sh.NoShift)
-
-		} else {
-			return err
 		}
 
 		info := ipcLib.MountReqInfo{
