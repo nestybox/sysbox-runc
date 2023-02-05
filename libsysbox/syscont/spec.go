@@ -808,7 +808,7 @@ func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, rootfsUidShiftType sh.
 
 		if m.Type == "bind" && isSpecialDir {
 
-			if mgr.Config.UseIDMappingOnOverlayfs {
+			if mgr.Config.OverlayfsOnIDMapMountOk {
 				useIDMap, err := idMap.IDMapMountSupportedOnPath(m.Source)
 				if err != nil {
 					return err
@@ -856,7 +856,7 @@ func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, rootfsUidShiftType sh.
 		// overlayfs works with ID-mapping because we will instead ID-map this mount.
 
 		shiftUids := false
-		if !mgr.Config.UseIDMappingOnOverlayfs {
+		if !mgr.Config.OverlayfsOnIDMapMountOk {
 
 			path := filepath.Join(rootPath, dest)
 			fi, err := os.Stat(path)

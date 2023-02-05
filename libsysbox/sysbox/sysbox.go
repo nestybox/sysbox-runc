@@ -190,33 +190,33 @@ func needUidShiftOnRootfs(spec *specs.Spec) (bool, error) {
 }
 
 // checkUidShifting returns the type of UID shifting needed (if any) for the
-// container. The first return value indicates the type of UID shifting needed
-// for the container's rootfs, while the second indicates the type of UID
-// shifting for bind-mounts.
+// container. The first return value indicates the type of UID shifting to be
+// used for the container's rootfs, while the second indicates the type of UID
+// shifting for container bind-mounts.
 func CheckUidShifting(sysMgr *Mgr, spec *specs.Spec) (sh.IDShiftType, sh.IDShiftType, error) {
 
-	useShiftfs := sysMgr.Config.UseShiftfs
-	useIDMapping := sysMgr.Config.UseIDMapping
+	shiftfsOk := sysMgr.Config.ShiftfsOk
+	shiftfsOnOvfsOk := sysMgr.Config.ShiftfsOnOverlayfsOk
 
-	useIDMappingOnOvfs := sysMgr.Config.UseIDMappingOnOverlayfs
-	useShiftfsOnOvfs := sysMgr.Config.UseShiftfsOnOverlayfs
+	idMapMountOk := sysMgr.Config.IDMapMountOk
+	ovfsOnIDMapMountOk := sysMgr.Config.OverlayfsOnIDMapMountOk
 
 	useShiftfsOnRootfs := false
-	useIDMappingOnRootfs := false
+	useIDMapMountOnRootfs := false
 
 	rootPathFs, err := libutils.GetFsName(spec.Root.Path)
 	if err != nil {
 		return sh.NoShift, sh.NoShift, err
 	}
 
-	if useIDMapping {
-		if rootPathFs == "overlayfs" && useIDMappingOnOvfs {
-			useIDMappingOnRootfs = true
+	if idMapMountOk {
+		if rootPathFs == "overlayfs" && ovfsOnIDMapMountOk {
+			useIDMapMountOnRootfs = true
 		}
 	}
 
-	if useShiftfs {
-		if rootPathFs == "overlayfs" && useShiftfsOnOvfs {
+	if shiftfsOk {
+		if rootPathFs == "overlayfs" && shiftfsOnOvfsOk {
 			useShiftfsOnRootfs = true
 		}
 	}
@@ -238,9 +238,9 @@ func CheckUidShifting(sysMgr *Mgr, spec *specs.Spec) (sh.IDShiftType, sh.IDShift
 	rootfsShiftType := sh.NoShift
 
 	if needShiftOnRootfs {
-		if useIDMappingOnRootfs && useShiftfsOnRootfs {
+		if useIDMapMountOnRootfs && useShiftfsOnRootfs {
 			rootfsShiftType = sh.IDMappedMountOrShiftfs
-		} else if useIDMappingOnRootfs {
+		} else if useIDMapMountOnRootfs {
 			rootfsShiftType = sh.IDMappedMount
 		} else if useShiftfsOnRootfs {
 			rootfsShiftType = sh.Shiftfs
@@ -257,11 +257,11 @@ func CheckUidShifting(sysMgr *Mgr, spec *specs.Spec) (sh.IDShiftType, sh.IDShift
 	// system file, etc.).
 	bindMountShiftType := sh.NoShift
 
-	if useIDMapping && useShiftfs {
+	if idMapMountOk && shiftfsOk {
 		bindMountShiftType = sh.IDMappedMountOrShiftfs
-	} else if useIDMapping {
+	} else if idMapMountOk {
 		bindMountShiftType = sh.IDMappedMount
-	} else if useShiftfs {
+	} else if shiftfsOk {
 		bindMountShiftType = sh.Shiftfs
 	}
 
