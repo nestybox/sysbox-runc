@@ -1155,6 +1155,8 @@ func doRootfsIDMapping(config *configs.Config, pipe io.ReadWriter) error {
 		{
 			Op:     rootfsIDMap,
 			Rootfs: config.Rootfs,
+			Uid:    config.UidMappings[0].HostID,
+			Gid:    config.GidMappings[0].HostID,
 		},
 	}
 
