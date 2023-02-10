@@ -267,6 +267,9 @@ func (l *linuxRootfsInit) Init() error {
 
 	case rootfsIDMap:
 		rootfs := l.reqs[0].Rootfs
+		uid := l.reqs[0].Uid
+		gid := l.reqs[0].Gid
+
 		usernsPath := "/proc/1/ns/user"
 
 		// Move current dir away from rootfs since we will remount it
@@ -332,6 +335,12 @@ func (l *linuxRootfsInit) Init() error {
 					"setting up ID-mapped mount on path %s (likely means idmapped mounts are not supported on the filesystem at this path (%s))",
 					rootfs, fsName)
 			}
+		}
+
+		// ID-mapping by itself won't allow the container to write to "/"; must
+		// chown the rootfs dir so that it can write there.
+		if err := unix.Chown(rootfs, uid, gid); err != nil {
+			return newSystemErrorWithCausef(err, "failed to chown %s to %v:%v", rootfs, uid, gid)
 		}
 
 	case bind:
