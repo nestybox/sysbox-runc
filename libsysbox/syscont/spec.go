@@ -29,7 +29,6 @@ import (
 
 	mapset "github.com/deckarep/golang-set"
 	ipcLib "github.com/nestybox/sysbox-ipc/sysboxMgrLib"
-	"github.com/nestybox/sysbox-libs/idMap"
 	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
 	utils "github.com/nestybox/sysbox-libs/utils"
 	"github.com/opencontainers/runc/libsysbox/sysbox"
@@ -807,17 +806,6 @@ func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, rootfsUidShiftType sh.
 		_, isSpecialDir := specialDirMap[m.Destination]
 
 		if m.Type == "bind" && isSpecialDir {
-
-			if mgr.Config.OverlayfsOnIDMapMountOk {
-				useIDMap, err := idMap.IDMapMountSupportedOnPath(m.Source)
-				if err != nil {
-					return err
-				}
-				if useIDMap {
-					continue
-				}
-			}
-
 			info := ipcLib.MountPrepInfo{
 				Source:    m.Source,
 				Exclusive: true,
