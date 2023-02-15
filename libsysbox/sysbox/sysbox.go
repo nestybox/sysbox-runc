@@ -201,51 +201,50 @@ func CheckUidShifting(sysMgr *Mgr, spec *specs.Spec) (sh.IDShiftType, sh.IDShift
 	idMapMountOk := sysMgr.Config.IDMapMountOk
 	ovfsOnIDMapMountOk := sysMgr.Config.OverlayfsOnIDMapMountOk
 
-	useShiftfsOnRootfs := false
-	useIDMapMountOnRootfs := false
+	rootfsShiftType := sysMgr.Config.RootfsUidShiftType
 
-	rootPathFs, err := libutils.GetFsName(spec.Root.Path)
-	if err != nil {
-		return sh.NoShift, sh.NoShift, err
-	}
+	if rootfsShiftType == sh.NoShift {
 
-	if idMapMountOk {
-		if rootPathFs == "overlayfs" && ovfsOnIDMapMountOk {
-			useIDMapMountOnRootfs = true
+		useShiftfsOnRootfs := false
+		useIDMapMountOnRootfs := false
+
+		rootPathFs, err := libutils.GetFsName(spec.Root.Path)
+		if err != nil {
+			return sh.NoShift, sh.NoShift, err
 		}
-	}
 
-	if shiftfsOk {
-		if rootPathFs == "overlayfs" && shiftfsOnOvfsOk {
-			useShiftfsOnRootfs = true
+		if idMapMountOk {
+			if rootPathFs == "overlayfs" && ovfsOnIDMapMountOk {
+				useIDMapMountOnRootfs = true
+			}
 		}
-	}
 
-	needShiftOnRootfs, err := needUidShiftOnRootfs(spec)
-	if err != nil {
-		return sh.NoShift, sh.NoShift, fmt.Errorf("failed to check uid-shifting requirement on rootfs: %s", err)
-	}
+		if shiftfsOk {
+			if rootPathFs == "overlayfs" && shiftfsOnOvfsOk {
+				useShiftfsOnRootfs = true
+			}
+		}
 
-	// Check uid shifting type to be used for the container's rootfs.
-	//
-	// We do it via ID-mapping (preferably), or via shiftfs (if available on the
-	// host), or by chown'ing the rootfs hierarchy. If both ID-mapping and
-	// shiftfs are supported, we will try ID-mapping first and in case it does
-	// not work, use shiftfs. Chowning is the least preferred and slowest
-	// approach, but won't disrupt anything on the host since the container's
-	// rootfs is dedicated to the container (no other entity in the system will
-	// use it while the container is running).
-	rootfsShiftType := sh.NoShift
+		needShiftOnRootfs, err := needUidShiftOnRootfs(spec)
+		if err != nil {
+			return sh.NoShift, sh.NoShift, fmt.Errorf("failed to check uid-shifting requirement on rootfs: %s", err)
+		}
 
-	if needShiftOnRootfs {
-		if useIDMapMountOnRootfs && useShiftfsOnRootfs {
-			rootfsShiftType = sh.IDMappedMountOrShiftfs
-		} else if useIDMapMountOnRootfs {
-			rootfsShiftType = sh.IDMappedMount
-		} else if useShiftfsOnRootfs {
-			rootfsShiftType = sh.Shiftfs
-		} else {
-			rootfsShiftType = sh.Chown
+		// Check uid shifting type to be used for the container's rootfs.
+		//
+		// We do it via ID-mapping (preferably), or via shiftfs (if available on
+		// the host), or by chown'ing the rootfs hierarchy. Chowning is the least
+		// preferred and slowest approach, but won't disrupt anything on the host
+		// since the container's rootfs is dedicated to the container (no other
+		// entity in the system will use it while the container is running).
+		if needShiftOnRootfs {
+			if useIDMapMountOnRootfs {
+				rootfsShiftType = sh.IDMappedMount
+			} else if useShiftfsOnRootfs {
+				rootfsShiftType = sh.Shiftfs
+			} else {
+				rootfsShiftType = sh.Chown
+			}
 		}
 	}
 
