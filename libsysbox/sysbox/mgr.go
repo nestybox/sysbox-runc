@@ -24,6 +24,7 @@ import (
 
 	"github.com/nestybox/sysbox-ipc/sysboxMgrGrpc"
 	ipcLib "github.com/nestybox/sysbox-ipc/sysboxMgrLib"
+	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
@@ -87,14 +88,17 @@ func (mgr *Mgr) Register(spec *specs.Spec) error {
 	return nil
 }
 
-func (mgr *Mgr) Update(userns, netns string, uidMappings, gidMappings []specs.LinuxIDMapping) error {
+func (mgr *Mgr) Update(userns, netns string,
+	uidMappings, gidMappings []specs.LinuxIDMapping,
+	rootfsUidShiftType sh.IDShiftType) error {
 
 	updateInfo := &ipcLib.UpdateInfo{
-		Id:          mgr.Id,
-		Userns:      userns,
-		Netns:       netns,
-		UidMappings: uidMappings,
-		GidMappings: gidMappings,
+		Id:                 mgr.Id,
+		Userns:             userns,
+		Netns:              netns,
+		UidMappings:        uidMappings,
+		GidMappings:        gidMappings,
+		RootfsUidShiftType: rootfsUidShiftType,
 	}
 
 	if err := sysboxMgrGrpc.Update(updateInfo); err != nil {

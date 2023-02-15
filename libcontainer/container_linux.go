@@ -482,7 +482,9 @@ func (c *linuxContainer) start(process *Process) error {
 				gidMappings = append(gidMappings, cast(m))
 			}
 
-			if err := c.sysMgr.Update(userns, netns, uidMappings, gidMappings); err != nil {
+			rootfsUidShiftType := c.config.RootfsUidShiftType
+
+			if err := c.sysMgr.Update(userns, netns, uidMappings, gidMappings, rootfsUidShiftType); err != nil {
 				return newSystemErrorWithCause(err, "sending creation timestamp to sysbox-fs")
 			}
 		}

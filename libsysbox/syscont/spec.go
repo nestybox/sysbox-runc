@@ -25,7 +25,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 
 	mapset "github.com/deckarep/golang-set"
 	ipcLib "github.com/nestybox/sysbox-ipc/sysboxMgrLib"
@@ -299,6 +298,9 @@ var linuxCaps = []string{
 	"CAP_WAKE_ALARM",
 	"CAP_BLOCK_SUSPEND",
 	"CAP_AUDIT_READ",
+	"CAP_PERFMON",
+	"CAP_BPF",
+	"CAP_CHECKPOINT_RESTORE",
 }
 
 // cfgNamespaces checks that the namespace config has the minimum set
@@ -785,19 +787,14 @@ func getSpecialDirs(spec *specs.Spec) (map[string]ipcLib.MntKind, error) {
 // sysMgrSetupMounts requests the sysbox-mgr to setup special container mounts.
 func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, rootfsUidShiftType sh.IDShiftType) error {
 
-	// Obtain map of Sysbox's special directories.
 	specialDirMap, err := getSpecialDirs(spec)
 	if err != nil {
 		return err
 	}
 
-	uid := spec.Linux.UIDMappings[0].HostID
-	gid := spec.Linux.GIDMappings[0].HostID
-
 	// If the spec has a host bind-mount over one of the special dirs, ask the
 	// sysbox-mgr to prepare the mount source (e.g., chown files to match the
-	// container host uid & gid). Skip if ID-mapping with overlayfs works because
-	// we will instead ID-map this mount.
+	// container host uid & gid).
 
 	prepList := []ipcLib.MountPrepInfo{}
 
@@ -816,83 +813,40 @@ func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, rootfsUidShiftType sh.
 		}
 	}
 
+	uid := spec.Linux.UIDMappings[0].HostID
+	gid := spec.Linux.GIDMappings[0].HostID
+
 	if len(prepList) > 0 {
 		if err := mgr.PrepMounts(uid, gid, prepList); err != nil {
 			return err
 		}
 	}
 
-	// If we are not in sys container mode, skip setting up the implicit sysbox-mgr
-	// mounts.
+	// If we are not in sys container mode, skip setting up the implicit sysbox-mgr mounts.
 	if !mgr.Config.SyscontMode {
 		return nil
 	}
 
-	// Add the special dirs to the list of mounts that we will request sysbox-mgr
-	// to setup. Sysbox-mgr will setup host dirs to back the mounts in the
-	// request list; it will also send us any other mounts it needs.
+	// Add the special dirs to the list of implicit mounts setup by Sysbox.
+	// sysbox-mgr will setup host dirs to back the mounts; it will also send us
+	// a list of any other implicit mounts it needs.
 
-	rootPath, err := filepath.Abs(spec.Root.Path)
-	if err != nil {
-		return err
+	rootfsMapped := rootfsUidShiftType == sh.IDMappedMount || rootfsUidShiftType == sh.Shiftfs
+	idMapSpecialDir := rootfsMapped && mgr.Config.OverlayfsOnIDMapMountOk
+	specialDirUidShift := !idMapSpecialDir && rootfsUidShiftType != sh.NoShift
+
+	if idMapSpecialDir {
+		uid = 0
+		gid = 0
 	}
 
 	reqList := []ipcLib.MountReqInfo{}
 	for dest, kind := range specialDirMap {
-
-		// Check if the special dir requires uid shifting or not; skip if
-		// overlayfs works with ID-mapping because we will instead ID-map this mount.
-
-		shiftUids := false
-		if !mgr.Config.OverlayfsOnIDMapMountOk {
-
-			path := filepath.Join(rootPath, dest)
-			fi, err := os.Stat(path)
-			if err == nil {
-
-				// If the special dir exists within the container's rootfs, then uid
-				// shifting is required when it's owned by root:root.
-
-				st, _ := fi.Sys().(*syscall.Stat_t)
-
-				if st.Uid != st.Gid {
-					return fmt.Errorf("container rootfs has special dir %s with non-matching uid & gid: %d %d", path, st.Uid, st.Gid)
-				}
-				if st.Uid != 0 && st.Uid != uid {
-					return fmt.Errorf("container rootfs has special dir %s with unexpected uid: %d; want %d or %d", path, st.Uid, 0, uid)
-				}
-				if st.Gid != 0 && st.Gid != gid {
-					return fmt.Errorf("container rootfs has special dir %s with unexpected gid: %d; want %d or %d", path, st.Gid, 0, gid)
-				}
-				if st.Uid == 0 && st.Gid == 0 {
-					shiftUids = true
-				}
-
-			} else if os.IsNotExist(err) {
-
-				// If the special dir does not exist within the container rootfs, then
-				// uid shifting is not required when the container starts. However,
-				// when the container stops, if the sysbox host volume that backs the
-				// mount over the special dir has data in it, we copy that back to the
-				// container's rootfs. In this case, whether we do uid shifting on the
-				// special dir during the copy depends on whether the container rootfs
-				// itself requires uid shifting or not (i.e., whether the rootfs is
-				// owned by root:root (shifting required) or by the <uid>:<gid> in the
-				// userns map (shifting not required)).
-
-				shiftUids = (rootfsUidShiftType != sh.NoShift)
-
-			} else {
-				return err
-			}
-		}
-
 		info := ipcLib.MountReqInfo{
 			Kind:      kind,
 			Dest:      dest,
-			ShiftUids: shiftUids,
+			ShiftUids: specialDirUidShift,
 		}
-
 		reqList = append(reqList, info)
 	}
 
