@@ -2571,6 +2571,23 @@ func (c *linuxContainer) procSeccompInit(pid int, fd int32) error {
 	return nil
 }
 
+// sysbox-runc: isFuseMount indicates if the given path is a FUSE-based filesystem.
+func isFuseMount(path string) (bool, error) {
+	var fs unix.Statfs_t
+	const fuseSuperMagic = 0x65735546 // unix.FUSE_SUPER_MAGIC (not yet defined in golang 1.14)
+
+	err := unix.Statfs(path, &fs)
+	if err != nil {
+		return true, err
+	}
+
+	if fs.Type == fuseSuperMagic {
+		return true, nil
+	}
+
+	return false, nil
+}
+
 // sysbox-runc: sets up the shiftfs marks for the container
 func (c *linuxContainer) setupShiftfsMarks() error {
 
@@ -2620,6 +2637,17 @@ func (c *linuxContainer) setupShiftfsMarks() error {
 
 					if isBindMnt {
 						m.Source = origSrc
+					}
+				}
+
+				// If the mount source is FUSE-based, we may need to skip shiftfs on it.
+				if c.sysMgr.Config.NoShiftfsOnFuse {
+					isFuse, err := isFuseMount(m.Source)
+					if err != nil {
+						return err
+					}
+					if isFuse {
+						continue
 					}
 				}
 
