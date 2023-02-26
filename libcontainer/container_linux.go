@@ -2580,12 +2580,12 @@ func (c *linuxContainer) setupShiftfsMarks() error {
 	}
 
 	config := c.config
-	shiftfsMounts := []configs.ShiftfsMount{}
+	shiftfsMounts := []shiftfs.MountPoint{}
 
 	// rootfs
 	if config.RootfsUidShiftType == sh.Shiftfs ||
 		config.RootfsUidShiftType == sh.IDMappedMountOrShiftfs {
-		shiftfsMounts = append(shiftfsMounts, configs.ShiftfsMount{Source: config.Rootfs, Readonly: false})
+		shiftfsMounts = append(shiftfsMounts, shiftfs.MountPoint{Source: config.Rootfs, Readonly: false})
 	}
 
 	// bind-mounts
@@ -2648,7 +2648,7 @@ func (c *linuxContainer) setupShiftfsMarks() error {
 				}
 
 				if !duplicate {
-					sm := configs.ShiftfsMount{
+					sm := shiftfs.MountPoint{
 						Source:   dir,
 						Readonly: m.Flags&unix.MS_RDONLY == unix.MS_RDONLY,
 					}

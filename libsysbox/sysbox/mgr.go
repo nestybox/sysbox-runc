@@ -25,6 +25,7 @@ import (
 	"github.com/nestybox/sysbox-ipc/sysboxMgrGrpc"
 	ipcLib "github.com/nestybox/sysbox-ipc/sysboxMgrLib"
 	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
+	"github.com/nestybox/sysbox-libs/shiftfs"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
@@ -142,7 +143,7 @@ func (mgr *Mgr) ReqMounts(uid, gid uint32, reqList []ipcLib.MountReqInfo) ([]spe
 }
 
 // ReqShiftfsMark sends a request to sysbox-mgr to mark shiftfs on the given dirs; all paths must be absolute.
-func (mgr *Mgr) ReqShiftfsMark(mounts []configs.ShiftfsMount) ([]configs.ShiftfsMount, error) {
+func (mgr *Mgr) ReqShiftfsMark(mounts []shiftfs.MountPoint) ([]shiftfs.MountPoint, error) {
 	resp, err := sysboxMgrGrpc.ReqShiftfsMark(mgr.Id, mounts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to request shiftfs marking to sysbox-mgr: %v", err)

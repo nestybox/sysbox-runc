@@ -8,6 +8,7 @@ import (
 	"time"
 
 	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
+	"github.com/nestybox/sysbox-libs/shiftfs"
 	"github.com/opencontainers/runc/libcontainer/devices"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
@@ -77,12 +78,6 @@ type Syscall struct {
 	Action   Action `json:"action"`
 	ErrnoRet *uint  `json:"errnoRet"`
 	Args     []*Arg `json:"args"`
-}
-
-// ShiftfsMount describes a shiftfs mount point
-type ShiftfsMount struct {
-	Source   string
-	Readonly bool
 }
 
 // TODO Windows. Many of these fields should be factored out into those parts
@@ -224,7 +219,7 @@ type Config struct {
 	BindMntUidShiftType sh.IDShiftType `json:"bindmnt_uid_shift_type,omitempty"`
 
 	// ShiftfsMounts is a list of directories on which shiftfs needs to be mounted
-	ShiftfsMounts []ShiftfsMount `json:"shiftfs_mounts,omitempty"`
+	ShiftfsMounts []shiftfs.MountPoint `json:"shiftfs_mounts,omitempty"`
 
 	// SwitchDockerDns indicates if the containers should change the IP address
 	// of Docker DNS hosts with localhost addresses.
