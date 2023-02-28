@@ -28,6 +28,7 @@ import (
 
 	mapset "github.com/deckarep/golang-set"
 	ipcLib "github.com/nestybox/sysbox-ipc/sysboxMgrLib"
+	"github.com/nestybox/sysbox-libs/capability"
 	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
 	utils "github.com/nestybox/sysbox-libs/utils"
 	"github.com/opencontainers/runc/libsysbox/sysbox"
@@ -258,51 +259,6 @@ var syscontSystemdRwPaths = []string{
 	"/sys/kernel",
 }
 
-// linuxCaps is the full list of Linux capabilities
-var linuxCaps = []string{
-	"CAP_CHOWN",
-	"CAP_DAC_OVERRIDE",
-	"CAP_FSETID",
-	"CAP_FOWNER",
-	"CAP_MKNOD",
-	"CAP_NET_RAW",
-	"CAP_SETGID",
-	"CAP_SETUID",
-	"CAP_SETFCAP",
-	"CAP_SETPCAP",
-	"CAP_NET_BIND_SERVICE",
-	"CAP_SYS_CHROOT",
-	"CAP_KILL",
-	"CAP_AUDIT_WRITE",
-	"CAP_DAC_READ_SEARCH",
-	"CAP_LINUX_IMMUTABLE",
-	"CAP_NET_BROADCAST",
-	"CAP_NET_ADMIN",
-	"CAP_IPC_LOCK",
-	"CAP_IPC_OWNER",
-	"CAP_SYS_MODULE",
-	"CAP_SYS_RAWIO",
-	"CAP_SYS_PTRACE",
-	"CAP_SYS_PACCT",
-	"CAP_SYS_ADMIN",
-	"CAP_SYS_BOOT",
-	"CAP_SYS_NICE",
-	"CAP_SYS_RESOURCE",
-	"CAP_SYS_TIME",
-	"CAP_SYS_TTY_CONFIG",
-	"CAP_LEASE",
-	"CAP_AUDIT_CONTROL",
-	"CAP_MAC_OVERRIDE",
-	"CAP_MAC_ADMIN",
-	"CAP_SYSLOG",
-	"CAP_WAKE_ALARM",
-	"CAP_BLOCK_SUSPEND",
-	"CAP_AUDIT_READ",
-	"CAP_PERFMON",
-	"CAP_BPF",
-	"CAP_CHECKPOINT_RESTORE",
-}
-
 // cfgNamespaces checks that the namespace config has the minimum set
 // of namespaces required and adds any missing namespaces to it
 func cfgNamespaces(sysMgr *sysbox.Mgr, spec *specs.Spec) error {
@@ -476,28 +432,51 @@ func cfgIDMappings(sysMgr *sysbox.Mgr, spec *specs.Spec) error {
 }
 
 // cfgCapabilities sets the capabilities for the process in the system container
-func cfgCapabilities(p *specs.Process) {
+func cfgCapabilities(p *specs.Process) error {
 	caps := p.Capabilities
 	uid := p.User.UID
 
 	noCaps := []string{}
 
+	sysboxCaps, err := getSysboxEffCaps()
+	if err != nil {
+		return err
+	}
+
 	if uid == 0 {
-		// init processes owned by root have all capabilities
-		caps.Bounding = linuxCaps
-		caps.Effective = linuxCaps
-		caps.Inheritable = linuxCaps
-		caps.Permitted = linuxCaps
-		caps.Ambient = linuxCaps
+		// init processes owned by root have all capabilities assigned to Sysbox itself (i.e., all root caps)
+		caps.Bounding = sysboxCaps
+		caps.Effective = sysboxCaps
+		caps.Inheritable = sysboxCaps
+		caps.Permitted = sysboxCaps
+		caps.Ambient = sysboxCaps
 	} else {
 		// init processes owned by others have all caps disabled and the bounding caps all
 		// set (just as in a regular host)
-		caps.Bounding = linuxCaps
+		caps.Bounding = sysboxCaps
 		caps.Effective = noCaps
 		caps.Inheritable = noCaps
 		caps.Permitted = noCaps
 		caps.Ambient = noCaps
 	}
+
+	return nil
+}
+
+// getSysboxEffCaps returns the list of capabilities assigned to sysbox-runc itself.
+func getSysboxEffCaps() ([]string, error) {
+	caps, err := capability.NewPid2(0)
+	if err != nil {
+		return nil, err
+	}
+	err = caps.Load()
+	if err != nil {
+		return nil, err
+	}
+
+	allCapsStr := caps.StringCap(capability.EFFECTIVE, capability.OCI_STRING)
+	allCapsStr = strings.ReplaceAll(allCapsStr, ", ", ",")
+	return strings.Split(allCapsStr, ","), nil
 }
 
 // cfgMaskedPaths removes from the container's config any masked paths for which
@@ -1197,7 +1176,9 @@ func ConvertProcessSpec(p *specs.Process, sysMgr *sysbox.Mgr, isExec bool) error
 	}
 
 	if sysMgr.Config.SyscontMode && !sysMgr.Config.HonorCaps {
-		cfgCapabilities(p)
+		if err := cfgCapabilities(p); err != nil {
+			return err
+		}
 	}
 
 	if sysMgr.Config.SyscontMode {

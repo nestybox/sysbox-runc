@@ -23,6 +23,11 @@ import (
 // Example returns an example OCI spec file for a system container
 func Example() (*specs.Spec, error) {
 
+	sysboxCaps, err := getSysboxEffCaps()
+	if err != nil {
+		return nil, err
+	}
+
 	return &specs.Spec{
 		Version: specs.Version,
 		Root: &specs.Root{
@@ -45,11 +50,11 @@ func Example() (*specs.Spec, error) {
 			Cwd:             "/",
 			NoNewPrivileges: true,
 			Capabilities: &specs.LinuxCapabilities{
-				Bounding:    linuxCaps,
-				Permitted:   linuxCaps,
-				Inheritable: linuxCaps,
-				Ambient:     linuxCaps,
-				Effective:   linuxCaps,
+				Bounding:    sysboxCaps,
+				Permitted:   sysboxCaps,
+				Inheritable: sysboxCaps,
+				Ambient:     sysboxCaps,
+				Effective:   sysboxCaps,
 			},
 			Rlimits: []specs.POSIXRlimit{
 				{
