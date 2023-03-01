@@ -24,8 +24,8 @@ require (
 	github.com/nestybox/sysbox-libs/linuxUtils v0.0.0-00010101000000-000000000000
 	github.com/nestybox/sysbox-libs/mount v0.0.0-00010101000000-000000000000
 	github.com/nestybox/sysbox-libs/overlayUtils v0.0.0-00010101000000-000000000000
-	github.com/nestybox/sysbox-libs/utils v0.0.0-00010101000000-000000000000
 	github.com/nestybox/sysbox-libs/shiftfs v0.0.0-00010101000000-000000000000
+	github.com/nestybox/sysbox-libs/utils v0.0.0-00010101000000-000000000000
 	github.com/opencontainers/runc v1.0.0-rc9.0.20210126000000-2be806d1391d
 	github.com/opencontainers/runtime-spec v1.0.3-0.20200929063507-e6143ca7d51d
 	github.com/opencontainers/selinux v1.8.0
@@ -36,21 +36,21 @@ require (
 	github.com/urfave/cli v1.22.1
 	github.com/vishvananda/netlink v1.1.0
 	github.com/willf/bitset v1.1.11
-	golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8
+	golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f
 )
 
 replace (
 	github.com/nestybox/sysbox-ipc => ../sysbox-ipc
-	github.com/nestybox/sysbox-libs/libseccomp-golang => ../sysbox-libs/libseccomp-golang
-	github.com/nestybox/sysbox-libs/formatter => ../sysbox-libs/formatter
 	github.com/nestybox/sysbox-libs/capability => ../sysbox-libs/capability
-	github.com/nestybox/sysbox-libs/utils => ../sysbox-libs/utils
-	github.com/nestybox/sysbox-libs/linuxUtils => ../sysbox-libs/linuxUtils
 	github.com/nestybox/sysbox-libs/dockerUtils => ../sysbox-libs/dockerUtils
-	github.com/nestybox/sysbox-libs/idShiftUtils => ../sysbox-libs/idShiftUtils
-	github.com/nestybox/sysbox-libs/overlayUtils => ../sysbox-libs/overlayUtils
-	github.com/nestybox/sysbox-libs/mount => ../sysbox-libs/mount
-	github.com/nestybox/sysbox-libs/shiftfs => ../sysbox-libs/shiftfs
+	github.com/nestybox/sysbox-libs/formatter => ../sysbox-libs/formatter
 	github.com/nestybox/sysbox-libs/idMap => ../sysbox-libs/idMap
+	github.com/nestybox/sysbox-libs/idShiftUtils => ../sysbox-libs/idShiftUtils
+	github.com/nestybox/sysbox-libs/libseccomp-golang => ../sysbox-libs/libseccomp-golang
+	github.com/nestybox/sysbox-libs/linuxUtils => ../sysbox-libs/linuxUtils
+	github.com/nestybox/sysbox-libs/mount => ../sysbox-libs/mount
+	github.com/nestybox/sysbox-libs/overlayUtils => ../sysbox-libs/overlayUtils
+	github.com/nestybox/sysbox-libs/shiftfs => ../sysbox-libs/shiftfs
+	github.com/nestybox/sysbox-libs/utils => ../sysbox-libs/utils
 	github.com/opencontainers/runc => ./
-	)
+)
