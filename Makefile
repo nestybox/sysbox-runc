@@ -129,13 +129,13 @@ ifneq ($(SYS_ARCH),$(TARGET_ARCH))
 	endif
 endif
 
-GO_BUILD := $(GO_XCOMPILE) $(GO) build $(GO_BUILDMODE) -trimpath $(EXTRA_FLAGS) \
+GO_BUILD := $(GO_XCOMPILE) $(GO) build $(GO_BUILDMODE) -buildvcs=false -trimpath $(EXTRA_FLAGS) \
 		-tags "$(BUILDTAGS)" -ldflags "${LDFLAGS}"
 
-GO_BUILD_STATIC := CGO_ENABLED=1 $(GO_XCOMPILE) $(GO) build -trimpath $(EXTRA_FLAGS) \
+GO_BUILD_STATIC := CGO_ENABLED=1 $(GO_XCOMPILE) $(GO) build -buildvcs=false -trimpath $(EXTRA_FLAGS) \
 		-tags "$(BUILDTAGS) netgo osusergo" -ldflags "-extldflags -static ${LDFLAGS}"
 
-GO_BUILD_DEBUG := $(GO_XCOMPILE) $(GO) build --buildmode=exe -trimpath $(EXTRA_FLAGS) \
+GO_BUILD_DEBUG := $(GO_XCOMPILE) $(GO) build -buildvcs=false --buildmode=exe -trimpath $(EXTRA_FLAGS) \
 		-tags "$(BUILDTAGS)" -gcflags="all=-N -l" -ldflags "${LDFLAGS}"
 
 RUN_TEST_CONT := $(CONTAINER_ENGINE) run ${DOCKER_RUN_PROXY} \
