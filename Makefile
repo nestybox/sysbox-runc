@@ -85,7 +85,7 @@ IMAGE_BASE_DISTRO := $(shell cat /etc/os-release | grep "^ID=" | cut -d "=" -f2 
 # present in Sysbox's Makefile; we are duplicating it here to keep sysbox-runc as independent
 # as possible. If KERNEL_HEADERS is not already defined, we will assume that the same applies
 # to all related variables declared below.
-ifeq ($(IMAGE_BASE_DISTRO),$(filter $(IMAGE_BASE_DISTRO),centos fedora redhat almalinux rocky))
+ifeq ($(IMAGE_BASE_DISTRO),$(filter $(IMAGE_BASE_DISTRO),centos fedora redhat almalinux rocky amzn))
 	IMAGE_BASE_RELEASE := $(shell cat /etc/os-release | grep "^VERSION_ID" | cut -d "=" -f2 | tr -d '"' | cut -d "." -f1)
 	KERNEL_HEADERS := kernels/$(KERNEL_REL)
 else
