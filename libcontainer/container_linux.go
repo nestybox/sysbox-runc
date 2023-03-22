@@ -809,15 +809,9 @@ func (c *linuxContainer) Pause() error {
 			return err
 		}
 
-		if c.config.RootfsUidShiftType == sh.Chown {
-			if c.config.RootfsCloned {
-				if err := c.sysMgr.RevertClonedRootfsChown(); err != nil {
-					return err
-				}
-			} else {
-				if err := c.revertRootfsChown(); err == nil {
-					return err
-				}
+		if !c.config.RootfsCloned && c.config.RootfsUidShiftType == sh.Chown {
+			if err := c.revertRootfsChown(); err == nil {
+				return err
 			}
 		}
 
@@ -826,6 +820,7 @@ func (c *linuxContainer) Pause() error {
 				return err
 			}
 		}
+
 		return c.state.transition(&pausedState{
 			c: c,
 		})
@@ -844,18 +839,15 @@ func (c *linuxContainer) Resume() error {
 		return newGenericError(fmt.Errorf("container not paused"), ContainerNotPaused)
 	}
 
-	if c.config.RootfsUidShiftType == sh.Chown {
-		if c.config.RootfsCloned {
-			uidOffset := int32(c.config.UidMappings[0].HostID)
-			gidOffset := int32(c.config.GidMappings[0].HostID)
+	if !c.config.RootfsCloned && c.config.RootfsUidShiftType == sh.Chown {
+		if err := c.chownRootfs(); err != nil {
+			return err
+		}
+	}
 
-			if err := c.sysMgr.ChownClonedRootfs(uidOffset, gidOffset); err != nil {
-				return err
-			}
-		} else {
-			if err := c.chownRootfs(); err != nil {
-				return err
-			}
+	if c.sysMgr.Enabled() {
+		if err := c.sysMgr.Resume(); err != nil {
+			return err
 		}
 	}
 

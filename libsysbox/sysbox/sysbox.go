@@ -232,8 +232,8 @@ func CheckUidShifting(sysMgr *Mgr, spec *specs.Spec) (sh.IDShiftType, sh.IDShift
 
 		// Check uid shifting type to be used for the container's rootfs.
 		//
-		// We do it via ID-mapping (preferably), or via shiftfs (if available on
-		// the host), or by chown'ing the rootfs hierarchy. Chowning is the least
+		// We do it via ID-mapping (preferably) or via shiftfs (if available on
+		// the host) or by chown'ing the rootfs hierarchy. Chowning is the least
 		// preferred and slowest approach, but won't disrupt anything on the host
 		// since the container's rootfs is dedicated to the container (no other
 		// entity in the system will use it while the container is running).

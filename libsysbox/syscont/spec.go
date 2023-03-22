@@ -775,7 +775,10 @@ func getSpecialDirs(spec *specs.Spec) (map[string]ipcLib.MntKind, error) {
 	return specialDirMap, nil
 }
 
-// sysMgrSetupMounts requests the sysbox-mgr to setup special container mounts.
+// sysMgrSetupMounts requests the sysbox-mgr to setup special container mounts
+// (e.g., the implicit mounts that sysbox creates over the container's
+// /var/lib/docker, /var/lib/kubelet, etc. in order to enable system software to
+// run in the container seamlessly).
 func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, rootfsUidShiftType sh.IDShiftType) error {
 
 	specialDirMap, err := getSpecialDirs(spec)
@@ -821,27 +824,16 @@ func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, rootfsUidShiftType sh.
 	// Add the special dirs to the list of implicit mounts setup by Sysbox.
 	// sysbox-mgr will setup host dirs to back the mounts; it will also send us
 	// a list of any other implicit mounts it needs.
-
-	rootfsMapped := rootfsUidShiftType == sh.IDMappedMount || rootfsUidShiftType == sh.Shiftfs
-	idMapSpecialDir := rootfsMapped && mgr.Config.OverlayfsOnIDMapMountOk
-	specialDirUidShift := !idMapSpecialDir && rootfsUidShiftType != sh.NoShift
-
-	if idMapSpecialDir {
-		uid = 0
-		gid = 0
-	}
-
 	reqList := []ipcLib.MountReqInfo{}
 	for dest, kind := range specialDirMap {
 		info := ipcLib.MountReqInfo{
-			Kind:      kind,
-			Dest:      dest,
-			ShiftUids: specialDirUidShift,
+			Kind: kind,
+			Dest: dest,
 		}
 		reqList = append(reqList, info)
 	}
 
-	m, err := mgr.ReqMounts(uid, gid, reqList)
+	m, err := mgr.ReqMounts(rootfsUidShiftType, reqList)
 	if err != nil {
 		return err
 	}

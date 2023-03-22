@@ -134,8 +134,8 @@ func (mgr *Mgr) PrepMounts(uid, gid uint32, prepList []ipcLib.MountPrepInfo) err
 }
 
 // ReqMounts sends a request to sysbox-mgr for container mounts; all paths must be absolute.
-func (mgr *Mgr) ReqMounts(uid, gid uint32, reqList []ipcLib.MountReqInfo) ([]specs.Mount, error) {
-	mounts, err := sysboxMgrGrpc.ReqMounts(mgr.Id, uid, gid, reqList)
+func (mgr *Mgr) ReqMounts(rootfsUidShiftType sh.IDShiftType, reqList []ipcLib.MountReqInfo) ([]specs.Mount, error) {
+	mounts, err := sysboxMgrGrpc.ReqMounts(mgr.Id, rootfsUidShiftType, reqList)
 	if err != nil {
 		return nil, fmt.Errorf("failed to request mounts from sysbox-mgr: %v", err)
 	}
@@ -164,6 +164,13 @@ func (mgr *Mgr) ReqFsState(rootfs string) ([]configs.FsEntry, error) {
 func (mgr *Mgr) Pause() error {
 	if err := sysboxMgrGrpc.Pause(mgr.Id); err != nil {
 		return fmt.Errorf("failed to notify pause to sysbox-mgr: %v", err)
+	}
+	return nil
+}
+
+func (mgr *Mgr) Resume() error {
+	if err := sysboxMgrGrpc.Resume(mgr.Id); err != nil {
+		return fmt.Errorf("failed to notify resume to sysbox-mgr: %v", err)
 	}
 	return nil
 }
