@@ -2678,11 +2678,14 @@ func (c *linuxContainer) setupShiftfsMarks() error {
 		}
 	}
 
+	if len(shiftfsMounts) == 0 {
+		return nil
+	}
+
 	// Perform the shiftfs marks; normally this is done by sysbox-mgr as it can
 	// track shiftfs mark-points on the host. But for sysbox-runc unit testing
 	// the sysbox-mgr is not present, so we do the shiftfs marking locally (which
 	// only works when sys containers are not sharing mount points).
-
 	if c.sysMgr.Enabled() {
 
 		shiftfsMarks, err := c.sysMgr.ReqShiftfsMark(shiftfsMounts)
