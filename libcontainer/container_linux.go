@@ -48,6 +48,7 @@ import (
 	"github.com/nestybox/sysbox-libs/idMap"
 	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
 	"github.com/nestybox/sysbox-libs/shiftfs"
+	sysboxLibsUtils "github.com/nestybox/sysbox-libs/utils"
 )
 
 const stdioFdCount = 3
@@ -2563,23 +2564,6 @@ func (c *linuxContainer) procSeccompInit(pid int, fd int32) error {
 	return nil
 }
 
-// sysbox-runc: isFuseMount indicates if the given path is a FUSE-based filesystem.
-func isFuseMount(path string) (bool, error) {
-	var fs unix.Statfs_t
-	const fuseSuperMagic = 0x65735546 // unix.FUSE_SUPER_MAGIC (not yet defined in golang 1.14)
-
-	err := unix.Statfs(path, &fs)
-	if err != nil {
-		return true, err
-	}
-
-	if fs.Type == fuseSuperMagic {
-		return true, nil
-	}
-
-	return false, nil
-}
-
 // sysbox-runc: sets up the shiftfs marks for the container
 func (c *linuxContainer) setupShiftfsMarks() error {
 
@@ -2590,6 +2574,7 @@ func (c *linuxContainer) setupShiftfsMarks() error {
 
 	config := c.config
 	shiftfsMounts := []shiftfs.MountPoint{}
+	noShiftfsOnFuse := c.sysbox.Mgr.Config.NoShiftfsOnFuse
 
 	// rootfs
 	if config.RootfsUidShiftType == sh.Shiftfs ||
@@ -2632,17 +2617,6 @@ func (c *linuxContainer) setupShiftfsMarks() error {
 					}
 				}
 
-				// If the mount source is FUSE-based, we may need to skip shiftfs on it.
-				if c.sysbox.Mgr.Config.NoShiftfsOnFuse {
-					isFuse, err := isFuseMount(m.Source)
-					if err != nil {
-						return err
-					}
-					if isFuse {
-						continue
-					}
-				}
-
 				// shiftfs mounts must be on directories (not on files). But this
 				// does not mean that the directory on which shiftfs is mounted is
 				// necessarily fully exposed inside the container; it may be that
@@ -2656,7 +2630,12 @@ func (c *linuxContainer) setupShiftfsMarks() error {
 					dir = m.Source
 				}
 
-				if skipShiftfsBindSource(dir) {
+				allow, err := allowShiftfsBindSource(dir, noShiftfsOnFuse)
+				if err != nil {
+					return err
+				}
+
+				if !allow {
 					continue
 				}
 
@@ -2802,23 +2781,36 @@ func (c *linuxContainer) revertRootfsChown() error {
 }
 
 // The following are host directories where we never mount shiftfs as it causes functional problems.
-var shiftfsBlackList = []string{"/dev"}
+var shiftfsDevBlacklist = []string{"/dev"}
+var shiftfsBlacklist = []string{"shiftfs"}
 
-// sysbox-runc: skipShiftfsBindSource indicates if shiftfs mounts should be skipped on the
-// given directory.
-func skipShiftfsBindSource(source string) bool {
-	for _, m := range shiftfsBlackList {
-		if source == m {
-			return true
-		}
+// sysbox-runc: allowShiftfsBindSource indicates if shiftfs mounts is allowed on
+// the given bind mount.
+func allowShiftfsBindSource(source string, noShiftfsOnFuse bool) (bool, error) {
+
+	// Don't mount shiftfs on top of some devices
+	if sysboxLibsUtils.StringSliceContains(shiftfsDevBlacklist, source) {
+		return false, nil
 	}
 
-	// Don't mount shiftfs on cgroup v2 bind-source either
+	// Don't mount shiftfs on cgroup v2 bind mounts either
 	if strings.HasPrefix(source, "/sys/fs/cgroup") {
-		return true
+		return false, nil
 	}
 
-	return false
+	// Don't mount shiftfs on top of some filesystems
+	fsName, err := sysboxLibsUtils.GetFsName(source)
+	if err != nil {
+		return false, err
+	}
+	if sysboxLibsUtils.StringSliceContains(shiftfsBlacklist, fsName) {
+		return false, nil
+	}
+	if noShiftfsOnFuse && fsName == "fuse" {
+		return false, nil
+	}
+
+	return true, nil
 }
 
 // sysbox-runc: determines which mounts must be ID-mapped; does not actually
