@@ -18,6 +18,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/nestybox/sysbox-libs/idMap"
+	"github.com/nestybox/sysbox-libs/idShiftUtils"
 	mount "github.com/nestybox/sysbox-libs/mount"
 	overlayUtils "github.com/nestybox/sysbox-libs/overlayUtils"
 	utils "github.com/nestybox/sysbox-libs/utils"
@@ -305,6 +306,7 @@ func (l *linuxRootfsInit) Init() error {
 			}
 
 			ovfsMntOpts := overlayUtils.GetMountOpt(mi)
+			ovfsUpperLayer := overlayUtils.GetUpperLayer(ovfsMntOpts)
 			ovfsLowerLayers := overlayUtils.GetLowerLayers(ovfsMntOpts)
 
 			// Remove the current overlayfs mount
@@ -320,6 +322,11 @@ func (l *linuxRootfsInit) Init() error {
 						"setting up ID-mapped mount on path %s (likely means idmapped mounts are not supported on the filesystem at this path (%s))",
 						layer, fsName)
 				}
+			}
+
+			// The overlayfs upper layer can't be ID-mapped, so it needs to be chowned.
+			if err := idShiftUtils.ShiftIdsWithChown(ovfsUpperLayer, int32(uid), int32(gid)); err != nil {
+				return newSystemErrorWithCausef(err, "chown overlayfs upper layet at %s")
 			}
 
 			// Recreate the rootfs overlayfs mount (using the ID-mapped lower layers)
