@@ -2589,6 +2589,10 @@ func (c *linuxContainer) setupShiftfsMarks() error {
 		for _, m := range config.Mounts {
 			if m.Device == "bind" {
 
+				if ignoreIDshift(m, config) {
+					continue
+				}
+
 				if m.IDMappedMount {
 					continue
 				}
@@ -2839,6 +2843,10 @@ func (c *linuxContainer) setupIDMappedMounts() error {
 		for _, m := range config.Mounts {
 			if m.Device == "bind" {
 
+				if ignoreIDshift(m, config) {
+					continue
+				}
+
 				idMapMntAllowed, err := idMap.IDMapMountSupportedOnPath(m.Source)
 				if err != nil {
 					return newSystemErrorWithCausef(err, "checking for ID-mapped mount support on bind source %s", m.Source)
@@ -2960,4 +2968,15 @@ func fileIsBindMount(mounts []*mount.Info, fpath string) (bool, string, error) {
 	// The extra "/" ensures we have a path separator in the resulting path
 	fpathMi.Root = strings.Replace(fpathMi.Root, devRoot, devMp+"/", 1)
 	return true, fpathMi.Root, nil
+}
+
+// Iterate through the 'idShift-ignore-list' extracted by sysbox-mgr and skip all
+// those mountpoints with a matching 'destination'.
+func ignoreIDshift(mount *configs.Mount, config *configs.Config) bool {
+	for _, e := range config.IDshiftIgnoreList {
+		if e == mount.Destination {
+			return true
+		}
+	}
+	return false
 }

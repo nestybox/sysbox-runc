@@ -234,6 +234,10 @@ type Config struct {
 
 	// Indicates if container setup should fail when we detect a filesystem uid mapping error
 	FsuidMapFailOnErr bool `json:"fsuid_map_fail_on_err"`
+
+	// IDShiftIgnoreList is a list of container paths over which no UID/GID shifting mechanism must
+	// be applied.
+	IDshiftIgnoreList []string `json:"idshift_ignore_list,omitempty"`
 }
 
 type HookName string

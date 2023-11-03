@@ -317,6 +317,7 @@ func createContainer(context *cli.Context,
 		SwitchDockerDns:     sysbox.SwitchDockerDns,
 		RootfsCloned:        sysbox.RootfsCloned,
 		FsuidMapFailOnErr:   sysMgr.Config.FsuidMapFailOnErr,
+		IDshiftIgnoreList:   sysbox.IDshiftIgnoreList,
 	})
 	if err != nil {
 		return nil, err
