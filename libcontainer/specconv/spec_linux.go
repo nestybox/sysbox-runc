@@ -55,17 +55,18 @@ var mountPropagationMapping = map[string]int{
 // all containers.
 //
 // XXX (cyphar)
-//    This behaviour is at the very least "questionable" (if not outright
-//    wrong) according to the runtime-spec.
 //
-//    Yes, we have to include certain devices other than the ones the user
-//    specifies, but several devices listed here are not part of the spec
-//    (including "mknod for any device"?!). In addition, these rules are
-//    appended to the user-provided set which means that users *cannot disable
-//    this behaviour*.
+//	This behaviour is at the very least "questionable" (if not outright
+//	wrong) according to the runtime-spec.
 //
-//    ... unfortunately I'm too scared to change this now because who knows how
-//    many people depend on this (incorrect and arguably insecure) behaviour.
+//	Yes, we have to include certain devices other than the ones the user
+//	specifies, but several devices listed here are not part of the spec
+//	(including "mknod for any device"?!). In addition, these rules are
+//	appended to the user-provided set which means that users *cannot disable
+//	this behaviour*.
+//
+//	... unfortunately I'm too scared to change this now because who knows how
+//	many people depend on this (incorrect and arguably insecure) behaviour.
 var AllowedDevices = []*devices.Device{
 	// allow mknod for any device
 	{
@@ -208,6 +209,7 @@ type CreateOpts struct {
 	SwitchDockerDns     bool
 	RootfsCloned        bool
 	FsuidMapFailOnErr   bool
+	IDshiftIgnoreList   []string
 }
 
 // CreateLibcontainerConfig creates a new libcontainer configuration from a
@@ -248,6 +250,7 @@ func CreateLibcontainerConfig(opts *CreateOpts) (*configs.Config, error) {
 		SwitchDockerDns:     opts.SwitchDockerDns,
 		RootfsCloned:        opts.RootfsCloned,
 		FsuidMapFailOnErr:   opts.FsuidMapFailOnErr,
+		IDshiftIgnoreList:   opts.IDshiftIgnoreList,
 	}
 
 	for _, m := range spec.Mounts {

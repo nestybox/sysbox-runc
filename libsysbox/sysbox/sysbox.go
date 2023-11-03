@@ -43,6 +43,7 @@ type Sysbox struct {
 	OrigRootfs          string
 	OrigMounts          []specs.Mount
 	ShiftfsMounts       []shiftfs.MountPoint
+	IDshiftIgnoreList   []string
 }
 
 func NewSysbox(id string, withMgr, withFs bool) *Sysbox {

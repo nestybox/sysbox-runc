@@ -901,17 +901,16 @@ func checkSpec(spec *specs.Spec) error {
 }
 
 // getSysboxEnvVarConfigs collects the SYSBOX_* env vars passed to the container.
-func getSysboxEnvVarConfigs(p *specs.Process, sysMgr *sysbox.Mgr) error {
-
-	knownEnvVars := []string{
-		"SYSBOX_IGNORE_SYSFS_CHOWN",
-		"SYSBOX_ALLOW_TRUSTED_XATTR",
-		"SYSBOX_HONOR_CAPS",
-		"SYSBOX_SYSCONT_MODE",
+func getSysboxEnvVarConfigs(p *specs.Process, sbox *sysbox.Sysbox) error {
+	var knownEnvVars = map[string]string{
+		"SYSBOX_IGNORE_SYSFS_CHOWN":  "bool",
+		"SYSBOX_ALLOW_TRUSTED_XATTR": "bool",
+		"SYSBOX_HONOR_CAPS":          "bool",
+		"SYSBOX_SYSCONT_MODE":        "bool",
+		"SYSBOX_SKIP_UID_SHIFT":      "string",
 	}
 
 	for _, ev := range p.Env {
-
 		if !strings.HasPrefix(ev, "SYSBOX_") {
 			continue
 		}
@@ -925,27 +924,70 @@ func getSysboxEnvVarConfigs(p *specs.Process, sysMgr *sysbox.Mgr) error {
 		evVal := tokens[1]
 
 		// If a SYSBOX_* env var is specified, it must be one of the supported ones.
-		if !utils.StringSliceContains(knownEnvVars, evName) {
+		envVarType, ok := knownEnvVars[evName]
+		if !ok {
 			return fmt.Errorf("invalid env var %s; must be one of %v", evName, knownEnvVars)
 		}
 
-		if evVal != "TRUE" && evVal != "FALSE" {
-			return fmt.Errorf("env var %s has invalid value %s; expect [TRUE|FALSE].", evName, evVal)
-		}
-
-		switch evName {
-		case "SYSBOX_IGNORE_SYSFS_CHOWN":
-			sysMgr.Config.IgnoreSysfsChown = (evVal == "TRUE")
-		case "SYSBOX_ALLOW_TRUSTED_XATTR":
-			sysMgr.Config.AllowTrustedXattr = (evVal == "TRUE")
-		case "SYSBOX_HONOR_CAPS":
-			sysMgr.Config.HonorCaps = (evVal == "TRUE")
-		case "SYSBOX_SYSCONT_MODE":
-			sysMgr.Config.SyscontMode = (evVal == "TRUE")
+		switch envVarType {
+		case "bool":
+			if err := getSysboxBoolEnvVarConfigs(sbox, evName, evVal); err != nil {
+				return err
+			}
+		case "string":
+			if err := getSysboxStringEnvVarConfigs(sbox, evName, evVal); err != nil {
+				return err
+			}
 		}
 	}
 
 	return nil
+}
+
+func getSysboxBoolEnvVarConfigs(sbox *sysbox.Sysbox, evName string, evVal string) error {
+	if evVal != "TRUE" && evVal != "FALSE" {
+		return fmt.Errorf("env var %s has invalid value %s; expect [TRUE|FALSE].", evName, evVal)
+	}
+
+	switch evName {
+	case "SYSBOX_IGNORE_SYSFS_CHOWN":
+		sbox.Mgr.Config.IgnoreSysfsChown = (evVal == "TRUE")
+	case "SYSBOX_ALLOW_TRUSTED_XATTR":
+		sbox.Mgr.Config.AllowTrustedXattr = (evVal == "TRUE")
+	case "SYSBOX_HONOR_CAPS":
+		sbox.Mgr.Config.HonorCaps = (evVal == "TRUE")
+	case "SYSBOX_SYSCONT_MODE":
+		sbox.Mgr.Config.SyscontMode = (evVal == "TRUE")
+	}
+
+	return nil
+}
+
+func getSysboxStringEnvVarConfigs(sbox *sysbox.Sysbox, evName string, evVal string) error {
+	if evVal == "" {
+		return fmt.Errorf("env var %s has empty value", evName)
+	}
+
+	switch evName {
+	case "SYSBOX_SKIP_UID_SHIFT":
+		sbox.IDshiftIgnoreList = getSysboxEnvVarIDshiftIgnoreConfig(evVal)
+	}
+
+	return nil
+}
+
+// getSysboxEnvVarIDshiftIgnoreConfig parses the SYSBOX_SKIP_UID_SHIFT env-var and returns
+// a list of paths for which id-shifting operations must be avoided.
+// Example: "/var/lib/mutagen, /var/lib/docker".
+func getSysboxEnvVarIDshiftIgnoreConfig(envvar string) []string {
+	paths := strings.Split(envvar, ",")
+
+	// Trim spaces from the paths.
+	for i, p := range paths {
+		paths[i] = strings.TrimSpace(p)
+	}
+
+	return paths
 }
 
 // removeSysboxEnvVarsForExec removes the SYSBOX_* env vars from the process spec.
@@ -1169,13 +1211,13 @@ func systemdInit(p *specs.Process) bool {
 }
 
 // Configure the container's process spec for system containers
-func ConvertProcessSpec(p *specs.Process, sysbox *sysbox.Sysbox, isExec bool) error {
+func ConvertProcessSpec(p *specs.Process, sbox *sysbox.Sysbox, isExec bool) error {
 
-	sysMgr := sysbox.Mgr
+	sysMgr := sbox.Mgr
 
 	if isExec {
 		removeSysboxEnvVarsForExec(p)
-		if err := getSysboxEnvVarConfigs(p, sysMgr); err != nil {
+		if err := getSysboxEnvVarConfigs(p, sbox); err != nil {
 			return err
 		}
 	}
@@ -1204,7 +1246,7 @@ func ConvertSpec(context *cli.Context, spec *specs.Spec, sbox *sysbox.Sysbox) er
 
 	sysMgr := sbox.Mgr
 
-	if err := getSysboxEnvVarConfigs(spec.Process, sysMgr); err != nil {
+	if err := getSysboxEnvVarConfigs(spec.Process, sbox); err != nil {
 		return err
 	}
 
