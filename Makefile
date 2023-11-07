@@ -100,14 +100,14 @@ else
 		endif
 	endif
 	KERNEL_HEADERS := linux-headers-$(KERNEL_REL)
-	KERNEL_HEADERS_BASE := $(shell find /usr/src/$(KERNEL_HEADERS) -maxdepth 1 -type l -exec readlink {} \; | cut -d"/" -f2 | egrep -v "^\.\." | head -1)
+	KERNEL_HEADERS_BASE := $(shell find /usr/src/$(KERNEL_HEADERS) -maxdepth 1 -type l -exec readlink {} \; | cut -d"/" -f2 | egrep -v "^\.\." | tr ' ' '\n' | sort | uniq)
 endif
 
 ifeq ($(KERNEL_HEADERS_BASE), )
 	KERNEL_HEADERS_MOUNTS := -v /usr/src/$(KERNEL_HEADERS):/usr/src/$(KERNEL_HEADERS):ro
 else
-	KERNEL_HEADERS_MOUNTS := -v /usr/src/$(KERNEL_HEADERS):/usr/src/$(KERNEL_HEADERS):ro \
-				 -v /usr/src/$(KERNEL_HEADERS_BASE):/usr/src/$(KERNEL_HEADERS_BASE):ro
+	KERNEL_HEADERS_MOUNTS := -v /usr/src/$(KERNEL_HEADERS):/usr/src/$(KERNEL_HEADERS):ro
+	KERNEL_HEADERS_MOUNTS += $(foreach header,$(KERNEL_HEADERS_BASE), -v /usr/src/$(header):/usr/src/$(header):ro)
 endif
 
 ifeq ($(shell $(GO) env GOOS),linux)
