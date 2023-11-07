@@ -71,7 +71,7 @@ COPY tests/integration/multi-arch.bash tests/integration/
 ENV ROOTFS /busybox
 RUN mkdir -p "${ROOTFS}"
 RUN . tests/integration/multi-arch.bash \
-    && curl -fsSL `get_busybox` | tar xfJC - "${ROOTFS}"
+    && curl -fsSL https://github.com/openstack/kuryr/raw/master/contrib/busybox/busybox.tar.xz | tar Jxf - -C "${ROOTFS}"
 
 ENV DEBIAN_ROOTFS /debian
 RUN mkdir -p "${DEBIAN_ROOTFS}"
