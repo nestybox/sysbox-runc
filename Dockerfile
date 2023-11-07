@@ -59,7 +59,7 @@ RUN curl -o /usr/local/bin/umoci -fsSL https://github.com/opencontainers/umoci/r
     && chmod +x /usr/local/bin/umoci
 
 # install debug tools
-RUN go get github.com/go-delve/delve/cmd/dlv \
+RUN go get github.com/go-delve/delve/cmd/dlv@v1.7.3 \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
     psmisc
