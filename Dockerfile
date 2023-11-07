@@ -59,7 +59,7 @@ RUN curl -o /usr/local/bin/umoci -fsSL https://github.com/opencontainers/umoci/r
     && chmod +x /usr/local/bin/umoci
 
 # install debug tools
-RUN go get github.com/go-delve/delve/cmd/dlv@v1.7.3 \
+RUN go get github.com/go-delve/delve/cmd/dlv@v1.7.3\
     && apt-get update \
     && apt-get install -y --no-install-recommends \
     psmisc
@@ -71,7 +71,7 @@ COPY tests/integration/multi-arch.bash tests/integration/
 ENV ROOTFS /busybox
 RUN mkdir -p "${ROOTFS}"
 RUN . tests/integration/multi-arch.bash \
-    && curl -fsSL https://github.com/openstack/kuryr/raw/master/contrib/busybox/busybox.tar.xz | tar Jxf - -C "${ROOTFS}"
+    && curl -fsSL `get_busybox` | tar xfJC - "${ROOTFS}"
 
 ENV DEBIAN_ROOTFS /debian
 RUN mkdir -p "${DEBIAN_ROOTFS}"
