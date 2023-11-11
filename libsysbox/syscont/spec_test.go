@@ -19,7 +19,9 @@ package syscont
 import (
 	"testing"
 
+	ipcLib "github.com/nestybox/sysbox-ipc/sysboxMgrLib"
 	utils "github.com/nestybox/sysbox-libs/utils"
+	"github.com/opencontainers/runc/libsysbox/sysbox"
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
@@ -518,5 +520,64 @@ func TestValidateIDMappings(t *testing.T) {
 	if !equalIDMappings(want, spec.Linux.GIDMappings) {
 		t.Errorf("validateIDMappings(): gid mappings are not correct; want %v, got %v",
 			want, spec.Linux.GIDMappings)
+	}
+}
+
+func Test_getSysboxEnvVarConfigs(t *testing.T) {
+	type args struct {
+		p    *specs.Process
+		sbox *sysbox.Sysbox
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+		resSbox *sysbox.Sysbox
+	}{
+		{
+			// Test-case 1: Unknown SYSBOX env-var. Expected error.
+			name:    "unknown-sysbox-envvar",
+			args:    args{p: &specs.Process{Env: []string{"SYSBOX_ENV=1"}}, sbox: &sysbox.Sysbox{}},
+			wantErr: true,
+		},
+		{
+			// Test-case 2: Invalid format for generic env-var. Expected error.
+			name:    "invalid-format-generic-envvar",
+			args:    args{p: &specs.Process{Env: []string{"SYSBOX_HONOR_CAPS"}}, sbox: &sysbox.Sysbox{}},
+			wantErr: true,
+		},
+		{
+			// Test-case 3: Invalid format for boolean env-var. Expected error.
+			name:    "invalid-format-bool-envvar",
+			args:    args{p: &specs.Process{Env: []string{"SYSBOX_HONOR_CAPS=1"}}, sbox: &sysbox.Sysbox{}},
+			wantErr: true,
+		},
+		{
+			// Test-case 4: Invalid format for string env-var. Expected error.
+			name:    "invalid-format-string-envvar",
+			args:    args{p: &specs.Process{Env: []string{"SYSBOX_SKIP_UID_SHIFT="}}, sbox: &sysbox.Sysbox{}},
+			wantErr: true,
+		},
+		{
+			// Test-case 5: Verify proper parsing of SYSBOX_SYSCONT_MODE. No error expected.
+			name:    "syscont-mode-envvar",
+			args:    args{p: &specs.Process{Env: []string{"SYSBOX_SYSCONT_MODE=FALSE"}}, sbox: &sysbox.Sysbox{Mgr: &sysbox.Mgr{Config: &ipcLib.ContainerConfig{SyscontMode: false}}}},
+			wantErr: false,
+			resSbox: &sysbox.Sysbox{Mgr: &sysbox.Mgr{Config: &ipcLib.ContainerConfig{SyscontMode: false}}},
+		},
+		{
+			// Test-case 6: Verify proper parsing of SYSBOX_SKIP_UID_SHIFT. No error expected.
+			name:    "skip-uid-shift-envvar",
+			args:    args{p: &specs.Process{Env: []string{"SYSBOX_SKIP_UID_SHIFT=/var/lib/1, /var/lib/2, /var/lib/3"}}, sbox: &sysbox.Sysbox{}},
+			wantErr: false,
+			resSbox: &sysbox.Sysbox{IDshiftIgnoreList: []string{"/var/lib/1", "/var/lib/2", "/var/lib/3"}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := getSysboxEnvVarConfigs(tt.args.p, tt.args.sbox); (err != nil) != tt.wantErr && tt.args.sbox != tt.resSbox {
+				t.Errorf("getSysboxEnvVarConfigs() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
 	}
 }
