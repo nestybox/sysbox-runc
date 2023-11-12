@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	mapset "github.com/deckarep/golang-set"
@@ -967,10 +968,17 @@ func getSysboxStringEnvVarConfigs(sbox *sysbox.Sysbox, evName string, evVal stri
 	if evVal == "" {
 		return fmt.Errorf("env var %s has empty value", evName)
 	}
+	if isWhitespacePresent := regexp.MustCompile(`\s`).MatchString(evVal); isWhitespacePresent {
+		return fmt.Errorf("env var %s has invalid value %s; space characters are not allowed", evName, evVal)
+	}
+
+	var err error
 
 	switch evName {
 	case "SYSBOX_SKIP_UID_SHIFT":
-		sbox.IDshiftIgnoreList = getSysboxEnvVarIDshiftIgnoreConfig(evVal)
+		if sbox.IDshiftIgnoreList, err = getSysboxEnvVarIDshiftIgnoreConfig(evName, evVal); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -978,16 +986,19 @@ func getSysboxStringEnvVarConfigs(sbox *sysbox.Sysbox, evName string, evVal stri
 
 // getSysboxEnvVarIDshiftIgnoreConfig parses the SYSBOX_SKIP_UID_SHIFT env-var and returns
 // a list of paths for which id-shifting operations must be avoided.
-// Example: "/var/lib/mutagen, /var/lib/docker".
-func getSysboxEnvVarIDshiftIgnoreConfig(envvar string) []string {
-	paths := strings.Split(envvar, ",")
+// Example: "/var/lib/mutagen,/var/lib/docker".
+func getSysboxEnvVarIDshiftIgnoreConfig(evName, evVal string) ([]string, error) {
+	paths := strings.Split(evVal, ",")
 
-	// Trim spaces from the paths.
+	// Iterate through the paths and verify they are all absolute.
 	for i, p := range paths {
-		paths[i] = strings.TrimSpace(p)
+		if !filepath.IsAbs(p) {
+			return nil, fmt.Errorf("env var %s has an invalid (not absolute) path: %s", evName, p)
+		}
+		paths[i] = p
 	}
 
-	return paths
+	return paths, nil
 }
 
 // removeSysboxEnvVarsForExec removes the SYSBOX_* env vars from the process spec.
@@ -997,7 +1008,8 @@ func removeSysboxEnvVarsForExec(p *specs.Process) {
 	for _, envVar := range p.Env {
 		if !strings.HasPrefix(envVar, "SYSBOX_IGNORE_SYSFS_CHOWN=") &&
 			!strings.HasPrefix(envVar, "SYSBOX_ALLOW_TRUSTED_XATTR=") &&
-			!strings.HasPrefix(envVar, "SYSBOX_SYSCONT_MODE=") {
+			!strings.HasPrefix(envVar, "SYSBOX_SYSCONT_MODE=") &&
+			!strings.HasPrefix(envVar, "SYSBOX_SKIP_UID_SHIFT=") {
 			env = append(env, envVar)
 		}
 	}

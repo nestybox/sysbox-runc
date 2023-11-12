@@ -541,19 +541,19 @@ func Test_getSysboxEnvVarConfigs(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			// Test-case 2: Invalid format for generic env-var. Expected error.
+			// Test-case 2: Invalid format for generic env-var. Error expected.
 			name:    "invalid-format-generic-envvar",
 			args:    args{p: &specs.Process{Env: []string{"SYSBOX_HONOR_CAPS"}}, sbox: &sysbox.Sysbox{}},
 			wantErr: true,
 		},
 		{
-			// Test-case 3: Invalid format for boolean env-var. Expected error.
+			// Test-case 3: Invalid format for boolean env-var. Error expected.
 			name:    "invalid-format-bool-envvar",
 			args:    args{p: &specs.Process{Env: []string{"SYSBOX_HONOR_CAPS=1"}}, sbox: &sysbox.Sysbox{}},
 			wantErr: true,
 		},
 		{
-			// Test-case 4: Invalid format for string env-var. Expected error.
+			// Test-case 4: Invalid format for string env-var. Error expected.
 			name:    "invalid-format-string-envvar",
 			args:    args{p: &specs.Process{Env: []string{"SYSBOX_SKIP_UID_SHIFT="}}, sbox: &sysbox.Sysbox{}},
 			wantErr: true,
@@ -568,9 +568,21 @@ func Test_getSysboxEnvVarConfigs(t *testing.T) {
 		{
 			// Test-case 6: Verify proper parsing of SYSBOX_SKIP_UID_SHIFT. No error expected.
 			name:    "skip-uid-shift-envvar",
-			args:    args{p: &specs.Process{Env: []string{"SYSBOX_SKIP_UID_SHIFT=/var/lib/1, /var/lib/2, /var/lib/3"}}, sbox: &sysbox.Sysbox{}},
+			args:    args{p: &specs.Process{Env: []string{"SYSBOX_SKIP_UID_SHIFT=/var/lib/1,/var/lib/2,/var/lib/3"}}, sbox: &sysbox.Sysbox{}},
 			wantErr: false,
 			resSbox: &sysbox.Sysbox{IDshiftIgnoreList: []string{"/var/lib/1", "/var/lib/2", "/var/lib/3"}},
+		},
+		{
+			// Test-case 7: Verify identification of SYSBOX_SKIP_UID_SHIFT's invalid (relative) path. Error expected.
+			name:    "skip-uid-shift-envvar-relative-path",
+			args:    args{p: &specs.Process{Env: []string{"SYSBOX_SKIP_UID_SHIFT=/var/lib/1,var/lib/2"}}, sbox: &sysbox.Sysbox{}},
+			wantErr: true,
+		},
+		{
+			// Test-case 8: Verify identification of SYSBOX_SKIP_UID_SHIFT's invalid path (with spaces). Error expected.
+			name:    "skip-uid-shift-envvar-space-in-path",
+			args:    args{p: &specs.Process{Env: []string{"SYSBOX_SKIP_UID_SHIFT=/var/lib/1, /var/lib/2"}}, sbox: &sysbox.Sysbox{}},
+			wantErr: true,
 		},
 	}
 	for _, tt := range tests {
