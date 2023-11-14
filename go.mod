@@ -9,7 +9,6 @@ require (
 	github.com/containerd/console v1.0.1
 	github.com/coreos/go-systemd/v22 v22.1.0
 	github.com/cyphar/filepath-securejoin v0.2.2
-	github.com/deckarep/golang-set v1.7.1
 	github.com/docker/go-units v0.4.0
 	github.com/godbus/dbus/v5 v5.0.3
 	github.com/golang/protobuf v1.4.3
@@ -20,14 +19,13 @@ require (
 	github.com/nestybox/sysbox-libs/dockerUtils v0.0.0-00010101000000-000000000000
 	github.com/nestybox/sysbox-libs/idMap v0.0.0-00010101000000-000000000000
 	github.com/nestybox/sysbox-libs/idShiftUtils v0.0.0-00010101000000-000000000000
-	github.com/nestybox/sysbox-libs/libseccomp-golang v0.0.0-00010101000000-000000000000
 	github.com/nestybox/sysbox-libs/linuxUtils v0.0.0-00010101000000-000000000000
 	github.com/nestybox/sysbox-libs/mount v0.0.0-00010101000000-000000000000
 	github.com/nestybox/sysbox-libs/overlayUtils v0.0.0-00010101000000-000000000000
 	github.com/nestybox/sysbox-libs/shiftfs v0.0.0-00010101000000-000000000000
 	github.com/nestybox/sysbox-libs/utils v0.0.0-00010101000000-000000000000
 	github.com/opencontainers/runc v1.1.4
-	github.com/opencontainers/runtime-spec v1.0.3-0.20200929063507-e6143ca7d51d
+	github.com/opencontainers/runtime-spec v1.1.1-0.20230823135140-4fec88fd00a4
 	github.com/opencontainers/selinux v1.8.0
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/profile v1.5.0
@@ -37,6 +35,12 @@ require (
 	github.com/vishvananda/netlink v1.1.0
 	github.com/willf/bitset v1.1.11
 	golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f
+)
+
+require (
+	github.com/deckarep/golang-set/v2 v2.3.1
+	github.com/seccomp/libseccomp-golang v0.10.0
+	golang.org/x/net v0.0.0-20220722155237-a158d28d115b
 )
 
 require (
@@ -56,7 +60,6 @@ require (
 	github.com/shurcooL/sanitized_anchor_name v1.0.0 // indirect
 	github.com/spf13/afero v1.4.1 // indirect
 	github.com/vishvananda/netns v0.0.0-20191106174202-0a2b9b5464df // indirect
-	golang.org/x/net v0.0.0-20220722155237-a158d28d115b // indirect
 	golang.org/x/text v0.3.8 // indirect
 	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013 // indirect
 	google.golang.org/grpc v1.34.1 // indirect
@@ -70,7 +73,6 @@ replace (
 	github.com/nestybox/sysbox-libs/formatter => ../sysbox-libs/formatter
 	github.com/nestybox/sysbox-libs/idMap => ../sysbox-libs/idMap
 	github.com/nestybox/sysbox-libs/idShiftUtils => ../sysbox-libs/idShiftUtils
-	github.com/nestybox/sysbox-libs/libseccomp-golang => ../sysbox-libs/libseccomp-golang
 	github.com/nestybox/sysbox-libs/linuxUtils => ../sysbox-libs/linuxUtils
 	github.com/nestybox/sysbox-libs/mount => ../sysbox-libs/mount
 	github.com/nestybox/sysbox-libs/overlayUtils => ../sysbox-libs/overlayUtils

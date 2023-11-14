@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 package libcontainer
@@ -283,7 +284,7 @@ func syncParentDoOp(reqs []opReq, pipe io.ReadWriter) error {
 
 // sysbox-runc:
 // syncParentSeccompFd sends a seccomp notification file-descriptor to the parent runc.
-func syncParentSeccompFd(fd int32, pipe *os.File) error {
+func syncParentSeccompFd(fi *os.File, pipe *os.File) error {
 	if err := writeSync(pipe, procFd); err != nil {
 		return err
 	}
@@ -293,7 +294,7 @@ func syncParentSeccompFd(fd int32, pipe *os.File) error {
 
 	// send fd using cmsg(3)
 	socket := int(pipe.Fd())
-	scmRights := syscall.UnixRights(int(fd))
+	scmRights := syscall.UnixRights(int(fi.Fd()))
 	if err := syscall.Sendmsg(socket, nil, scmRights, nil, 0); err != nil {
 		return err
 	}
@@ -626,12 +627,12 @@ func setupSyscallTraps(config *initConfig, pipe *os.File) error {
 	// Load the seccomp notification filter here (for syscall trapping inside the container)
 	if config.Config.SeccompNotif != nil && len(config.Config.SeccompNotif.Syscalls) > 0 {
 
-		fd, err := seccomp.LoadSeccomp(config.Config.SeccompNotif)
+		fi, err := seccomp.InitSeccomp(config.Config.SeccompNotif)
 		if err != nil {
 			return newSystemErrorWithCause(err, "loading seccomp notification rules")
 		}
 
-		if err := syncParentSeccompFd(fd, pipe); err != nil {
+		if err := syncParentSeccompFd(fi, pipe); err != nil {
 			return newSystemErrorWithCause(err, "syncing with parent runc to pass seccomp file-descriptor")
 		}
 	}

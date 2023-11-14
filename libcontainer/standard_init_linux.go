@@ -206,6 +206,7 @@ func (l *linuxStandardInit) Init() error {
 	if err != nil {
 		return errors.Wrap(err, "get pdeath signal")
 	}
+
 	if l.config.NoNewPrivileges {
 		if err := unix.Prctl(unix.PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0); err != nil {
 			return errors.Wrap(err, "set nonewprivileges")
@@ -245,7 +246,7 @@ func (l *linuxStandardInit) Init() error {
 		}
 
 		if l.config.Config.Seccomp != nil {
-			if _, err := seccomp.LoadSeccomp(l.config.Config.Seccomp); err != nil {
+			if _, err := seccomp.InitSeccomp(l.config.Config.Seccomp); err != nil {
 				return newSystemErrorWithCause(err, "loading seccomp filtering rules")
 			}
 			seccompFiltDone = true
@@ -314,7 +315,7 @@ func (l *linuxStandardInit) Init() error {
 	// syscalls take place afterward (reducing the amount of syscalls that users need to
 	// enable in their seccomp profiles).
 	if l.config.Config.Seccomp != nil && !seccompFiltDone {
-		if _, err := seccomp.LoadSeccomp(l.config.Config.Seccomp); err != nil {
+		if _, err := seccomp.InitSeccomp(l.config.Config.Seccomp); err != nil {
 			return newSystemErrorWithCause(err, "loading seccomp filtering rules")
 		}
 	}
