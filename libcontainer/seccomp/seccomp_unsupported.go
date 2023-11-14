@@ -1,29 +1,35 @@
+//go:build !linux || !cgo || !seccomp
 // +build !linux !cgo !seccomp
 
 package seccomp
 
 import (
 	"errors"
+	"os"
 
 	"github.com/opencontainers/runc/libcontainer/configs"
+	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
 var ErrSeccompNotEnabled = errors.New("seccomp: config provided but seccomp not supported")
 
-// LoadSeccomp does nothing because seccomp is not supported.
-func LoadSeccomp(config *configs.Seccomp) (int32, error) {
+// InitSeccomp does nothing because seccomp is not supported.
+func InitSeccomp(config *configs.Seccomp) (*os.File, error) {
 	if config != nil {
-		return -1, ErrSeccompNotEnabled
+		return nil, ErrSeccompNotEnabled
 	}
-	return -1, nil
+	return nil, nil
 }
 
-// IsEnabled returns false, because it is not supported.
-func IsEnabled() bool {
-	return false
+// FlagSupported tells if a provided seccomp flag is supported.
+func FlagSupported(_ specs.LinuxSeccompFlag) error {
+	return ErrSeccompNotEnabled
 }
 
 // Version returns major, minor, and micro.
 func Version() (uint, uint, uint) {
 	return 0, 0, 0
 }
+
+// Enabled is true if seccomp support is compiled in.
+const Enabled = false

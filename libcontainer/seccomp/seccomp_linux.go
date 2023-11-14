@@ -1,28 +1,25 @@
-// +build linux,cgo,seccomp
+//go:build cgo && seccomp
+// +build cgo,seccomp
 
 package seccomp
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 
-	libseccomp "github.com/nestybox/sysbox-libs/libseccomp-golang"
-	"github.com/opencontainers/runc/libcontainer/configs"
-
+	libseccomp "github.com/seccomp/libseccomp-golang"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
+
+	"github.com/opencontainers/runc/libcontainer/configs"
+	"github.com/opencontainers/runc/libcontainer/seccomp/patchbpf"
+	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
 var (
-	actAllow  = libseccomp.ActAllow
-	actTrap   = libseccomp.ActTrap
-	actKill   = libseccomp.ActKill
-	actTrace  = libseccomp.ActTrace.SetReturnCode(int16(unix.EPERM))
-	actLog    = libseccomp.ActLog
-	actErrno  = libseccomp.ActErrno.SetReturnCode(int16(unix.EPERM))
-	actNotify = libseccomp.ActNotify
+	actTrace = libseccomp.ActTrace.SetReturnCode(int16(unix.EPERM))
+	actErrno = libseccomp.ActErrno.SetReturnCode(int16(unix.EPERM))
 )
 
 const (
@@ -30,119 +27,196 @@ const (
 	syscallMaxArguments int = 6
 )
 
-// Loads a seccomp filter with the given seccomp config. If the given config contains a
-// seccomp notify action, returns a file descriptor that can be used by a tracer process
-// to retrieve such notifications from the kernel.
-func LoadSeccomp(config *configs.Seccomp) (int32, error) {
-	var notifyFd libseccomp.ScmpFd
-
+// InitSeccomp installs the seccomp filters to be used in the container as
+// specified in config. Returns the seccomp file descriptor if any of the
+// filters include a SCMP_ACT_NOTIFY action.
+func InitSeccomp(config *configs.Seccomp) (*os.File, error) {
 	if config == nil {
-		return -1, errors.New("cannot initialize Seccomp - nil config passed")
+		return nil, errors.New("cannot initialize Seccomp - nil config passed")
 	}
 
-	defaultAction, err := getAction(config.DefaultAction, nil)
+	defaultAction, err := getAction(config.DefaultAction, config.DefaultErrnoRet)
 	if err != nil {
-		return -1, errors.New("error initializing seccomp - invalid default action")
+		return nil, errors.New("error initializing seccomp - invalid default action")
+	}
+
+	// Ignore the error since pre-2.4 libseccomp is treated as API level 0.
+	apiLevel, _ := libseccomp.GetAPI()
+	for _, call := range config.Syscalls {
+		if call.Action == configs.Notify {
+			if apiLevel < 6 {
+				return nil, fmt.Errorf("seccomp notify unsupported: API level: got %d, want at least 6. Please try with libseccomp >= 2.5.0 and Linux >= 5.7", apiLevel)
+			}
+
+			// We can't allow the write syscall to notify to the seccomp agent.
+			// After InitSeccomp() is called, we need to syncParentSeccomp() to write the seccomp fd plain
+			// number, so the parent sends it to the seccomp agent. If we use SCMP_ACT_NOTIFY on write, we
+			// never can write the seccomp fd to the parent and therefore the seccomp agent never receives
+			// the seccomp fd and runc is hang during initialization.
+			//
+			// Note that read()/close(), that are also used in syncParentSeccomp(), _can_ use SCMP_ACT_NOTIFY.
+			// Because we write the seccomp fd on the pipe to the parent, the parent is able to proceed and
+			// send the seccomp fd to the agent (it is another process and not subject to the seccomp
+			// filter). We will be blocked on read()/close() inside syncParentSeccomp() but if the seccomp
+			// agent allows those syscalls to proceed, initialization works just fine and the agent can
+			// handle future read()/close() syscalls as it wanted.
+			if call.Name == "write" {
+				return nil, errors.New("SCMP_ACT_NOTIFY cannot be used for the write syscall")
+			}
+		}
+	}
+
+	// See comment on why write is not allowed. The same reason applies, as this can mean handling write too.
+	if defaultAction == libseccomp.ActNotify {
+		return nil, errors.New("SCMP_ACT_NOTIFY cannot be used as default action")
 	}
 
 	filter, err := libseccomp.NewFilter(defaultAction)
 	if err != nil {
-		return -1, fmt.Errorf("error creating filter: %s", err)
+		return nil, fmt.Errorf("error creating filter: %w", err)
 	}
 
 	// Add extra architectures
 	for _, arch := range config.Architectures {
 		scmpArch, err := libseccomp.GetArchFromString(arch)
 		if err != nil {
-			return -1, fmt.Errorf("error validating Seccomp architecture: %s", err)
+			return nil, fmt.Errorf("error validating Seccomp architecture: %w", err)
 		}
-
 		if err := filter.AddArch(scmpArch); err != nil {
-			return -1, fmt.Errorf("error adding architecture to seccomp filter: %s", err)
+			return nil, fmt.Errorf("error adding architecture to seccomp filter: %w", err)
 		}
 	}
 
-	// Unset no new privs bit (i.e., libseccomp won't touch it when loading the filter)
+	// Add extra flags.
+	for _, flag := range config.Flags {
+		if err := setFlag(filter, flag); err != nil {
+			return nil, err
+		}
+	}
+
+	// Enable libseccomp binary tree optimization for longer rulesets.
+	//
+	// The number below chosen semi-arbitrarily, considering the following:
+	// 1. libseccomp <= 2.5.4 misbehaves when binary tree optimization
+	// is enabled and there are 0 rules.
+	// 2. All known libseccomp versions (2.5.0 to 2.5.4) generate a binary
+	// tree with 4 syscalls per node.
+	if len(config.Syscalls) > 32 {
+		if err := filter.SetOptimize(2); err != nil {
+			// The error is not fatal and is probably means we have older libseccomp.
+			logrus.Debugf("seccomp binary tree optimization not available: %v", err)
+		}
+	}
+
+	// Unset no new privs bit
 	if err := filter.SetNoNewPrivsBit(false); err != nil {
-		return -1, fmt.Errorf("error setting no new privileges: %s", err)
+		return nil, fmt.Errorf("error setting no new privileges: %w", err)
 	}
 
 	// Add a rule for each syscall
-	notify := false
 	for _, call := range config.Syscalls {
 		if call == nil {
-			return -1, errors.New("encountered nil syscall while initializing Seccomp")
+			return nil, errors.New("encountered nil syscall while initializing Seccomp")
 		}
 
-		if call.Action == configs.Notify && notify == false {
-			if err := prepNotify(filter); err != nil {
-				return -1, fmt.Errorf("error preparing seccomp notifications: %s", err)
-			}
-			notify = true
-		}
-
-		if err = matchCall(filter, call); err != nil {
-			return -1, err
+		if err := matchCall(filter, call, defaultAction); err != nil {
+			return nil, err
 		}
 	}
 
-	if err = filter.Load(); err != nil {
-		return -1, fmt.Errorf("error loading seccomp filter into kernel: %s", err)
+	seccompFd, err := patchbpf.PatchAndLoad(config, filter)
+	if err != nil {
+		return nil, fmt.Errorf("error loading seccomp filter into kernel: %w", err)
 	}
-
-	// If the filter contains a notify action, get the notification file-descriptor
-	if notify {
-		fd, err := filter.GetNotifFd()
-		if err != nil {
-			return -1, fmt.Errorf("error getting filter notification fd: %s", err)
-		}
-		notifyFd = fd
-	}
-
-	return int32(notifyFd), nil
+	return seccompFd, nil
 }
 
-// IsEnabled returns if the kernel has been configured to support seccomp.
-func IsEnabled() bool {
-	// Try to read from /proc/self/status for kernels > 3.8
-	s, err := parseStatusFile("/proc/self/status")
-	if err != nil {
-		// Check if Seccomp is supported, via CONFIG_SECCOMP.
-		if err := unix.Prctl(unix.PR_GET_SECCOMP, 0, 0, 0, 0); err != unix.EINVAL {
-			// Make sure the kernel has CONFIG_SECCOMP_FILTER.
-			if err := unix.Prctl(unix.PR_SET_SECCOMP, unix.SECCOMP_MODE_FILTER, 0, 0, 0); err != unix.EINVAL {
-				return true
-			}
+type unknownFlagError struct {
+	flag specs.LinuxSeccompFlag
+}
+
+func (e *unknownFlagError) Error() string {
+	return "seccomp flag " + string(e.flag) + " is not known to runc"
+}
+
+func setFlag(filter *libseccomp.ScmpFilter, flag specs.LinuxSeccompFlag) error {
+	switch flag {
+	case flagTsync:
+		// libseccomp-golang always use filterAttrTsync when
+		// possible so all goroutines will receive the same
+		// rules, so there is nothing to do. It does not make
+		// sense to apply the seccomp filter on only one
+		// thread; other threads will be terminated after exec
+		// anyway.
+		return nil
+	case specs.LinuxSeccompFlagLog:
+		if err := filter.SetLogBit(true); err != nil {
+			return fmt.Errorf("error adding log flag to seccomp filter: %w", err)
 		}
-		return false
+		return nil
+	case specs.LinuxSeccompFlagSpecAllow:
+		if err := filter.SetSSB(true); err != nil {
+			return fmt.Errorf("error adding SSB flag to seccomp filter: %w", err)
+		}
+		return nil
 	}
-	_, ok := s["Seccomp"]
-	return ok
+	// NOTE when adding more flags above, do not forget to also:
+	// - add new flags to `flags` slice in config.go;
+	// - add new flag values to flags_value() in tests/integration/seccomp.bats;
+	// - modify func filterFlags in patchbpf/ accordingly.
+
+	return &unknownFlagError{flag: flag}
+}
+
+// FlagSupported checks if the flag is known to runc and supported by
+// currently used libseccomp and kernel (i.e. it can be set).
+func FlagSupported(flag specs.LinuxSeccompFlag) error {
+	filter := &libseccomp.ScmpFilter{}
+	err := setFlag(filter, flag)
+
+	// For flags we don't know, setFlag returns unknownFlagError.
+	var uf *unknownFlagError
+	if errors.As(err, &uf) {
+		return err
+	}
+	// For flags that are known to runc and libseccomp-golang but can not
+	// be applied because either libseccomp or the kernel is too old,
+	// seccomp.VersionError is returned.
+	var verErr *libseccomp.VersionError
+	if errors.As(err, &verErr) {
+		// Not supported by libseccomp or the kernel.
+		return err
+	}
+
+	// All other flags are known and supported.
+	return nil
 }
 
 // Convert Libcontainer Action to Libseccomp ScmpAction
 func getAction(act configs.Action, errnoRet *uint) (libseccomp.ScmpAction, error) {
 	switch act {
-	case configs.Kill:
-		return actKill, nil
+	case configs.Kill, configs.KillThread:
+		return libseccomp.ActKillThread, nil
 	case configs.Errno:
 		if errnoRet != nil {
 			return libseccomp.ActErrno.SetReturnCode(int16(*errnoRet)), nil
 		}
 		return actErrno, nil
 	case configs.Trap:
-		return actTrap, nil
+		return libseccomp.ActTrap, nil
 	case configs.Allow:
-		return actAllow, nil
+		return libseccomp.ActAllow, nil
 	case configs.Trace:
 		if errnoRet != nil {
 			return libseccomp.ActTrace.SetReturnCode(int16(*errnoRet)), nil
 		}
 		return actTrace, nil
 	case configs.Log:
-		return actLog, nil
+		return libseccomp.ActLog, nil
 	case configs.Notify:
-		return actNotify, nil
+		return libseccomp.ActNotify, nil
+	case configs.KillProcess:
+		return libseccomp.ActKillProcess, nil
 	default:
 		return libseccomp.ActInvalid, errors.New("invalid action, cannot use in rule")
 	}
@@ -187,7 +261,7 @@ func getCondition(arg *configs.Arg) (libseccomp.ScmpCondition, error) {
 }
 
 // Add a rule to match a single syscall
-func matchCall(filter *libseccomp.ScmpFilter, call *configs.Syscall) error {
+func matchCall(filter *libseccomp.ScmpFilter, call *configs.Syscall, defAct libseccomp.ScmpAction) error {
 	if call == nil || filter == nil {
 		return errors.New("cannot use nil as syscall to block")
 	}
@@ -196,34 +270,40 @@ func matchCall(filter *libseccomp.ScmpFilter, call *configs.Syscall) error {
 		return errors.New("empty string is not a valid syscall")
 	}
 
-	// If we can't resolve the syscall, assume it's not supported on this kernel
-	// Ignore it, don't error out
-	callNum, err := libseccomp.GetSyscallFromName(call.Name)
-	if err != nil {
-		return nil
-	}
-
 	// Convert the call's action to the libseccomp equivalent
 	callAct, err := getAction(call.Action, call.ErrnoRet)
 	if err != nil {
-		return fmt.Errorf("action in seccomp profile is invalid: %s", err)
+		return fmt.Errorf("action in seccomp profile is invalid: %w", err)
+	}
+	if callAct == defAct {
+		// This rule is redundant, silently skip it
+		// to avoid error from AddRule.
+		return nil
+	}
+
+	// If we can't resolve the syscall, assume it is not supported
+	// by this kernel. Warn about it, don't error out.
+	callNum, err := libseccomp.GetSyscallFromName(call.Name)
+	if err != nil {
+		logrus.Debugf("unknown seccomp syscall %q ignored", call.Name)
+		return nil
 	}
 
 	// Unconditional match - just add the rule
 	if len(call.Args) == 0 {
-		if err = filter.AddRule(callNum, callAct); err != nil {
-			return fmt.Errorf("error adding seccomp filter rule for syscall %s: %s", call.Name, err)
+		if err := filter.AddRule(callNum, callAct); err != nil {
+			return fmt.Errorf("error adding seccomp filter rule for syscall %s: %w", call.Name, err)
 		}
 	} else {
-		// If two or more arguments have the same condition, revert to old behavior, adding
-		// each condition as a separate rule
+		// If two or more arguments have the same condition,
+		// Revert to old behavior, adding each condition as a separate rule
 		argCounts := make([]uint, syscallMaxArguments)
 		conditions := []libseccomp.ScmpCondition{}
 
 		for _, cond := range call.Args {
 			newCond, err := getCondition(cond)
 			if err != nil {
-				return fmt.Errorf("error creating seccomp syscall condition for syscall %s: %s", call.Name, err)
+				return fmt.Errorf("error creating seccomp syscall condition for syscall %s: %w", call.Name, err)
 			}
 
 			argCounts[cond.Index] += 1
@@ -245,47 +325,20 @@ func matchCall(filter *libseccomp.ScmpFilter, call *configs.Syscall) error {
 			for _, cond := range conditions {
 				condArr := []libseccomp.ScmpCondition{cond}
 
-				if err = filter.AddRuleConditional(callNum, callAct, condArr); err != nil {
-					return fmt.Errorf("error adding seccomp rule for syscall %s: %s", call.Name, err)
+				if err := filter.AddRuleConditional(callNum, callAct, condArr); err != nil {
+					return fmt.Errorf("error adding seccomp rule for syscall %s: %w", call.Name, err)
 				}
 			}
 		} else {
 			// No conditions share same argument
 			// Use new, proper behavior
-			if err = filter.AddRuleConditional(callNum, callAct, conditions); err != nil {
-				return fmt.Errorf("error adding seccomp rule for syscall %s: %s", call.Name, err)
+			if err := filter.AddRuleConditional(callNum, callAct, conditions); err != nil {
+				return fmt.Errorf("error adding seccomp rule for syscall %s: %w", call.Name, err)
 			}
 		}
 	}
 
 	return nil
-}
-
-func parseStatusFile(path string) (map[string]string, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	s := bufio.NewScanner(f)
-	status := make(map[string]string)
-
-	for s.Scan() {
-		text := s.Text()
-		parts := strings.Split(text, ":")
-
-		if len(parts) <= 1 {
-			continue
-		}
-
-		status[parts[0]] = parts[1]
-	}
-	if err := s.Err(); err != nil {
-		return nil, err
-	}
-
-	return status, nil
 }
 
 // Version returns major, minor, and micro.
@@ -293,24 +346,5 @@ func Version() (uint, uint, uint) {
 	return libseccomp.GetLibraryVersion()
 }
 
-// prepNotify prepares seccomp for syscall notification actions
-func prepNotify(filter *libseccomp.ScmpFilter) error {
-
-	// seccomp notification requires API level >= 5
-	api, err := libseccomp.GetApi()
-	if err != nil {
-		return fmt.Errorf("error getting seccomp API level: %s", err)
-	} else if api < 5 {
-		err = libseccomp.SetApi(5)
-		if err != nil {
-			return fmt.Errorf("error setting seccomp API level to 5: %s", err)
-		}
-	}
-
-	// seccomp notification is not compatible with thread-sync
-	if err := filter.SetTsync(false); err != nil {
-		return fmt.Errorf("Error clearing tsync on filter: %s", err)
-	}
-
-	return nil
-}
+// Enabled is true if seccomp support is compiled in.
+const Enabled = true

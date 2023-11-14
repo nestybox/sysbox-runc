@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 package libcontainer
@@ -87,7 +88,7 @@ func (l *linuxSetnsInit) Init() error {
 		}
 
 		if l.config.Config.Seccomp != nil {
-			if _, err := seccomp.LoadSeccomp(l.config.Config.Seccomp); err != nil {
+			if _, err := seccomp.InitSeccomp(l.config.Config.Seccomp); err != nil {
 				return newSystemErrorWithCause(err, "loading seccomp filtering rules")
 			}
 			seccompFiltDone = true
@@ -110,7 +111,7 @@ func (l *linuxSetnsInit) Init() error {
 		}
 	}
 	if l.config.Config.Seccomp != nil && !seccompFiltDone {
-		if _, err := seccomp.LoadSeccomp(l.config.Config.Seccomp); err != nil {
+		if _, err := seccomp.InitSeccomp(l.config.Config.Seccomp); err != nil {
 			return newSystemErrorWithCause(err, "loading seccomp filtering rules")
 		}
 	}

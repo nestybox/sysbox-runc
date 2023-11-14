@@ -33,9 +33,13 @@ type IDMap struct {
 // for syscalls. Additional architectures can be added by specifying them in
 // Architectures.
 type Seccomp struct {
-	DefaultAction Action     `json:"default_action"`
-	Architectures []string   `json:"architectures"`
-	Syscalls      []*Syscall `json:"syscalls"`
+	DefaultAction    Action                   `json:"default_action"`
+	Architectures    []string                 `json:"architectures"`
+	Flags            []specs.LinuxSeccompFlag `json:"flags"`
+	Syscalls         []*Syscall               `json:"syscalls"`
+	DefaultErrnoRet  *uint                    `json:"default_errno_ret"`
+	ListenerPath     string                   `json:"listener_path,omitempty"`
+	ListenerMetadata string                   `json:"listener_metadata,omitempty"`
 }
 
 // Action is taken upon rule match in Seccomp
@@ -49,6 +53,8 @@ const (
 	Trace
 	Log
 	Notify
+	KillThread
+	KillProcess
 )
 
 // Operator is a comparison operator to be used when matching syscall arguments in Seccomp

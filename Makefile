@@ -49,9 +49,6 @@ SYSIPC_SRC := $(shell find $(SYSIPC_DIR) 2>&1 | grep -E '.*\.(c|h|go|proto)$$')
 SYSLIB_DIR := ../sysbox-libs
 SYSLIB_SRC := $(shell find $(SYSLIB_DIR) 2>&1 | grep -E '.*\.(c|h|go|proto)$$')
 
-LIBSECCOMP_DIR := ../sysbox-libs/libseccomp-golang
-LIBSECCOMP_SRC := $(shell find $(LIBSECCOMP_DIR) 2>&1 | grep -E '.*\.(go)')
-
 SHIFTFS_MODULE_PRESENT = $(shell lsmod | grep shiftfs)
 
 LDFLAGS := -X 'main.edition=${EDITION}' -X main.version=${VERSION} \
@@ -154,7 +151,7 @@ RUN_TEST_CONT := $(CONTAINER_ENGINE) run ${DOCKER_RUN_PROXY} \
 
 sysbox-runc: $(RUNC_BUILDDIR)/$(RUNC_TARGET)
 
-$(RUNC_BUILDDIR)/$(RUNC_TARGET): $(SOURCES) $(SYSIPC_SRC) $(SYSLIB_SRC) $(LIBSECCOMP_SRC)
+$(RUNC_BUILDDIR)/$(RUNC_TARGET): $(SOURCES) $(SYSIPC_SRC) $(SYSLIB_SRC)
 	$(GO_BUILD) -o $(RUNC_BUILDDIR)/$(RUNC_TARGET) .
 
 sysbox-runc-debug: $(RUNC_BUILDDIR)/$(RUNC_DEBUG_TARGET)
