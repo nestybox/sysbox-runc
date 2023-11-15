@@ -365,6 +365,7 @@ var syscontSyscallWhitelist = []string{
 // List of syscalls with allowed argument restrictions (via seccomp)
 var syscontSyscallAllowRestrList = []string{
 	"personality",
+	"socket",
 }
 
 // Base list of syscalls that are always trapped & emulated inside a Sysbox
