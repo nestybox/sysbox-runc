@@ -27,7 +27,7 @@ import (
 	"regexp"
 	"strings"
 
-	mapset "github.com/deckarep/golang-set"
+	mapset "github.com/deckarep/golang-set/v2"
 	ipcLib "github.com/nestybox/sysbox-ipc/sysboxMgrLib"
 	"github.com/nestybox/sysbox-libs/capability"
 	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
@@ -269,17 +269,17 @@ func cfgNamespaces(sysMgr *sysbox.Mgr, spec *specs.Spec) error {
 	var allNs = []string{"pid", "ipc", "uts", "mount", "network", "user", "cgroup"}
 	var reqNs = []string{"pid", "ipc", "uts", "mount", "network"}
 
-	allNsSet := mapset.NewSet()
+	allNsSet := mapset.NewSet[string]()
 	for _, ns := range allNs {
 		allNsSet.Add(ns)
 	}
 
-	reqNsSet := mapset.NewSet()
+	reqNsSet := mapset.NewSet[string]()
 	for _, ns := range reqNs {
 		reqNsSet.Add(ns)
 	}
 
-	specNsSet := mapset.NewSet()
+	specNsSet := mapset.NewSet[string]()
 	for _, ns := range spec.Linux.Namespaces {
 		specNsSet.Add(string(ns.Type))
 	}
@@ -1054,9 +1054,8 @@ func cfgSeccomp(seccomp *specs.LinuxSeccomp) error {
 	}
 
 	// categorize syscalls per seccomp actions
-	allowSet := mapset.NewSet()
-	errnoSet := mapset.NewSet()
-	killSet := mapset.NewSet()
+	allowSet := mapset.NewSet[string]()
+	disallowSet := mapset.NewSet[string]()
 
 	for _, syscall := range seccomp.Syscalls {
 		for _, name := range syscall.Names {
@@ -1064,15 +1063,15 @@ func cfgSeccomp(seccomp *specs.LinuxSeccomp) error {
 			case specs.ActAllow:
 				allowSet.Add(name)
 			case specs.ActErrno:
-				errnoSet.Add(name)
+				fallthrough
 			case specs.ActKill:
-				killSet.Add(name)
+				disallowSet.Add(name)
 			}
 		}
 	}
 
 	// convert sys container syscall whitelist to a set
-	syscontAllowSet := mapset.NewSet()
+	syscontAllowSet := mapset.NewSet[string]()
 	for _, sc := range syscontSyscallWhitelist {
 		syscontAllowSet.Add(sc)
 	}
@@ -1081,18 +1080,42 @@ func cfgSeccomp(seccomp *specs.LinuxSeccomp) error {
 	whitelist := (seccomp.DefaultAction == specs.ActErrno ||
 		seccomp.DefaultAction == specs.ActKill)
 
-	// diffset is the set of syscalls that needs adding (for whitelist) or removing (for blacklist)
-	diffSet := mapset.NewSet()
-	if whitelist {
-		diffSet = syscontAllowSet.Difference(allowSet)
-	} else {
-		disallowSet := errnoSet.Union(killSet)
-		diffSet = disallowSet.Difference(syscontAllowSet)
-	}
+	addSet := mapset.NewSet[string]()
+	rmSet := mapset.NewSet[string]()
 
 	if whitelist {
-		// add the diffset to the whitelist
-		for syscallName := range diffSet.Iter() {
+		addSet = syscontAllowSet.Difference(allowSet)
+		rmSet = disallowSet.Intersect(syscontAllowSet)
+	} else {
+		// Note: no addSet here since we don't have a sysbox syscall blacklist
+		rmSet = disallowSet.Difference(syscontAllowSet)
+	}
+
+	// Remove syscalls from the container's error/kill lists
+	if rmSet.Cardinality() > 0 {
+		var newSyscalls []specs.LinuxSyscall
+		for _, sc := range seccomp.Syscalls {
+			if sc.Action == specs.ActErrno || sc.Action == specs.ActKill {
+				n := []string{}
+				for _, scName := range sc.Names {
+					if !rmSet.Contains(scName) {
+						n = append(n, scName)
+					}
+				}
+				sc.Names = n
+				if len(sc.Names) > 0 {
+					newSyscalls = append(newSyscalls, sc)
+				}
+			} else {
+				newSyscalls = append(newSyscalls, sc)
+			}
+		}
+		seccomp.Syscalls = newSyscalls
+	}
+
+	// Add syscalls to the container's allowed list
+	if addSet.Cardinality() > 0 {
+		for syscallName := range addSet.Iter() {
 			str := fmt.Sprintf("%v", syscallName)
 			sc := specs.LinuxSyscall{
 				Names:  []string{str},
@@ -1100,26 +1123,6 @@ func cfgSeccomp(seccomp *specs.LinuxSeccomp) error {
 			}
 			seccomp.Syscalls = append(seccomp.Syscalls, sc)
 		}
-
-		logrus.Debugf("added syscalls to seccomp profile: %v", diffSet)
-
-	} else {
-		// remove the diffset from the blacklist
-		var newSyscalls []specs.LinuxSyscall
-		for _, sc := range seccomp.Syscalls {
-			for i, scName := range sc.Names {
-				if diffSet.Contains(scName) {
-					// Remove this syscall
-					sc.Names = append(sc.Names[:i], sc.Names[i+1:]...)
-				}
-			}
-			if sc.Names != nil {
-				newSyscalls = append(newSyscalls, sc)
-			}
-		}
-		seccomp.Syscalls = newSyscalls
-
-		logrus.Debugf("removed syscalls from seccomp profile: %v", diffSet)
 	}
 
 	if whitelist {
