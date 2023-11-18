@@ -428,6 +428,7 @@ func mountToRootfs(m *configs.Mount, config *configs.Config, enableCgroupns bool
 	if err != nil {
 		return err
 	}
+	m.Destination = dest
 
 	switch m.Device {
 	case "proc", "sysfs":
@@ -542,6 +543,11 @@ func doBindMounts(config *configs.Config, pipe io.ReadWriter) error {
 		// runc to actually do the prior mount(s).
 		if mntDependsOnPrior {
 			if len(mntReqs) > 0 {
+
+				mntReqs[0].Op = bind
+				mntReqs[0].Rootfs = config.Rootfs
+				mntReqs[0].FsuidMapFailOnErr = config.FsuidMapFailOnErr
+
 				if err := syncParentDoOp(mntReqs, pipe); err != nil {
 					return newSystemErrorWithCause(err, "syncing with parent runc to perform bind mounts")
 				}
@@ -565,6 +571,11 @@ func doBindMounts(config *configs.Config, pipe io.ReadWriter) error {
 	}
 
 	if len(mntReqs) > 0 {
+
+		mntReqs[0].Op = bind
+		mntReqs[0].Rootfs = config.Rootfs
+		mntReqs[0].FsuidMapFailOnErr = config.FsuidMapFailOnErr
+
 		if err := syncParentDoOp(mntReqs, pipe); err != nil {
 			return newSystemErrorWithCause(err, "syncing with parent runc to perform bind mounts")
 		}

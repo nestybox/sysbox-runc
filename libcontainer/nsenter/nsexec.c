@@ -536,7 +536,6 @@ static void nl_parse(int fd, struct nlconfig_t *config)
 			config->shiftfs_mounts = current;
 			config->shiftfs_mounts_len = payload_len;
 			break;
-
 		default:
 			bail("unknown netlink message type %d", nlattr->nla_type);
 		}
@@ -616,7 +615,6 @@ void join_namespaces(char *nslist)
 	free(namespaces);
 }
 
-/* sysbox-runc */
 int mount_shiftfs(struct nlconfig_t *config) {
 	char *saveptr = NULL;
 	char *mntlist = config->shiftfs_mounts;
