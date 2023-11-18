@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 package libcontainer
@@ -183,20 +184,11 @@ func CriuPath(criupath string) func(*LinuxFactory) error {
 	}
 }
 
-// SysFs returns an option func that configures a LinuxFactory to return containers that
-// use the given sysbox-fs for emulating parts of the container's rootfs.
-func SysFs(sysFs *sysbox.Fs) func(*LinuxFactory) error {
+// Sysbox returns an option func to configure a LinuxFactory with the given
+// Sysbox config.
+func Sysbox(sysbox *sysbox.Sysbox) func(*LinuxFactory) error {
 	return func(l *LinuxFactory) error {
-		l.SysFs = sysFs
-		return nil
-	}
-}
-
-// SysMgr returns an option func that configures a LinuxFactory to return containers that
-// use the given sysbox-mgr services.
-func SysMgr(sysMgr *sysbox.Mgr) func(*LinuxFactory) error {
-	return func(l *LinuxFactory) error {
-		l.SysMgr = sysMgr
+		l.Sysbox = sysbox
 		return nil
 	}
 }
@@ -226,12 +218,8 @@ func New(root string, options ...func(*LinuxFactory) error) (Factory, error) {
 		}
 	}
 
-	if l.SysMgr == nil {
-		l.SysMgr = sysbox.NewMgr("", false)
-	}
-
-	if l.SysFs == nil {
-		l.SysFs = sysbox.NewFs("", false)
+	if l.Sysbox == nil {
+		l.Sysbox = sysbox.NewSysbox("", false, false)
 	}
 
 	return l, nil
@@ -268,11 +256,8 @@ type LinuxFactory struct {
 	// NewIntelRdtManager returns an initialized Intel RDT manager for a single container.
 	NewIntelRdtManager func(config *configs.Config, id string, path string) intelrdt.Manager
 
-	// SysFs is the object representing the sysbox-fs
-	SysFs *sysbox.Fs
-
-	// SysMgr is the object representing the sysbox-mgr
-	SysMgr *sysbox.Mgr
+	// Sysbox config
+	Sysbox *sysbox.Sysbox
 }
 
 func (l *LinuxFactory) Create(id string, config *configs.Config) (Container, error) {
@@ -310,8 +295,7 @@ func (l *LinuxFactory) Create(id string, config *configs.Config) (Container, err
 		newuidmapPath: l.NewuidmapPath,
 		newgidmapPath: l.NewgidmapPath,
 		cgroupManager: l.NewCgroupsManager(config.Cgroups, nil),
-		sysMgr:        l.SysMgr,
-		sysFs:         l.SysFs,
+		sysbox:        l.Sysbox,
 	}
 	if l.NewIntelRdtManager != nil {
 		c.intelRdtManager = l.NewIntelRdtManager(config, id, "")
@@ -354,9 +338,12 @@ func (l *LinuxFactory) Load(id string) (Container, error) {
 		cgroupManager:        l.NewCgroupsManager(state.Config.Cgroups, state.CgroupPaths),
 		root:                 containerRoot,
 		created:              state.Created,
-		sysFs:                &state.SysFs,
-		sysMgr:               &state.SysMgr,
+		sysbox:               &state.Sysbox,
 	}
+
+	c.sysbox.Mgr = &state.SysMgr
+	c.sysbox.Fs = &state.SysFs
+
 	if l.NewIntelRdtManager != nil {
 		c.intelRdtManager = l.NewIntelRdtManager(&state.Config, id, state.IntelRdtPath)
 	}

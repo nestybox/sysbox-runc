@@ -201,7 +201,7 @@ func TestCfgMaskedPaths(t *testing.T) {
 	cfgMaskedPaths(spec)
 
 	for _, mp := range spec.Linux.MaskedPaths {
-		for _, ep := range sysboxExposedPaths {
+		for _, ep := range syscontExposedPaths {
 			if mp == ep {
 				t.Errorf("cfgMaskedPaths: failed to unmask path %s", ep)
 			}
@@ -224,7 +224,7 @@ func TestCfgReadonlyPaths(t *testing.T) {
 	cfgReadonlyPaths(spec)
 
 	for _, rop := range spec.Linux.ReadonlyPaths {
-		for _, rwp := range sysboxRwPaths {
+		for _, rwp := range syscontRwPaths {
 			if rop == rwp {
 				t.Errorf("cfgReadonlyPaths: failed to remove read-only on path %s", rwp)
 			}

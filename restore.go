@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 
-	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/system"
 	"github.com/opencontainers/runc/libsysbox/sysbox"
@@ -100,12 +99,9 @@ using the sysbox-runc checkpoint command.`,
 	},
 	Action: func(context *cli.Context) error {
 		var (
-			err                 error
-			spec                *specs.Spec
-			rootfsUidShiftType  sh.IDShiftType
-			bindMntUidShiftType sh.IDShiftType
-			rootfsCloned        bool
-			status              int
+			err    error
+			spec   *specs.Spec
+			status int
 		)
 
 		if err = checkArgs(context, 1, exactArgs); err != nil {
@@ -122,30 +118,32 @@ using the sysbox-runc checkpoint command.`,
 		}
 
 		id := context.Args().First()
-		sysMgr := sysbox.NewMgr(id, !context.GlobalBool("no-sysbox-mgr"))
-		sysFs := sysbox.NewFs(id, !context.GlobalBool("no-sysbox-fs"))
+
+		withMgr := !context.GlobalBool("no-sysbox-mgr")
+		withFs := !context.GlobalBool("no-sysbox-fs")
+
+		sysbox := sysbox.NewSysbox(id, withMgr, withFs)
 
 		// register with sysMgr (registration with sysFs occurs later (within libcontainer))
-		if sysMgr.Enabled() {
-			if err = sysMgr.Register(spec); err != nil {
+		if sysbox.Mgr.Enabled() {
+			if err = sysbox.Mgr.Register(spec); err != nil {
 				return err
 			}
 			defer func() {
 				if err != nil {
-					sysMgr.Unregister()
+					sysbox.Mgr.Unregister()
 				}
 			}()
 		}
 
 		// Get sysbox-fs related configs
-		if sysFs.Enabled() {
-			if err = sysFs.GetConfig(); err != nil {
+		if sysbox.Fs.Enabled() {
+			if err = sysbox.Fs.GetConfig(); err != nil {
 				return err
 			}
 		}
 
-		rootfsUidShiftType, bindMntUidShiftType, rootfsCloned, err = syscont.ConvertSpec(context, sysMgr, sysFs, spec)
-		if err != nil {
+		if err = syscont.ConvertSpec(context, spec, sysbox); err != nil {
 			return fmt.Errorf("error in the container spec: %v", err)
 		}
 
@@ -153,9 +151,9 @@ using the sysbox-runc checkpoint command.`,
 		if err = setEmptyNsMask(context, options); err != nil {
 			return err
 		}
-		status, err = startContainer(context, spec, CT_ACT_RESTORE, options, rootfsUidShiftType, bindMntUidShiftType, rootfsCloned, sysMgr, sysFs)
+		status, err = startContainer(context, spec, CT_ACT_RESTORE, options, sysbox)
 		if err != nil {
-			sysFs.Unregister()
+			sysbox.Fs.Unregister()
 			return err
 		}
 		// exit with the container's exit status so any external supervisor is

@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 package main
@@ -136,7 +137,7 @@ func execProcess(context *cli.Context) (int, error) {
 	}
 
 	bundle := utils.SearchLabels(state.Config.Labels, "bundle")
-	p, err := getProcess(context, bundle, &state.SysMgr)
+	p, err := getProcess(context, bundle, &state.Sysbox)
 	if err != nil {
 		return -1, err
 	}
@@ -161,7 +162,7 @@ func execProcess(context *cli.Context) (int, error) {
 	return r.run(p)
 }
 
-func getProcess(context *cli.Context, bundle string, sysMgr *sysbox.Mgr) (*specs.Process, error) {
+func getProcess(context *cli.Context, bundle string, sysbox *sysbox.Sysbox) (*specs.Process, error) {
 	if path := context.String("process"); path != "" {
 		f, err := os.Open(path)
 		if err != nil {
@@ -178,7 +179,7 @@ func getProcess(context *cli.Context, bundle string, sysMgr *sysbox.Mgr) (*specs
 		// sysbox-runc: convert the process spec for system containers; drop SYSBOX_*
 		// env vars on exec (their effect is set at container start time and can't be
 		// changed thereafter).
-		return &p, syscont.ConvertProcessSpec(&p, sysMgr, true)
+		return &p, syscont.ConvertProcessSpec(&p, sysbox, true)
 	}
 	// process via cli flags
 	if err := os.Chdir(bundle); err != nil {
@@ -251,7 +252,7 @@ func getProcess(context *cli.Context, bundle string, sysMgr *sysbox.Mgr) (*specs
 	// sysbox-runc: convert the process spec for system containers; drop SYSBOX_*
 	// env vars on exec (their effect is set at container start time and can't be
 	// changed thereafter).
-	if err := syscont.ConvertProcessSpec(p, sysMgr, true); err != nil {
+	if err := syscont.ConvertProcessSpec(p, sysbox, true); err != nil {
 		return nil, err
 	}
 	return p, nil

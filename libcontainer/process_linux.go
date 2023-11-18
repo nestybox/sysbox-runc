@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 package libcontainer
@@ -627,7 +628,7 @@ func (p *initProcess) start() (retErr error) {
 // hooks so that sysbox-fs is ready to respond by the time the hooks run.
 func (p *initProcess) registerWithSysboxfs(childPid int) error {
 
-	sysFs := p.container.sysFs
+	sysFs := p.container.sysbox.Fs
 	if !sysFs.Enabled() {
 		return nil
 	}

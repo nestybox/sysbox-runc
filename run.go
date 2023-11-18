@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 
-	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
 	"github.com/opencontainers/runc/libsysbox/sysbox"
 	"github.com/opencontainers/runc/libsysbox/syscont"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -71,13 +70,10 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 	},
 	Action: func(context *cli.Context) error {
 		var (
-			err                 error
-			spec                *specs.Spec
-			rootfsUidShiftType  sh.IDShiftType
-			bindMntUidShiftType sh.IDShiftType
-			rootfsCloned        bool
-			status              int
-			profiler            interface{ Stop() }
+			err      error
+			spec     *specs.Spec
+			status   int
+			profiler interface{ Stop() }
 		)
 
 		// Enable profiler if requested to do so
@@ -110,46 +106,48 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 		}
 
 		id := context.Args().First()
-		sysMgr := sysbox.NewMgr(id, !context.GlobalBool("no-sysbox-mgr"))
-		sysFs := sysbox.NewFs(id, !context.GlobalBool("no-sysbox-fs"))
 
-		// register with sysMgr
-		if sysMgr.Enabled() {
-			if err = sysMgr.Register(spec); err != nil {
+		withMgr := !context.GlobalBool("no-sysbox-mgr")
+		withFs := !context.GlobalBool("no-sysbox-fs")
+
+		sysbox := sysbox.NewSysbox(id, withMgr, withFs)
+
+		// register with sysbox-mgr
+		if sysbox.Mgr.Enabled() {
+			if err = sysbox.Mgr.Register(spec); err != nil {
 				return err
 			}
 			defer func() {
 				if err != nil {
-					sysMgr.Unregister()
+					sysbox.Mgr.Unregister()
 				}
 			}()
 		}
 
 		// Get sysbox-fs related configs
-		if sysFs.Enabled() {
-			if err = sysFs.GetConfig(); err != nil {
+		if sysbox.Fs.Enabled() {
+			if err = sysbox.Fs.GetConfig(); err != nil {
 				return err
 			}
 		}
 
-		rootfsUidShiftType, bindMntUidShiftType, rootfsCloned, err = syscont.ConvertSpec(context, sysMgr, sysFs, spec)
-		if err != nil {
+		if err = syscont.ConvertSpec(context, spec, sysbox); err != nil {
 			return fmt.Errorf("error in the container spec: %v", err)
 		}
 
 		// pre-register with sysFs
-		if sysFs.Enabled() {
-			if err = sysFs.PreRegister(spec.Linux.Namespaces); err != nil {
+		if sysbox.Fs.Enabled() {
+			if err = sysbox.Fs.PreRegister(spec.Linux.Namespaces); err != nil {
 				return err
 			}
 			defer func() {
 				if err != nil {
-					sysFs.Unregister()
+					sysbox.Fs.Unregister()
 				}
 			}()
 		}
 
-		status, err = startContainer(context, spec, CT_ACT_RUN, nil, rootfsUidShiftType, bindMntUidShiftType, rootfsCloned, sysMgr, sysFs)
+		status, err = startContainer(context, spec, CT_ACT_RUN, nil, sysbox)
 		if err == nil {
 
 			// note: defer func() to stop profiler won't execute on os.Exit(); must explicitly stop it.
