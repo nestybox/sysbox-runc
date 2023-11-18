@@ -2350,7 +2350,7 @@ func (c *linuxContainer) bootstrapData(cloneFlags uintptr, nsMaps map[configs.Na
 		})
 
 		shiftfsMounts := []string{}
-		for _, m := range c.sysbox.ShiftfsMounts {
+		for _, m := range c.config.ShiftfsMounts {
 			shiftfsMounts = append(shiftfsMounts, m.Source)
 		}
 
@@ -2681,7 +2681,7 @@ func (c *linuxContainer) setupShiftfsMarks() error {
 				shiftfsMounts, shiftfsMarks)
 		}
 
-		c.sysbox.ShiftfsMounts = shiftfsMarks
+		config.ShiftfsMounts = shiftfsMarks
 
 		// Replace the container's mounts that have shiftfs with the shiftfs
 		// markpoint allocated by sysbox-mgr.
@@ -2711,7 +2711,7 @@ func (c *linuxContainer) setupShiftfsMarks() error {
 		return nil
 
 	} else {
-		c.sysbox.ShiftfsMounts = shiftfsMounts
+		config.ShiftfsMounts = shiftfsMounts
 		return c.setupShiftfsMarkLocal(mi)
 	}
 }
@@ -2737,7 +2737,7 @@ func (c *linuxContainer) setupShiftfsMarkLocal(mi []*mount.Info) error {
 // Teardown shiftfs marks; meant for testing only
 func (c *linuxContainer) teardownShiftfsMarkLocal(mi []*mount.Info) error {
 
-	for _, m := range c.sysbox.ShiftfsMounts {
+	for _, m := range c.config.ShiftfsMounts {
 		mounted, err := mount.MountedWithFs(m.Source, "shiftfs", mi)
 		if err != nil {
 			return newSystemErrorWithCausef(err, "checking for shiftfs mount at %s", m.Source)

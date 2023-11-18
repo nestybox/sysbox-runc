@@ -25,7 +25,6 @@ import (
 
 	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
 	linuxUtils "github.com/nestybox/sysbox-libs/linuxUtils"
-	"github.com/nestybox/sysbox-libs/shiftfs"
 	libutils "github.com/nestybox/sysbox-libs/utils"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"
@@ -42,7 +41,6 @@ type Sysbox struct {
 	SwitchDockerDns     bool
 	OrigRootfs          string
 	OrigMounts          []specs.Mount
-	ShiftfsMounts       []shiftfs.MountPoint
 	IDshiftIgnoreList   []string
 }
 
