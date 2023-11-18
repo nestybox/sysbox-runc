@@ -1,5 +1,5 @@
 //
-// Copyright 2019-2020 Nestybox, Inc.
+// Copyright 2019-2022 Nestybox, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,7 +42,13 @@ func NewMgr(id string, enable bool) *Mgr {
 	return &Mgr{
 		Active: enable,
 		Id:     id,
-		Config: &ipcLib.ContainerConfig{},
+		Config: &ipcLib.ContainerConfig{
+			// Configs that default to true in sysbox-mgr; we set them here for
+			// sysbox-runc unit tests where sysbox-mgr is not present.
+			AliasDns:          true,
+			AllowTrustedXattr: true,
+			SyscontMode:       true,
+		},
 	}
 }
 

@@ -22,83 +22,39 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"unsafe"
 
 	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
 	linuxUtils "github.com/nestybox/sysbox-libs/linuxUtils"
+	"github.com/nestybox/sysbox-libs/shiftfs"
 	libutils "github.com/nestybox/sysbox-libs/utils"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"
 )
 
-// The min supported kernel release is chosen based on whether it contains all kernel
-// fixes required to run Sysbox. Refer to the Sysbox distro compatibility doc.
-type kernelRelease struct{ major, minor int }
-
-var minKernel = kernelRelease{5, 5}       // 5.5
-var minKernelUbuntu = kernelRelease{5, 0} // 5.0
-
-func readFileInt(path string) (int, error) {
-
-	f, err := os.Open(path)
-	if err != nil {
-		return -1, err
-	}
-	defer f.Close()
-
-	var b []byte = make([]byte, unsafe.Sizeof(int(0)))
-	_, err = f.Read(b)
-	if err != nil {
-		return -1, err
-	}
-
-	var val int
-	_, err = fmt.Sscanf(string(b), "%d", &val)
-	if err != nil {
-		return -1, err
-	}
-
-	return val, nil
+// Holds sysbox-specific config
+type Sysbox struct {
+	Id                  string
+	Mgr                 *Mgr
+	Fs                  *Fs
+	RootfsUidShiftType  sh.IDShiftType
+	BindMntUidShiftType sh.IDShiftType
+	RootfsCloned        bool
+	SwitchDockerDns     bool
+	OrigRootfs          string
+	OrigMounts          []specs.Mount
+	ShiftfsMounts       []shiftfs.MountPoint
 }
 
-// checks if the kernel is configured to allow unprivileged users to create
-// namespaces. This is necessary for running containers inside a system
-// container.
-func checkUnprivilegedUserns() error {
+func NewSysbox(id string, withMgr, withFs bool) *Sysbox {
 
-	// In Debian-based distros, unprivileged userns creation is enabled via
-	// "/proc/sys/kernel/unprivileged_userns_clone". In Fedora (and related)
-	// distros this sysctl does not exist. Rather, unprivileged userns creation
-	// is enabled by setting a non-zero value in "/proc/sys/user/max_user_namespaces".
-	// Here we check both.
+	sysMgr := NewMgr(id, withMgr)
+	sysFs := NewFs(id, withFs)
 
-	path := "/proc/sys/kernel/unprivileged_userns_clone"
-	if _, err := os.Stat(path); err == nil {
-
-		val, err := readFileInt(path)
-		if err != nil {
-			return err
-		}
-
-		if val != 1 {
-			return fmt.Errorf("kernel is not configured to allow unprivileged users to create namespaces: %s: want 1, have %d",
-				path, val)
-		}
+	return &Sysbox{
+		Id:  id,
+		Mgr: sysMgr,
+		Fs:  sysFs,
 	}
-
-	path = "/proc/sys/user/max_user_namespaces"
-
-	val, err := readFileInt(path)
-	if err != nil {
-		return err
-	}
-
-	if val == 0 {
-		return fmt.Errorf("kernel is not configured to allow unprivileged users to create namespaces: %s: want >= 1, have %d",
-			path, val)
-	}
-
-	return nil
 }
 
 func checkKernelVersion(distro string) error {

@@ -1,5 +1,5 @@
 //
-// Copyright 2019-2020 Nestybox, Inc.
+// Copyright 2019-2022 Nestybox, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -479,8 +479,7 @@ func getSysboxEffCaps() ([]string, error) {
 	return strings.Split(allCapsStr, ","), nil
 }
 
-// cfgMaskedPaths removes from the container's config any masked paths for which
-// sysbox-fs will handle accesses.
+// cfgMaskedPaths adds or removes from the container's config any masked paths required by Sysbox.
 func cfgMaskedPaths(spec *specs.Spec) {
 	if systemdInit(spec.Process) {
 		spec.Linux.MaskedPaths = utils.StringSliceRemove(spec.Linux.MaskedPaths, syscontSystemdExposedPaths)
@@ -498,7 +497,13 @@ func cfgReadonlyPaths(spec *specs.Spec) {
 }
 
 // cfgMounts configures the system container mounts
-func cfgMounts(spec *specs.Spec, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs, rootfsUidShiftType sh.IDShiftType) error {
+func cfgMounts(spec *specs.Spec, sysbox *sysbox.Sysbox) error {
+
+	sysMgr := sysbox.Mgr
+	sysFs := sysbox.Fs
+
+	// We will modify the container's mounts; remember the original ones
+	sysbox.OrigMounts = spec.Mounts
 
 	if sysMgr.Config.SyscontMode {
 		cfgSyscontMounts(spec)
@@ -509,7 +514,7 @@ func cfgMounts(spec *specs.Spec, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs, rootfsUid
 	}
 
 	if sysMgr.Enabled() {
-		if err := sysMgrSetupMounts(sysMgr, spec, rootfsUidShiftType); err != nil {
+		if err := sysMgrSetupMounts(sysbox, spec); err != nil {
 			return err
 		}
 	}
@@ -779,7 +784,10 @@ func getSpecialDirs(spec *specs.Spec) (map[string]ipcLib.MntKind, error) {
 // (e.g., the implicit mounts that sysbox creates over the container's
 // /var/lib/docker, /var/lib/kubelet, etc. in order to enable system software to
 // run in the container seamlessly).
-func sysMgrSetupMounts(mgr *sysbox.Mgr, spec *specs.Spec, rootfsUidShiftType sh.IDShiftType) error {
+func sysMgrSetupMounts(sysbox *sysbox.Sysbox, spec *specs.Spec) error {
+
+	rootfsUidShiftType := sysbox.RootfsUidShiftType
+	mgr := sysbox.Mgr
 
 	specialDirMap, err := getSpecialDirs(spec)
 	if err != nil {
@@ -1097,7 +1105,10 @@ func cfgSyscontSyscallTraps(sysMgr *sysbox.Mgr) {
 }
 
 // Configures rootfs cloning (when required); returns true if rootfs was cloned.
-func cfgRootfsCloning(spec *specs.Spec, sysMgr *sysbox.Mgr) (bool, error) {
+func cfgRootfsCloning(spec *specs.Spec, sysbox *sysbox.Sysbox) (bool, error) {
+
+	sysMgr := sysbox.Mgr
+	sysbox.OrigRootfs = spec.Root.Path
 
 	if !sysMgr.Enabled() || sysMgr.Config.NoRootfsCloning {
 		return false, nil
@@ -1158,7 +1169,9 @@ func systemdInit(p *specs.Process) bool {
 }
 
 // Configure the container's process spec for system containers
-func ConvertProcessSpec(p *specs.Process, sysMgr *sysbox.Mgr, isExec bool) error {
+func ConvertProcessSpec(p *specs.Process, sysbox *sysbox.Sysbox, isExec bool) error {
+
+	sysMgr := sysbox.Mgr
 
 	if isExec {
 		removeSysboxEnvVarsForExec(p)
@@ -1187,43 +1200,46 @@ func ConvertProcessSpec(p *specs.Process, sysMgr *sysbox.Mgr, isExec bool) error
 }
 
 // ConvertSpec converts the given container spec to a system container spec.
-func ConvertSpec(context *cli.Context,
-	sysMgr *sysbox.Mgr,
-	sysFs *sysbox.Fs,
-	spec *specs.Spec) (sh.IDShiftType, sh.IDShiftType, bool, error) {
+func ConvertSpec(context *cli.Context, spec *specs.Spec, sbox *sysbox.Sysbox) error {
+
+	sysMgr := sbox.Mgr
 
 	if err := getSysboxEnvVarConfigs(spec.Process, sysMgr); err != nil {
-		return sh.NoShift, sh.NoShift, false, err
+		return err
 	}
 
 	if err := checkSpec(spec); err != nil {
-		return sh.NoShift, sh.NoShift, false, fmt.Errorf("invalid or unsupported container spec: %v", err)
+		return fmt.Errorf("invalid or unsupported container spec: %v", err)
 	}
 
 	if err := cfgNamespaces(sysMgr, spec); err != nil {
-		return sh.NoShift, sh.NoShift, false, fmt.Errorf("invalid or unsupported container spec: %v", err)
+		return fmt.Errorf("invalid or unsupported container spec: %v", err)
 	}
 
 	if err := cfgIDMappings(sysMgr, spec); err != nil {
-		return sh.NoShift, sh.NoShift, false, fmt.Errorf("invalid user/group ID config: %v", err)
+		return fmt.Errorf("invalid user/group ID config: %v", err)
 	}
 
 	// Must do this after cfgIDMappings()
 	rootfsUidShiftType, bindMntUidShiftType, err := sysbox.CheckUidShifting(sysMgr, spec)
 	if err != nil {
-		return sh.NoShift, sh.NoShift, false, err
+		return err
 	}
 
 	rootfsCloned := false
 	if rootfsUidShiftType == sh.Chown {
-		rootfsCloned, err = cfgRootfsCloning(spec, sysMgr)
+		rootfsCloned, err = cfgRootfsCloning(spec, sbox)
 		if err != nil {
-			return sh.NoShift, sh.NoShift, false, err
+			return err
 		}
 	}
 
-	if err := cfgMounts(spec, sysMgr, sysFs, rootfsUidShiftType); err != nil {
-		return sh.NoShift, sh.NoShift, false, fmt.Errorf("invalid mount config: %v", err)
+	sbox.RootfsUidShiftType = rootfsUidShiftType
+	sbox.BindMntUidShiftType = bindMntUidShiftType
+	sbox.RootfsCloned = rootfsCloned
+
+	if err := cfgMounts(spec, sbox); err != nil {
+		return fmt.Errorf("invalid mount config: %v", err)
 	}
 
 	if sysMgr.Config.SyscontMode {
@@ -1233,13 +1249,13 @@ func ConvertSpec(context *cli.Context,
 
 	cfgOomScoreAdj(spec)
 
-	if err := ConvertProcessSpec(spec.Process, sysMgr, false); err != nil {
-		return sh.NoShift, sh.NoShift, false, fmt.Errorf("failed to configure process spec: %v", err)
+	if err := ConvertProcessSpec(spec.Process, sbox, false); err != nil {
+		return fmt.Errorf("failed to configure process spec: %v", err)
 	}
 
 	if sysMgr.Config.SyscontMode {
 		if err := cfgSeccomp(spec.Linux.Seccomp); err != nil {
-			return sh.NoShift, sh.NoShift, false, fmt.Errorf("failed to configure seccomp: %v", err)
+			return fmt.Errorf("failed to configure seccomp: %v", err)
 		}
 	}
 
@@ -1247,5 +1263,5 @@ func ConvertSpec(context *cli.Context,
 		cfgSyscontSyscallTraps(sysMgr)
 	}
 
-	return rootfsUidShiftType, bindMntUidShiftType, rootfsCloned, nil
+	return nil
 }

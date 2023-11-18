@@ -69,8 +69,7 @@ type linuxContainer struct {
 	criuVersion          int
 	state                containerState
 	created              time.Time
-	sysFs                *sysbox.Fs
-	sysMgr               *sysbox.Mgr
+	sysbox               *sysbox.Sysbox
 }
 
 // State represents a running container's state
@@ -100,6 +99,9 @@ type State struct {
 
 	// Intel RDT "resource control" filesystem path
 	IntelRdtPath string `json:"intel_rdt_path"`
+
+	// Sysbox contains sysbox-specific config
+	Sysbox sysbox.Sysbox `json:"sysbox,omitempty"`
 
 	// SysFs contains info about resources obtained from sysbox-fs
 	SysFs sysbox.Fs `json:"sys_fs,omitempty"`
@@ -296,7 +298,7 @@ func (c *linuxContainer) Start(process *Process) error {
 			if config.RootfsCloned {
 				uidOffset := int32(config.UidMappings[0].HostID)
 				gidOffset := int32(config.GidMappings[0].HostID)
-				if err := c.sysMgr.ChownClonedRootfs(uidOffset, gidOffset); err != nil {
+				if err := c.sysbox.Mgr.ChownClonedRootfs(uidOffset, gidOffset); err != nil {
 					return newSystemErrorWithCause(err, "failed to chown rootfs clone")
 				}
 			} else {
@@ -428,8 +430,8 @@ func (c *linuxContainer) start(process *Process) error {
 	c.created = time.Now().UTC()
 
 	// sysbox-runc: send the creation-timestamp to sysbox-fs.
-	if process.Init && c.sysFs.Enabled() {
-		if err := c.sysFs.SendCreationTime(c.created); err != nil {
+	if process.Init && c.sysbox.Fs.Enabled() {
+		if err := c.sysbox.Fs.SendCreationTime(c.created); err != nil {
 			return newSystemErrorWithCause(err, "sending creation timestamp to sysbox-fs")
 		}
 	}
@@ -459,7 +461,7 @@ func (c *linuxContainer) start(process *Process) error {
 		}
 
 		// sysbox-runc: send an update to sysbox-mgr with the container's config
-		if c.sysMgr.Enabled() {
+		if c.sysbox.Mgr.Enabled() {
 			userns := state.NamespacePaths[configs.NEWUSER]
 			netns := state.NamespacePaths[configs.NEWNET]
 
@@ -484,7 +486,7 @@ func (c *linuxContainer) start(process *Process) error {
 
 			rootfsUidShiftType := c.config.RootfsUidShiftType
 
-			if err := c.sysMgr.Update(userns, netns, uidMappings, gidMappings, rootfsUidShiftType); err != nil {
+			if err := c.sysbox.Mgr.Update(userns, netns, uidMappings, gidMappings, rootfsUidShiftType); err != nil {
 				return newSystemErrorWithCause(err, "sending creation timestamp to sysbox-fs")
 			}
 		}
@@ -760,7 +762,7 @@ func (c *linuxContainer) Destroy() error {
 	// If the rootfs was chowned, revert it back to its original uid & gid
 	if c.config.RootfsUidShiftType == sh.Chown {
 		if c.config.RootfsCloned {
-			err = c.sysMgr.RevertClonedRootfsChown()
+			err = c.sysbox.Mgr.RevertClonedRootfsChown()
 		} else {
 			err = c.revertRootfsChown()
 		}
@@ -770,14 +772,14 @@ func (c *linuxContainer) Destroy() error {
 		err = err2
 	}
 
-	if c.sysFs.Enabled() {
-		if err2 := c.sysFs.Unregister(); err == nil {
+	if c.sysbox.Fs.Enabled() {
+		if err2 := c.sysbox.Fs.Unregister(); err == nil {
 			err = err2
 		}
 	}
 
-	if c.sysMgr.Enabled() {
-		if err2 := c.sysMgr.Unregister(); err == nil {
+	if c.sysbox.Mgr.Enabled() {
+		if err2 := c.sysbox.Mgr.Unregister(); err == nil {
 			err = err2
 		}
 	} else {
@@ -815,8 +817,8 @@ func (c *linuxContainer) Pause() error {
 			}
 		}
 
-		if c.sysMgr.Enabled() {
-			if err := c.sysMgr.Pause(); err != nil {
+		if c.sysbox.Mgr.Enabled() {
+			if err := c.sysbox.Mgr.Pause(); err != nil {
 				return err
 			}
 		}
@@ -845,8 +847,8 @@ func (c *linuxContainer) Resume() error {
 		}
 	}
 
-	if c.sysMgr.Enabled() {
-		if err := c.sysMgr.Resume(); err != nil {
+	if c.sysbox.Mgr.Enabled() {
+		if err := c.sysbox.Mgr.Resume(); err != nil {
 			return err
 		}
 	}
@@ -2096,8 +2098,9 @@ func (c *linuxContainer) currentState() (*State, error) {
 		IntelRdtPath:        intelRdtPath,
 		NamespacePaths:      make(map[configs.NamespaceType]string),
 		ExternalDescriptors: externalDescriptors,
-		SysMgr:              *c.sysMgr,
-		SysFs:               *c.sysFs,
+		Sysbox:              *c.sysbox,
+		SysMgr:              *c.sysbox.Mgr,
+		SysFs:               *c.sysbox.Fs,
 	}
 
 	if pid > 0 {
@@ -2346,7 +2349,7 @@ func (c *linuxContainer) bootstrapData(cloneFlags uintptr, nsMaps map[configs.Na
 		})
 
 		shiftfsMounts := []string{}
-		for _, m := range c.config.ShiftfsMounts {
+		for _, m := range c.sysbox.ShiftfsMounts {
 			shiftfsMounts = append(shiftfsMounts, m.Source)
 		}
 
@@ -2418,9 +2421,6 @@ func (c *linuxContainer) handleReqOp(childPid int, reqs []opReq) error {
 	if op != bind && op != switchDockerDns && op != chown && op != mkdir && op != rootfsIDMap {
 		return newSystemError(fmt.Errorf("invalid opReq type %d", int(op)))
 	}
-
-	// Add the container's init process pid to the first op request
-	reqs[0].InitPid = childPid
 
 	return c.handleOp(op, childPid, reqs)
 }
@@ -2555,8 +2555,8 @@ func (c *linuxContainer) handleOp(op opReqType, childPid int, reqs []opReq) erro
 // Processes a seccomp notification file-descriptor for the sys container by passing it to
 // sysbox-fs to setup syscall trapping.
 func (c *linuxContainer) procSeccompInit(pid int, fd int32) error {
-	if c.sysFs.Enabled() {
-		if err := c.sysFs.SendSeccompInit(pid, c.id, fd); err != nil {
+	if c.sysbox.Fs.Enabled() {
+		if err := c.sysbox.Fs.SendSeccompInit(pid, c.id, fd); err != nil {
 			return newSystemErrorWithCause(err, "sending seccomp fd to sysbox-fs")
 		}
 	}
@@ -2633,7 +2633,7 @@ func (c *linuxContainer) setupShiftfsMarks() error {
 				}
 
 				// If the mount source is FUSE-based, we may need to skip shiftfs on it.
-				if c.sysMgr.Config.NoShiftfsOnFuse {
+				if c.sysbox.Mgr.Config.NoShiftfsOnFuse {
 					isFuse, err := isFuseMount(m.Source)
 					if err != nil {
 						return err
@@ -2686,9 +2686,9 @@ func (c *linuxContainer) setupShiftfsMarks() error {
 	// track shiftfs mark-points on the host. But for sysbox-runc unit testing
 	// the sysbox-mgr is not present, so we do the shiftfs marking locally (which
 	// only works when sys containers are not sharing mount points).
-	if c.sysMgr.Enabled() {
+	if c.sysbox.Mgr.Enabled() {
 
-		shiftfsMarks, err := c.sysMgr.ReqShiftfsMark(shiftfsMounts)
+		shiftfsMarks, err := c.sysbox.Mgr.ReqShiftfsMark(shiftfsMounts)
 		if err != nil {
 			return err
 		}
@@ -2698,7 +2698,7 @@ func (c *linuxContainer) setupShiftfsMarks() error {
 				shiftfsMounts, shiftfsMarks)
 		}
 
-		config.ShiftfsMounts = shiftfsMarks
+		c.sysbox.ShiftfsMounts = shiftfsMarks
 
 		// Replace the container's mounts that have shiftfs with the shiftfs
 		// markpoint allocated by sysbox-mgr.
@@ -2728,7 +2728,7 @@ func (c *linuxContainer) setupShiftfsMarks() error {
 		return nil
 
 	} else {
-		config.ShiftfsMounts = shiftfsMounts
+		c.sysbox.ShiftfsMounts = shiftfsMounts
 		return c.setupShiftfsMarkLocal(mi)
 	}
 }
@@ -2754,7 +2754,7 @@ func (c *linuxContainer) setupShiftfsMarkLocal(mi []*mount.Info) error {
 // Teardown shiftfs marks; meant for testing only
 func (c *linuxContainer) teardownShiftfsMarkLocal(mi []*mount.Info) error {
 
-	for _, m := range c.config.ShiftfsMounts {
+	for _, m := range c.sysbox.ShiftfsMounts {
 		mounted, err := mount.MountedWithFs(m.Source, "shiftfs", mi)
 		if err != nil {
 			return newSystemErrorWithCausef(err, "checking for shiftfs mount at %s", m.Source)
@@ -2767,38 +2767,6 @@ func (c *linuxContainer) teardownShiftfsMarkLocal(mi []*mount.Info) error {
 	}
 
 	return nil
-}
-
-func (c *linuxContainer) rootfsCloningRequired() (bool, error) {
-
-	// If the rootfs is on an overlayfs mount, then chown can be very slow (in
-	// the order of many seconds because it triggers a "copy-up" of every file),
-	// unless the overlay was mounted with "metacopy=on". If metacopy is disabled
-	// (e.g., Docker does not set this option), then we need a solution.
-	//
-	// Turns out we can't simply add the "metacopy=on" to the existing overlayfs
-	// mount on the rootfs via a remount (it's not supported). We could unmount
-	// and then remount, but the unmount may break the container manager that set
-	// up the mount. We tried, it did not work (Docker/containerd did not like
-	// it).
-	//
-	// The solution is to ask the sysbox-mgr to clone the rootfs at a separate
-	// location, and mount the overlay with metacopy=on. We will then setup the
-	// container using this cloned rootfs.
-
-	if !c.sysMgr.Enabled() {
-		return false, nil
-	}
-
-	rootfs := c.config.Rootfs
-	mounts, err := mount.GetMounts()
-
-	mi, err := mount.GetMountAt(rootfs, mounts)
-	if err == nil && mi.Fstype == "overlay" && !strings.Contains(mi.Opts, "metacopy=on") {
-		return true, nil
-	}
-
-	return false, nil
 }
 
 // chowns the container's rootfs to match the user-ns uid & gid mappings.
@@ -2819,8 +2787,8 @@ func (c *linuxContainer) chownRootfs() error {
 // reverts the container's rootfs chown (back to it's original value)
 func (c *linuxContainer) revertRootfsChown() error {
 
-	if c.sysMgr.IsRootfsCloned() {
-		c.config.Rootfs = c.sysMgr.GetClonedRootfs()
+	if c.sysbox.Mgr.IsRootfsCloned() {
+		c.config.Rootfs = c.sysbox.Mgr.GetClonedRootfs()
 	}
 
 	uidOffset := 0 - int32(c.config.UidMappings[0].HostID)

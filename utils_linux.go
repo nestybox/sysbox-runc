@@ -13,7 +13,6 @@ import (
 	"strings"
 
 	"github.com/nestybox/sysbox-libs/dockerUtils"
-	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/cgroups/systemd"
 	"github.com/opencontainers/runc/libcontainer/configs"
@@ -34,7 +33,7 @@ import (
 var errEmptyID = errors.New("container id cannot be empty")
 
 // loadFactory returns the configured factory instance for execing containers.
-func loadFactory(context *cli.Context, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs) (libcontainer.Factory, error) {
+func loadFactory(context *cli.Context, sysbox *sysbox.Sysbox) (libcontainer.Factory, error) {
 	root := context.GlobalString("root")
 	abs, err := filepath.Abs(root)
 	if err != nil {
@@ -79,8 +78,7 @@ func loadFactory(context *cli.Context, sysMgr *sysbox.Mgr, sysFs *sysbox.Fs) (li
 		libcontainer.CriuPath(context.GlobalString("criu")),
 		libcontainer.NewuidmapPath(newuidmap),
 		libcontainer.NewgidmapPath(newgidmap),
-		libcontainer.SysFs(sysFs),
-		libcontainer.SysMgr(sysMgr))
+		libcontainer.Sysbox(sysbox))
 }
 
 // getContainer returns the specified container instance by loading it from state
@@ -90,7 +88,7 @@ func getContainer(context *cli.Context) (libcontainer.Container, error) {
 	if id == "" {
 		return nil, errEmptyID
 	}
-	factory, err := loadFactory(context, nil, nil)
+	factory, err := loadFactory(context, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -296,11 +294,10 @@ func sysMgrGetFsState(mgr *sysbox.Mgr, config *configs.Config) error {
 func createContainer(context *cli.Context,
 	id string,
 	spec *specs.Spec,
-	rootfsUidShiftType, bindMntUidShiftType sh.IDShiftType,
-	switchDockerDns bool,
-	rootfsCloned bool,
-	sysMgr *sysbox.Mgr,
-	sysFs *sysbox.Fs) (libcontainer.Container, error) {
+	sysbox *sysbox.Sysbox) (libcontainer.Container, error) {
+
+	sysMgr := sysbox.Mgr
+	sysFs := sysbox.Fs
 
 	rootlessCg, err := shouldUseRootlessCgroupManager(context)
 	if err != nil {
@@ -315,10 +312,10 @@ func createContainer(context *cli.Context,
 		Spec:                spec,
 		RootlessEUID:        os.Geteuid() != 0,
 		RootlessCgroups:     rootlessCg,
-		RootfsUidShiftType:  rootfsUidShiftType,
-		BindMntUidShiftType: bindMntUidShiftType,
-		SwitchDockerDns:     switchDockerDns,
-		RootfsCloned:        rootfsCloned,
+		RootfsUidShiftType:  sysbox.RootfsUidShiftType,
+		BindMntUidShiftType: sysbox.BindMntUidShiftType,
+		SwitchDockerDns:     sysbox.SwitchDockerDns,
+		RootfsCloned:        sysbox.RootfsCloned,
 		FsuidMapFailOnErr:   sysMgr.Config.FsuidMapFailOnErr,
 	})
 	if err != nil {
@@ -340,7 +337,7 @@ func createContainer(context *cli.Context,
 		}
 	}
 
-	factory, err := loadFactory(context, sysMgr, sysFs)
+	factory, err := loadFactory(context, sysbox)
 	if err != nil {
 		return nil, err
 	}
@@ -512,15 +509,14 @@ func startContainer(context *cli.Context,
 	spec *specs.Spec,
 	action CtAct,
 	criuOpts *libcontainer.CriuOpts,
-	rootfsUidShiftType, bindMntUidShiftType sh.IDShiftType,
-	rootfsCloned bool,
-	sysMgr *sysbox.Mgr,
-	sysFs *sysbox.Fs) (int, error) {
+	sysbox *sysbox.Sysbox) (int, error) {
 
 	id := context.Args().First()
 	if id == "" {
 		return -1, errEmptyID
 	}
+
+	sysMgr := sysbox.Mgr
 
 	switchDockerDns := false
 	if sysMgr.Enabled() && sysMgr.Config.AliasDns {
@@ -531,6 +527,8 @@ func startContainer(context *cli.Context,
 		}
 	}
 
+	sysbox.SwitchDockerDns = switchDockerDns
+
 	notifySocket := newNotifySocket(context, os.Getenv("NOTIFY_SOCKET"), id)
 	if notifySocket != nil {
 		if err := notifySocket.setupSpec(context, spec); err != nil {
@@ -538,7 +536,7 @@ func startContainer(context *cli.Context,
 		}
 	}
 
-	container, err := createContainer(context, id, spec, rootfsUidShiftType, bindMntUidShiftType, switchDockerDns, rootfsCloned, sysMgr, sysFs)
+	container, err := createContainer(context, id, spec, sysbox)
 	if err != nil {
 		return -1, err
 	}
