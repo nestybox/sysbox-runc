@@ -82,15 +82,12 @@ func iptablesRestoreHasWait() (bool, error) {
 
 func doBindMount(rootfs string, m *configs.Mount) error {
 
-	// sysbox-runc: For some reason, when the rootfs is on shiftfs, we
-	// need to do an Lstat() of the source path prior to doing the
-	// mount. Otherwise we get a "permission denied" error. It took me
-	// a while to figure this out. I found out by noticing that the
-	// mount cmd (not the syscall) would not hit the permission error,
-	// and then did an strace of the syscalls being done by the mount
-	// command, which led me to realize that the Lstat() was solving
-	// the problem. FYI, in order to do the strace, I had to enable the
-	// ptrace syscall inside the container (via the libsysbox's syscalls.go).
+	// sysbox-runc: For some reason, when the rootfs is on shiftfs, we need to do
+	// an Lstat() of the source path prior to doing the mount. Otherwise we get a
+	// "permission denied" error. It took me a while to figure this out. I found
+	// out by noticing that the mount utility (not the syscall) would not hit the
+	// permission error, and then did an strace of the syscalls being done by it,
+	// which led me to realize that the Lstat() was solving the problem.
 
 	src := m.Source
 	if !m.BindSrcInfo.IsDir {
@@ -99,7 +96,6 @@ func doBindMount(rootfs string, m *configs.Mount) error {
 	os.Lstat(src)
 
 	// Bind-mount with procfd to mitigate symlink exchange attacks.
-
 	if err := libcontainerUtils.WithProcfd(rootfs, m.Destination, func(procfd string) error {
 		if err := unix.Mount(m.Source, procfd, "", unix.MS_BIND|unix.MS_REC, ""); os.IsPermission(err) {
 

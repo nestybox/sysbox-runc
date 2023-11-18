@@ -40,9 +40,12 @@ const (
 )
 
 type opReq struct {
+	// If multiple opReqs of a given type are sent, the ones below are common to
+	// all and therefore only set in the first one (opReq[0]). Not all request
+	// types use all these fields necessarily (most use Rootfs but only
+	// bind-mount requests use the other ones).
 	Op                opReqType `json:"type"`
 	Rootfs            string    `json:"rootfs"`
-	InitPid           int       `json:"init_pid"`
 	FsuidMapFailOnErr bool      `json:"fsuid_map_fail_on_err"`
 
 	// bind
