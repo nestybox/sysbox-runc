@@ -520,11 +520,13 @@ func cfgMounts(spec *specs.Spec, sysbox *sysbox.Sysbox) error {
 		}
 	}
 
+	hasSystemd := false
 	if systemdInit(spec.Process) && sysMgr.Config.SyscontMode {
+		hasSystemd = true
 		cfgSystemdMounts(spec)
 	}
 
-	sortMounts(spec)
+	sortMounts(spec, hasSystemd)
 
 	return nil
 }

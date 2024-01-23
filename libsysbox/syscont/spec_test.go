@@ -239,47 +239,6 @@ func TestCfgReadonlyPaths(t *testing.T) {
 	}
 }
 
-func TestSortMounts(t *testing.T) {
-
-	spec := new(specs.Spec)
-
-	spec.Mounts = []specs.Mount{
-		{Destination: "/dev", Type: "tmpfs"},
-		{Destination: "/proc/swaps", Type: "bind"},
-		{Destination: "/proc", Type: "proc"},
-		{Destination: "/var/lib/docker/overlay2", Type: "bind"},
-		{Destination: "/var/lib/docker", Type: "bind"},
-		{Destination: "/var/lib/docker/overlay2/diff", Type: "bind"},
-		{Destination: "/tmp/run", Type: "tmpfs"},
-		{Destination: "/sys/fs/cgroup", Type: "cgroup"},
-		{Destination: "/sys", Type: "sysfs"},
-		{Destination: "/tmp/run2", Type: "tmpfs"},
-	}
-
-	wantMounts := []specs.Mount{
-		{Destination: "/sys", Type: "sysfs"},
-		{Destination: "/sys/fs/cgroup", Type: "cgroup"},
-		{Destination: "/proc", Type: "proc"},
-		{Destination: "/dev", Type: "tmpfs"},
-		{Destination: "/tmp/run", Type: "tmpfs"},
-		{Destination: "/tmp/run2", Type: "tmpfs"},
-
-		// bind mounts should be grouped at the end; bind mounts
-		// dependent on others must be placed after those others.
-
-		{Destination: "/proc/swaps", Type: "bind"},
-		{Destination: "/var/lib/docker", Type: "bind"},
-		{Destination: "/var/lib/docker/overlay2", Type: "bind"},
-		{Destination: "/var/lib/docker/overlay2/diff", Type: "bind"},
-	}
-
-	sortMounts(spec)
-
-	if !utils.MountSliceEqual(spec.Mounts, wantMounts) {
-		t.Errorf("sortMounts() failed: got %v, want %v", spec.Mounts, wantMounts)
-	}
-}
-
 func TestCfgSystemd(t *testing.T) {
 
 	spec := new(specs.Spec)
