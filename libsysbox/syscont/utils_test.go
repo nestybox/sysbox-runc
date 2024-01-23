@@ -19,6 +19,7 @@ package syscont
 import (
 	"testing"
 
+	utils "github.com/nestybox/sysbox-libs/utils"
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
@@ -104,5 +105,69 @@ func TestMergeIDMappings(t *testing.T) {
 		t.Errorf("mergeIDMappings(%v) failed with error: %s", have, err)
 	} else if !equalIDMappings(want, got) {
 		t.Errorf("mergeIDMappings(%v) failed: got %v, want %v", have, got, want)
+	}
+}
+
+func TestSortMounts(t *testing.T) {
+	spec := new(specs.Spec)
+
+	spec.Mounts = []specs.Mount{
+		{Destination: "/dev", Type: "tmpfs"},
+		{Destination: "/proc/swaps", Type: "bind"},
+		{Destination: "/proc", Type: "proc"},
+		{Destination: "/var/lib/docker/overlay2", Type: "bind"},
+		{Destination: "/var/lib/docker", Type: "bind"},
+		{Destination: "/var/lib/docker/overlay2/diff", Type: "bind"},
+		{Destination: "/tmp/run", Type: "tmpfs"},
+		{Destination: "/sys/fs/cgroup", Type: "cgroup"},
+		{Destination: "/sys", Type: "sysfs"},
+		{Destination: "/tmp/run2", Type: "tmpfs"},
+	}
+
+	wantMounts := []specs.Mount{
+		{Destination: "/sys", Type: "sysfs"},
+		{Destination: "/sys/fs/cgroup", Type: "cgroup"},
+		{Destination: "/proc", Type: "proc"},
+		{Destination: "/dev", Type: "tmpfs"},
+		{Destination: "/tmp/run", Type: "tmpfs"},
+		{Destination: "/tmp/run2", Type: "tmpfs"},
+
+		// bind mounts should be grouped at the end; bind mounts
+		// dependent on others must be placed after those others.
+
+		{Destination: "/proc/swaps", Type: "bind"},
+		{Destination: "/var/lib/docker", Type: "bind"},
+		{Destination: "/var/lib/docker/overlay2", Type: "bind"},
+		{Destination: "/var/lib/docker/overlay2/diff", Type: "bind"},
+	}
+
+	sortMounts(spec, false)
+
+	if !utils.MountSliceEqual(spec.Mounts, wantMounts) {
+		t.Errorf("sortMounts() failed: got %v, want %v", spec.Mounts, wantMounts)
+	}
+}
+
+func TestSortMountsSystemd(t *testing.T) {
+	spec := new(specs.Spec)
+
+	spec.Mounts = []specs.Mount{
+		{Destination: "/run/secrets/serviceaccount/token", Type: "bind"},
+		{Destination: "/run/lock", Type: "tmpfs"},
+		{Destination: "/var/run/secrets/serviceaccount/token", Type: "bind"},
+		{Destination: "/run", Type: "tmpfs"},
+	}
+
+	wantMounts := []specs.Mount{
+		{Destination: "/run", Type: "tmpfs"},
+		{Destination: "/run/lock", Type: "tmpfs"},
+		{Destination: "/run/secrets/serviceaccount/token", Type: "bind"},
+		{Destination: "/var/run/secrets/serviceaccount/token", Type: "bind"},
+	}
+
+	sortMounts(spec, true)
+
+	if !utils.MountSliceEqual(spec.Mounts, wantMounts) {
+		t.Errorf("sortMounts() failed: got %v, want %v", spec.Mounts, wantMounts)
 	}
 }

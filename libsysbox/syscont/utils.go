@@ -26,7 +26,7 @@ import (
 )
 
 // sortMounts sorts the sys container mounts in the given spec.
-func sortMounts(spec *specs.Spec) {
+func sortMounts(spec *specs.Spec, hasSystemd bool) {
 
 	// The OCI spec requires the runtime to honor the ordering on
 	// mounts in the spec. However, we deviate a bit and always order
@@ -37,6 +37,10 @@ func sortMounts(spec *specs.Spec) {
 		"/sys":  1,
 		"/proc": 2,
 		"/dev":  3,
+	}
+
+	if hasSystemd {
+		orderList["/run"] = 4
 	}
 
 	sort.SliceStable(spec.Mounts, func(i, j int) bool {
