@@ -327,6 +327,19 @@ func (l *linuxStandardInit) Init() error {
 		return err
 	}
 
+	// Close all file descriptors we are not passing to the container. This is
+	// necessary because the execve target could use internal sysbox-runc fds as
+	// the execve path, potentially giving access to binary files from the host
+	// (which can then be opened by container processes, leading to container
+	// escapes). Note that because this operation will close any open file
+	// descriptors that are referenced by (*os.File) handles from underneath the
+	// Go runtime, we must not do any file operations after this point (otherwise
+	// the (*os.File) finaliser could close the wrong file). See CVE-2024-21626
+	// for more information as to why this protection is necessary.
+	if err := utils.UnsafeCloseFrom(l.config.PassedFilesCount + 3); err != nil {
+		return err
+	}
+
 	if err := unix.Exec(name, l.config.Args[0:], os.Environ()); err != nil {
 		return newSystemErrorWithCausef(err, "exec user process: name = %v, args = %v, environ = %v", name, l.config.Args[0:], os.Environ())
 	}
