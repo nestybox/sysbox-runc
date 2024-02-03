@@ -105,16 +105,17 @@ var (
 	// Set to true by fs unit tests
 	TestMode bool
 
-	cgroupFd     int = -1
-	prepOnce     sync.Once
-	prepErr      error
-	resolveFlags uint64
+	cgroupRootHandle *os.File
+	prepOnce         sync.Once
+	prepErr          error
+	resolveFlags     uint64
 )
 
 func prepareOpenat2() error {
 	prepOnce.Do(func() {
 		fd, err := unix.Openat2(-1, cgroupfsDir, &unix.OpenHow{
-			Flags: unix.O_DIRECTORY | unix.O_PATH})
+			Flags: unix.O_DIRECTORY | unix.O_PATH | unix.O_CLOEXEC,
+		})
 		if err != nil {
 			prepErr = &os.PathError{Op: "openat2", Path: cgroupfsDir, Err: err}
 			if err != unix.ENOSYS {
@@ -124,15 +125,16 @@ func prepareOpenat2() error {
 			}
 			return
 		}
+		file := os.NewFile(uintptr(fd), cgroupfsDir)
+
 		var st unix.Statfs_t
-		if err = unix.Fstatfs(fd, &st); err != nil {
+		if err = unix.Fstatfs(int(file.Fd()), &st); err != nil {
 			prepErr = &os.PathError{Op: "statfs", Path: cgroupfsDir, Err: err}
 			logrus.Warnf("falling back to securejoin: %s", prepErr)
 			return
 		}
 
-		cgroupFd = fd
-
+		cgroupRootHandle = file
 		resolveFlags = unix.RESOLVE_BENEATH | unix.RESOLVE_NO_MAGICLINKS
 		if st.Type == unix.CGROUP2_SUPER_MAGIC {
 			// cgroupv2 has a single mountpoint and no "cpu,cpuacct" symlinks
@@ -162,7 +164,7 @@ func openFile(dir, file string, flags int) (*os.File, error) {
 	}
 
 	relname := reldir + "/" + file
-	fd, err := unix.Openat2(cgroupFd, relname,
+	fd, err := unix.Openat2(int(cgroupRootHandle.Fd()), relname,
 		&unix.OpenHow{
 			Resolve: resolveFlags,
 			Flags:   uint64(flags) | unix.O_CLOEXEC,
