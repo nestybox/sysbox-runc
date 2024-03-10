@@ -131,7 +131,7 @@ func (mgr *Mgr) ReqSubid(size uint32) (uint32, uint32, error) {
 	return uid, gid, nil
 }
 
-// PrepMounts sends a request to sysbox-mgr for prepare the given  container mounts; all paths must be absolute.
+// PrepMounts sends a request to sysbox-mgr for prepare the given container mounts; all paths must be absolute.
 func (mgr *Mgr) PrepMounts(uid, gid uint32, prepList []ipcLib.MountPrepInfo) error {
 	if err := sysboxMgrGrpc.PrepMounts(mgr.Id, uid, gid, prepList); err != nil {
 		return fmt.Errorf("failed to request mount source preps from sysbox-mgr: %v", err)
@@ -146,6 +146,16 @@ func (mgr *Mgr) ReqMounts(rootfsUidShiftType sh.IDShiftType, reqList []ipcLib.Mo
 		return nil, fmt.Errorf("failed to request mounts from sysbox-mgr: %v", err)
 	}
 	return mounts, nil
+}
+
+// SetupDevices sends a request to sysbox-mgr to prepare the given container devices. Method
+// may also extend the device list with additional devices that sysbox-mgr has discovered.
+func (mgr *Mgr) SetupDevices(devs []specs.LinuxDevice) ([]specs.LinuxDevice, error) {
+	devices, err := sysboxMgrGrpc.SetupDevices(mgr.Id, devs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to request devices setup from sysbox-mgr: %v", err)
+	}
+	return devices, nil
 }
 
 // ReqShiftfsMark sends a request to sysbox-mgr to mark shiftfs on the given dirs; all paths must be absolute.

@@ -553,7 +553,6 @@ func (p *initProcess) start() (retErr error) {
 				s.Pid = p.cmd.Process.Pid
 				s.Status = specs.StateCreating
 				hooks := p.config.Config.Hooks
-
 				if err := hooks[configs.Prestart].RunHooks(s); err != nil {
 					return err
 				}

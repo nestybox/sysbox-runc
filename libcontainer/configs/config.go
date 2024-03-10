@@ -412,6 +412,7 @@ func (c Command) Run(s *specs.State) error {
 	if err != nil {
 		return err
 	}
+
 	var stdout, stderr bytes.Buffer
 	cmd := exec.Cmd{
 		Path:   c.Path,

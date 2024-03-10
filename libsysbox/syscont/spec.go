@@ -525,6 +525,65 @@ func cfgReadonlyPaths(spec *specs.Spec) {
 	spec.Linux.ReadonlyPaths = utils.StringSliceRemove(spec.Linux.ReadonlyPaths, syscontRwPaths)
 }
 
+// cfgDevices creates implicit container devices and assists any container hook that
+// may require special device configuration.
+func cfgDevices(spec *specs.Spec, sysbox *sysbox.Sysbox) error {
+
+	sysMgr := sysbox.Mgr
+
+	if !sysMgr.Enabled() || !sysMgr.Config.SyscontMode {
+		return nil
+	}
+
+	if sysMgr.Enabled() {
+		if err := sysMgrSetupDevices(sysbox, spec); err != nil {
+			return err
+		}
+	}
+
+	if spec.Hooks == nil {
+		return nil
+	}
+
+	// Ideally, we want devices that rely on hooks for their creation, to display
+	// the proper UID/GID ownership values. For this purpose, we iterate through
+	// the following hooks to append the UID/GID values for those hooks that
+	// support this functionality (e.g., nvidia-runtime-hook).
+	//
+	// TODO: For some reason, the nvidia-hook is not honoring these mappings, so we need
+	// to investigate why this is happening (likely a bug in the hook).
+	uid := spec.Linux.UIDMappings[0].HostID
+	gid := spec.Linux.GIDMappings[0].HostID
+	user := fmt.Sprintf("--user=%d:%d", uid, gid)
+
+	// Since the 'prestart' hook is deprecated in favor of the 'createruntime' one,
+	// here we iterate through both hooks to avoid any sudden change in the config
+	// of higher-level container runtimes. However, to avoid any potential conflict,
+	// we prioritize the 'prestart' hook over the 'createruntime' one, since the
+	// former is the one that is currently being used by the nvidia-device-plugin.
+	var found bool
+	for i := range spec.Hooks.Prestart {
+		hook := &spec.Hooks.Prestart[i]
+		if strings.Contains(hook.Path, "nvidia-container-runtime-hook") {
+			hook.Args = []string{"nvidia-container-runtime-hook", "prestart", user}
+			found = true
+			break
+		}
+	}
+	if found {
+		return nil
+	}
+	for i := range spec.Hooks.CreateRuntime {
+		hook := &spec.Hooks.CreateRuntime[i]
+		if strings.Contains(hook.Path, "nvidia-container-runtime-hook") {
+			hook.Args = []string{"nvidia-container-runtime-hook", "create_runtime", user}
+			break
+		}
+	}
+
+	return nil
+}
+
 // cfgMounts configures the system container mounts
 func cfgMounts(spec *specs.Spec, sysbox *sysbox.Sysbox) error {
 
@@ -940,6 +999,26 @@ func sysMgrSetupMounts(sysbox *sysbox.Sysbox, spec *specs.Spec) error {
 	}
 
 	spec.Mounts = append(spec.Mounts, mounts...)
+
+	return nil
+}
+
+// sysMgrSetupDevices takes care of requesting these actions to sysbox-mgr:
+//   - Setups/massages container devices received through the received oci-spec to ensure they
+//     are accessible by sysbox-runc.
+//   - Creates any additional devices that may be required by the container for a more complete
+//     virtual-host abstraction.
+func sysMgrSetupDevices(sysbox *sysbox.Sysbox, spec *specs.Spec) error {
+
+	mgr := sysbox.Mgr
+
+	// Request sysbox-mgr to setup the container's devices and create any additional ones
+	// for enhanced functionality.
+	devices, err := mgr.SetupDevices(spec.Linux.Devices)
+	if err != nil {
+		return err
+	}
+	spec.Linux.Devices = devices
 
 	return nil
 }
@@ -1372,6 +1451,10 @@ func ConvertSpec(context *cli.Context, spec *specs.Spec, sbox *sysbox.Sysbox) er
 	sbox.RootfsUidShiftType = rootfsUidShiftType
 	sbox.BindMntUidShiftType = bindMntUidShiftType
 	sbox.RootfsCloned = rootfsCloned
+
+	if err := cfgDevices(spec, sbox); err != nil {
+		return fmt.Errorf("invalid device config: %v", err)
+	}
 
 	if err := cfgMounts(spec, sbox); err != nil {
 		return fmt.Errorf("invalid mount config: %v", err)
