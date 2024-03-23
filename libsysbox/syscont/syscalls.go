@@ -403,7 +403,7 @@ func AddSyscallTraps(config *configs.Config) error {
 
 		config.SeccompNotif = &configs.Seccomp{
 			DefaultAction: configs.Allow,
-			Architectures: []string{"amd64", "arm64", "arm"},
+			Architectures: []string{"amd64", "x86", "arm64", "arm"},
 			Syscalls:      list,
 		}
 	}
