@@ -304,10 +304,18 @@ func (l *linuxRootfsInit) Init() error {
 			ovfsMntOpts := overlayUtils.GetMountOpt(mi)
 			ovfsUpperLayer := overlayUtils.GetUpperLayer(ovfsMntOpts)
 			ovfsLowerLayers := overlayUtils.GetLowerLayers(ovfsMntOpts)
+			ovfsWorkDir := overlayUtils.GetWorkDir(ovfsMntOpts)
 
 			// Remove the current overlayfs mount
 			if err := unix.Unmount(rootfs, unix.MNT_DETACH); err != nil {
 				return err
+			}
+
+			// Overlay has a check in place to prevent mounting the same file system twice
+			// if volatile was already specified. Yes, the kernel repeats the "work" component.
+			err = os.RemoveAll(filepath.Join(ovfsWorkDir, "work", "incompat", "volatile"))
+			if err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("failed to remove the work/incompat/volatile marker from %s: %s", ovfsWorkDir, err)
 			}
 
 			// ID-map each of the ovfs lower layers
