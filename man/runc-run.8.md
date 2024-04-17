@@ -24,6 +24,7 @@ command(s) that get executed on start, edit the args parameter of the spec. See
     --bundle value, -b value  path to the root of the bundle directory, defaults to the current directory
     --console-socket value    path to an AF_UNIX socket which will receive a file descriptor referencing the master end of the console's pseudoterminal
     --detach, -d              detach from the container's process
+    --keep                    keep the container's state directory and cgroup. This can be helpful if a user wants to check the state (e.g., of cgroup controllers) after the container has exited. If this option is used, a manual **runc delete** is needed afterwards to clean the exited container's artifacts.
     --pid-file value          specify the file to write the process id to
     --no-subreaper            disable the use of the subreaper used to reap reparented processes
     --no-pivot                do not use pivot root to jail process inside rootfs.  This should be used whenever the rootfs is on top of a ramdisk
