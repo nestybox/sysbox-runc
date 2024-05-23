@@ -1,6 +1,6 @@
 module github.com/nestybox/sysbox-runc
 
-go 1.18
+go 1.21
 
 require (
 	github.com/Masterminds/semver v1.5.0
@@ -11,7 +11,7 @@ require (
 	github.com/cyphar/filepath-securejoin v0.2.2
 	github.com/docker/go-units v0.4.0
 	github.com/godbus/dbus/v5 v5.0.3
-	github.com/golang/protobuf v1.4.3
+	github.com/golang/protobuf v1.5.4
 	github.com/moby/sys/mountinfo v0.4.0
 	github.com/mrunalp/fileutils v0.5.0
 	github.com/nestybox/sysbox-ipc v0.0.0-00010101000000-000000000000
@@ -33,37 +33,47 @@ require (
 	github.com/urfave/cli v1.22.14
 	github.com/vishvananda/netlink v1.1.0
 	github.com/willf/bitset v1.1.11
-	golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f
+	golang.org/x/sys v0.20.0
 )
 
 require (
 	github.com/deckarep/golang-set/v2 v2.3.1
 	github.com/seccomp/libseccomp-golang v0.10.0
-	golang.org/x/net v0.0.0-20220722155237-a158d28d115b
+	golang.org/x/net v0.23.0
 )
 
 require (
-	github.com/Azure/go-ansiterm v0.0.0-20230124172434-306776ec8161 // indirect
 	github.com/Microsoft/go-winio v0.4.16 // indirect
-	github.com/containerd/containerd v1.4.12 // indirect
+	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
 	github.com/deckarep/golang-set v1.7.1 // indirect
-	github.com/docker/distribution v2.7.1+incompatible // indirect
-	github.com/docker/docker v20.10.2+incompatible // indirect
+	github.com/distribution/reference v0.6.0 // indirect
+	github.com/docker/docker v26.0.0+incompatible // indirect
 	github.com/docker/go-connections v0.4.0 // indirect
+	github.com/felixge/httpsnoop v1.0.4 // indirect
+	github.com/go-logr/logr v1.4.1 // indirect
+	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/joshlf/go-acl v0.0.0-20200411065538-eae00ae38531 // indirect
 	github.com/karrick/godirwalk v1.16.1 // indirect
+	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/nestybox/sysbox-libs/formatter v0.0.0-00010101000000-000000000000 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
-	github.com/opencontainers/image-spec v1.0.1 // indirect
+	github.com/opencontainers/image-spec v1.0.2 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/spf13/afero v1.4.1 // indirect
 	github.com/vishvananda/netns v0.0.0-20191106174202-0a2b9b5464df // indirect
-	golang.org/x/text v0.3.8 // indirect
-	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013 // indirect
-	google.golang.org/grpc v1.34.1 // indirect
-	google.golang.org/protobuf v1.25.0 // indirect
+	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.51.0 // indirect
+	go.opentelemetry.io/otel v1.27.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.27.0 // indirect
+	go.opentelemetry.io/otel/metric v1.27.0 // indirect
+	go.opentelemetry.io/otel/sdk v1.27.0 // indirect
+	go.opentelemetry.io/otel/trace v1.27.0 // indirect
+	go.opentelemetry.io/proto/otlp v1.2.0 // indirect
+	golang.org/x/text v0.14.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240227224415-6ceb2ff114de // indirect
+	google.golang.org/grpc v1.63.0 // indirect
+	google.golang.org/protobuf v1.34.1 // indirect
 )
 
 replace (
