@@ -17,6 +17,7 @@
 package syscont
 
 import (
+	"reflect"
 	"testing"
 
 	ipcLib "github.com/nestybox/sysbox-ipc/sysboxMgrLib"
@@ -550,5 +551,251 @@ func Test_getSysboxEnvVarConfigs(t *testing.T) {
 				t.Errorf("getSysboxEnvVarConfigs() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func Test_cfgSyscontMountsReadOnly(t *testing.T) {
+	type args struct {
+		sysMgr         *sysbox.Mgr
+		spec           *specs.Spec
+		expectedMounts []specs.Mount
+	}
+
+	sysMgrDefault := &sysbox.Mgr{
+		Config: &ipcLib.ContainerConfig{
+			RelaxedReadOnly: false,
+		},
+	}
+	sysMgrRelaxedRO := &sysbox.Mgr{
+		Config: &ipcLib.ContainerConfig{
+			RelaxedReadOnly: true,
+		},
+	}
+
+	// UT1: test with no overlapping mounts
+	mountsUT1 := []specs.Mount{}
+	expectedMountsUT1 := []specs.Mount{
+		{
+			Destination: "/run",
+			Source:      "tmpfs",
+			Type:        "tmpfs",
+			Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "mode=755", "size=64m"},
+		},
+		{
+			Destination: "/tmp",
+			Source:      "tmpfs",
+			Type:        "tmpfs",
+			Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "mode=755", "size=64m"},
+		},
+		{
+			Destination: "/sys",
+			Source:      "sysfs",
+			Type:        "sysfs",
+			Options:     []string{"noexec", "nosuid", "nodev", "ro"},
+		},
+		{
+			Destination: "/sys/fs/cgroup",
+			Source:      "cgroup",
+			Type:        "cgroup",
+			Options:     []string{"noexec", "nosuid", "nodev", "ro"},
+		},
+		{
+			Destination: "/proc",
+			Source:      "proc",
+			Type:        "proc",
+			Options:     []string{"noexec", "nosuid", "nodev"},
+		},
+		{
+			Destination: "/dev",
+			Source:      "tmpfs",
+			Type:        "tmpfs",
+			Options:     []string{"nosuid", "strictatime", "mode=755", "size=65536k"},
+		},
+		{
+			Destination: "/dev/kmsg",
+			Source:      "/dev/null",
+			Type:        "bind",
+			Options:     []string{"rbind", "rprivate"},
+		},
+	}
+
+	// UT2: test with overlapping ro mount (/run)
+	mountsUT2 := []specs.Mount{
+		{
+			Destination: "/run",
+			Source:      "/somepath",
+			Type:        "bind",
+			Options:     []string{"ro", "whatever"},
+		},
+	}
+	expectedMountsUT2 := []specs.Mount{
+		{
+			Destination: "/run",
+			Source:      "/somepath",
+			Type:        "bind",
+			Options:     []string{"ro", "whatever"},
+		},
+		{
+			Destination: "/tmp",
+			Source:      "tmpfs",
+			Type:        "tmpfs",
+			Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "mode=755", "size=64m"},
+		},
+		{
+			Destination: "/sys",
+			Source:      "sysfs",
+			Type:        "sysfs",
+			Options:     []string{"noexec", "nosuid", "nodev", "ro"},
+		},
+		{
+			Destination: "/sys/fs/cgroup",
+			Source:      "cgroup",
+			Type:        "cgroup",
+			Options:     []string{"noexec", "nosuid", "nodev", "ro"},
+		},
+		{
+			Destination: "/proc",
+			Source:      "proc",
+			Type:        "proc",
+			Options:     []string{"noexec", "nosuid", "nodev"},
+		},
+		{
+			Destination: "/dev",
+			Source:      "tmpfs",
+			Type:        "tmpfs",
+			Options:     []string{"nosuid", "strictatime", "mode=755", "size=65536k"},
+		},
+		{
+			Destination: "/dev/kmsg",
+			Source:      "/dev/null",
+			Type:        "bind",
+			Options:     []string{"rbind", "rprivate"},
+		},
+	}
+
+	// UT3: test with overlapping rw mount (/tmp)
+	mountsUT3 := []specs.Mount{
+		{
+			Destination: "/tmp",
+			Source:      "/somepath",
+			Type:        "bind",
+			Options:     []string{"rw", "whatever"},
+		},
+	}
+	expectedMountsUT3 := []specs.Mount{
+		{
+			Destination: "/tmp",
+			Source:      "/somepath",
+			Type:        "bind",
+			Options:     []string{"rw", "whatever"},
+		},
+		{
+			Destination: "/run",
+			Source:      "tmpfs",
+			Type:        "tmpfs",
+			Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "mode=755", "size=64m"},
+		},
+		{
+			Destination: "/sys",
+			Source:      "sysfs",
+			Type:        "sysfs",
+			Options:     []string{"noexec", "nosuid", "nodev", "ro"},
+		},
+		{
+			Destination: "/sys/fs/cgroup",
+			Source:      "cgroup",
+			Type:        "cgroup",
+			Options:     []string{"noexec", "nosuid", "nodev", "ro"},
+		},
+		{
+			Destination: "/proc",
+			Source:      "proc",
+			Type:        "proc",
+			Options:     []string{"noexec", "nosuid", "nodev"},
+		},
+		{
+			Destination: "/dev",
+			Source:      "tmpfs",
+			Type:        "tmpfs",
+			Options:     []string{"nosuid", "strictatime", "mode=755", "size=65536k"},
+		},
+		{
+			Destination: "/dev/kmsg",
+			Source:      "/dev/null",
+			Type:        "bind",
+			Options:     []string{"rbind", "rprivate"},
+		},
+	}
+
+	// UT4: relaxed-read-only setup with ro mounts (/sys)
+	mountsUT4 := []specs.Mount{
+		{
+			Destination: "/sys",
+			Source:      "sysfs",
+			Options:     []string{"ro", "whatever"},
+		},
+		{
+			Destination: "/sys/fs/cgroup",
+			Source:      "cgroup",
+			Options:     []string{"ro", "whatever"},
+		},
+	}
+	expectedMountsUT4 := []specs.Mount{
+		{
+			Destination: "/sys",
+			Source:      "sysfs",
+			Options:     []string{"ro", "whatever"},
+		},
+		{
+			Destination: "/sys/fs/cgroup",
+			Source:      "cgroup",
+			Options:     []string{"ro", "whatever"},
+		},
+		{
+			Destination: "/run",
+			Source:      "tmpfs",
+			Type:        "tmpfs",
+			Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "mode=755", "size=64m"},
+		},
+		{
+			Destination: "/tmp",
+			Source:      "tmpfs",
+			Type:        "tmpfs",
+			Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "mode=755", "size=64m"},
+		},
+	}
+
+	tests := []struct {
+		name string
+		args args
+	}{
+		// Test-cases definition
+		{
+			name: "basic setup with no overlapping mounts",
+			args: args{sysMgrDefault, &specs.Spec{Root: &specs.Root{Readonly: true}, Mounts: mountsUT1}, expectedMountsUT1},
+		},
+		{
+			name: "basic setup with overlapping mount (ro)",
+			args: args{sysMgrDefault, &specs.Spec{Root: &specs.Root{Readonly: true}, Mounts: mountsUT2}, expectedMountsUT2},
+		},
+		{
+			name: "basic setup with overlapping mount (rw)",
+			args: args{sysMgrDefault, &specs.Spec{Root: &specs.Root{Readonly: true}, Mounts: mountsUT3}, expectedMountsUT3},
+		},
+		{
+			name: "relaxed-read-only setup with /sys mounts (ro)",
+			args: args{sysMgrRelaxedRO, &specs.Spec{Root: &specs.Root{Readonly: true}, Mounts: mountsUT4}, expectedMountsUT4},
+		},
+	}
+
+	// Test-cases execution
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfgSyscontMountsReadOnly(tt.args.sysMgr, tt.args.spec)
+		})
+
+		if !reflect.DeepEqual(tt.args.spec.Mounts, tt.args.expectedMounts) {
+			t.Errorf("cfgSyscontMountsReadOnly failed: unexpected mounts; got %v, want %v", tt.args.spec.Mounts, tt.args.expectedMounts)
+		}
 	}
 }

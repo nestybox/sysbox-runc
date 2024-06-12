@@ -220,6 +220,27 @@ var syscontSystemdEnvVars = []string{
 	"container=private-users",
 }
 
+// List of file-system paths within a sys container that must be read-write to satisfy
+// system-level apps' requirements. This slide is useful in scenarios where the sys
+// container is running as "read-only" as per the corresponding oci-spec attribute.
+// In this mode, the sys container's rootfs is mounted read-only, which prevents RW
+// operations to tmpfs paths like '/run' and '/tmp'. This slide helps us override the
+// read-only attribute for these paths.
+var syscontMustBeRwMounts = []specs.Mount{
+	{
+		Destination: "/run",
+		Source:      "tmpfs",
+		Type:        "tmpfs",
+		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "mode=755", "size=64m"},
+	},
+	{
+		Destination: "/tmp",
+		Source:      "tmpfs",
+		Type:        "tmpfs",
+		Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "mode=755", "size=64m"},
+	},
+}
+
 // syscontRwPaths list the paths within the sys container's rootfs
 // that must have read-write permission
 var syscontRwPaths = []string{
@@ -507,7 +528,7 @@ func cfgMounts(spec *specs.Spec, sysbox *sysbox.Sysbox) error {
 	sysbox.OrigMounts = spec.Mounts
 
 	if sysMgr.Config.SyscontMode {
-		cfgSyscontMounts(spec)
+		cfgSyscontMounts(sysMgr, spec)
 	}
 
 	if sysFs.Enabled() {
@@ -533,7 +554,7 @@ func cfgMounts(spec *specs.Spec, sysbox *sysbox.Sysbox) error {
 
 // cfgSyscontMounts adds mounts required by sys containers; if the spec
 // has conflicting mounts, these are replaced with the required ones.
-func cfgSyscontMounts(spec *specs.Spec) {
+func cfgSyscontMounts(sysMgr *sysbox.Mgr, spec *specs.Spec) {
 
 	// Disallow mounts under the container's /sys/fs/cgroup/* (i.e., Sysbox sets those up)
 	var cgroupMounts = []specs.Mount{
@@ -563,23 +584,57 @@ func cfgSyscontMounts(spec *specs.Spec) {
 	}
 	spec.Linux.Devices = specDevs
 
-	// If the container's rootfs is read-only, then sysbox mounts of /sys and
-	// below should also be read-only.
+	// In read-only scenarios, we want to adjust the syscont mounts to ensure that
+	// certain container mounts are always mounted as read-write.
 	if spec.Root.Readonly {
-		tmpMounts := []specs.Mount{}
-		rwOpt := []string{"rw"}
-		for _, m := range syscontMounts {
-			if strings.HasPrefix(m.Destination, "/sys") {
-				m.Options = utils.StringSliceRemove(m.Options, rwOpt)
-				m.Options = append(m.Options, "ro")
-			}
-			tmpMounts = append(tmpMounts, m)
-		}
-		syscontMounts = tmpMounts
+		cfgSyscontMountsReadOnly(sysMgr, spec)
+		return
 	}
 
-	// Add sysbox mounts
+	// Add sysbox's default syscont mounts
 	spec.Mounts = append(spec.Mounts, syscontMounts...)
+}
+
+// cfgSyscontMountsReadOnly adjusts the RW/RO character of syscont mounts in
+// 'read-only' container scenarios. The purpose of this function is to ensure:
+//   - certain container mounts are always mounted as read-write (i.e., /run and /tmp)
+//   - /sys mounts are always mounted as read-only unless the sysbox-mgr is configured
+//     with the "relaxed-readonly" option.
+func cfgSyscontMountsReadOnly(sysMgr *sysbox.Mgr, spec *specs.Spec) {
+
+	// We want to ensure that certain container mounts are always mounted as
+	// read-write (i.e., /run and /tmp) unless the user has explicitly marked
+	// them as read-only in the container spec.
+	for _, m := range syscontMustBeRwMounts {
+		var found bool
+		for _, p := range spec.Mounts {
+			if p.Destination == m.Destination {
+				found = true
+				break
+			}
+		}
+		if !found {
+			spec.Mounts = append(spec.Mounts, m)
+		}
+	}
+
+	// If sysbox-mgr is configured with the "relaxed-readonly" option, we allow
+	// "/sys" mountpoints to be read-write, otherwise we mark them as read-only.
+	if sysMgr.Config.RelaxedReadOnly {
+		spec.Mounts = append(spec.Mounts, syscontMounts...)
+		return
+	}
+	tmpMounts := []specs.Mount{}
+	rwOpt := []string{"rw"}
+	for _, m := range syscontMounts {
+		if strings.HasPrefix(m.Destination, "/sys") {
+			m.Options = utils.StringSliceRemove(m.Options, rwOpt)
+			m.Options = append(m.Options, "ro")
+		}
+		tmpMounts = append(tmpMounts, m)
+	}
+
+	spec.Mounts = append(spec.Mounts, tmpMounts...)
 }
 
 // cfgSysboxFsMounts adds the sysbox-fs mounts to the container's config.
@@ -856,8 +911,10 @@ func sysMgrSetupMounts(sysbox *sysbox.Sysbox, spec *specs.Spec) error {
 	})
 
 	// If the spec indicates a read-only rootfs, the sysbox-mgr mounts should
-	// also be read-only.
-	if spec.Root.Readonly {
+	// also be read-only. The exception to this rule is in scenarios where the
+	// sysbox-mgr is in "relaxed-read-only" mode, in which case the mounts are
+	// left as read-write.
+	if spec.Root.Readonly && !sysbox.Mgr.Config.RelaxedReadOnly {
 		tmpMounts := []specs.Mount{}
 		rwOpt := []string{"rw"}
 		for _, m := range mounts {
