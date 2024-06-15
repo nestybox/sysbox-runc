@@ -730,25 +730,15 @@ func Test_cfgSyscontMountsReadOnly(t *testing.T) {
 	// UT4: relaxed-read-only setup with ro mounts (/sys)
 	mountsUT4 := []specs.Mount{
 		{
-			Destination: "/sys",
-			Source:      "sysfs",
-			Options:     []string{"ro", "whatever"},
-		},
-		{
-			Destination: "/sys/fs/cgroup",
-			Source:      "cgroup",
+			Destination: "/sys/fs/test",
+			Source:      "blah",
 			Options:     []string{"ro", "whatever"},
 		},
 	}
 	expectedMountsUT4 := []specs.Mount{
 		{
-			Destination: "/sys",
-			Source:      "sysfs",
-			Options:     []string{"ro", "whatever"},
-		},
-		{
-			Destination: "/sys/fs/cgroup",
-			Source:      "cgroup",
+			Destination: "/sys/fs/test",
+			Source:      "blah",
 			Options:     []string{"ro", "whatever"},
 		},
 		{
@@ -763,6 +753,36 @@ func Test_cfgSyscontMountsReadOnly(t *testing.T) {
 			Type:        "tmpfs",
 			Options:     []string{"rw", "rprivate", "noexec", "nosuid", "nodev", "mode=755", "size=64m"},
 		},
+		{
+			Destination: "/sys",
+			Source:      "sysfs",
+			Type:        "sysfs",
+			Options:     []string{"noexec", "nosuid", "nodev", "rw"},
+		},
+		{
+			Destination: "/sys/fs/cgroup",
+			Source:      "cgroup",
+			Type:        "cgroup",
+			Options:     []string{"noexec", "nosuid", "nodev", "rw"},
+		},
+		{
+			Destination: "/proc",
+			Source:      "proc",
+			Type:        "proc",
+			Options:     []string{"noexec", "nosuid", "nodev"},
+		},
+		{
+			Destination: "/dev",
+			Source:      "tmpfs",
+			Type:        "tmpfs",
+			Options:     []string{"nosuid", "strictatime", "mode=755", "size=65536k"},
+		},
+		{
+			Destination: "/dev/kmsg",
+			Source:      "/dev/null",
+			Type:        "bind",
+			Options:     []string{"rbind", "rprivate"},
+		},
 	}
 
 	tests := []struct {
@@ -771,19 +791,19 @@ func Test_cfgSyscontMountsReadOnly(t *testing.T) {
 	}{
 		// Test-cases definition
 		{
-			name: "basic setup with no overlapping mounts",
+			name: "No overlapping mounts",
 			args: args{sysMgrDefault, &specs.Spec{Root: &specs.Root{Readonly: true}, Mounts: mountsUT1}, expectedMountsUT1},
 		},
 		{
-			name: "basic setup with overlapping mount (ro)",
+			name: "Overlapping ro mount (/run)",
 			args: args{sysMgrDefault, &specs.Spec{Root: &specs.Root{Readonly: true}, Mounts: mountsUT2}, expectedMountsUT2},
 		},
 		{
-			name: "basic setup with overlapping mount (rw)",
+			name: "Overlapping rw mount (/tmp)",
 			args: args{sysMgrDefault, &specs.Spec{Root: &specs.Root{Readonly: true}, Mounts: mountsUT3}, expectedMountsUT3},
 		},
 		{
-			name: "relaxed-read-only setup with /sys mounts (ro)",
+			name: "Relaxed-read-only setup with non-overlapping ro mounts (/sys/test/1)",
 			args: args{sysMgrRelaxedRO, &specs.Spec{Root: &specs.Root{Readonly: true}, Mounts: mountsUT4}, expectedMountsUT4},
 		},
 	}

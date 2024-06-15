@@ -601,7 +601,6 @@ func cfgSyscontMounts(sysMgr *sysbox.Mgr, spec *specs.Spec) {
 //   - /sys mounts are always mounted as read-only unless the sysbox-mgr is configured
 //     with the "relaxed-readonly" option.
 func cfgSyscontMountsReadOnly(sysMgr *sysbox.Mgr, spec *specs.Spec) {
-
 	// We want to ensure that certain container mounts are always mounted as
 	// read-write (i.e., /run and /tmp) unless the user has explicitly marked
 	// them as read-only in the container spec.
@@ -618,22 +617,30 @@ func cfgSyscontMountsReadOnly(sysMgr *sysbox.Mgr, spec *specs.Spec) {
 		}
 	}
 
-	// If sysbox-mgr is configured with the "relaxed-readonly" option, we allow
-	// "/sys" mountpoints to be read-write, otherwise we mark them as read-only.
-	if sysMgr.Config.RelaxedReadOnly {
-		spec.Mounts = append(spec.Mounts, syscontMounts...)
-		return
-	}
-	tmpMounts := []specs.Mount{}
-	rwOpt := []string{"rw"}
-	for _, m := range syscontMounts {
-		if strings.HasPrefix(m.Destination, "/sys") {
-			m.Options = utils.StringSliceRemove(m.Options, rwOpt)
-			m.Options = append(m.Options, "ro")
-		}
-		tmpMounts = append(tmpMounts, m)
-	}
+	var tmpMounts = []specs.Mount{}
 
+	// If sysbox-mgr is configured with the "relaxed-readonly" option, we allow
+	// "/sys" syscont mountpoints to be read-write, otherwise we mark them as
+	// read-only.
+	if sysMgr.Config.RelaxedReadOnly {
+		roOpt := []string{"ro"}
+		for _, m := range syscontMounts {
+			if strings.HasPrefix(m.Destination, "/sys") {
+				m.Options = utils.StringSliceRemove(m.Options, roOpt)
+				m.Options = append(m.Options, "rw")
+			}
+			tmpMounts = append(tmpMounts, m)
+		}
+	} else {
+		rwOpt := []string{"rw"}
+		for _, m := range syscontMounts {
+			if strings.HasPrefix(m.Destination, "/sys") {
+				m.Options = utils.StringSliceRemove(m.Options, rwOpt)
+				m.Options = append(m.Options, "ro")
+			}
+			tmpMounts = append(tmpMounts, m)
+		}
+	}
 	spec.Mounts = append(spec.Mounts, tmpMounts...)
 }
 
