@@ -1373,6 +1373,12 @@ func switchDockerDnsIP(config *configs.Config, pipe io.ReadWriter) error {
 		return err
 	}
 
+	// https://github.com/nestybox/sysbox/issues/834
+	// Skip the DNS change if a default gateway isn't available.
+	if defRoute == "" {
+		return nil
+	}
+
 	// Request the parent runc to enter the container's net-ns and change the DNS
 	// in the iptables (can't do this from within the container as we may not
 	// have the required / compatible iptables package in the container).
