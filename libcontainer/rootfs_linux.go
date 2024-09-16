@@ -1373,11 +1373,11 @@ func switchDockerDnsIP(config *configs.Config, pipe io.ReadWriter) error {
 		return err
 	}
 
-  //Fix: If there is not a default route
-  //Skip the DNS change because is not required
-  if defRoute == "" {
-    return nil
-  }
+	//Fix: If there is not a default route
+	//Skip the DNS change because is not required
+	if defRoute == "" {
+		return nil
+	}
 
 	// Request the parent runc to enter the container's net-ns and change the DNS
 	// in the iptables (can't do this from within the container as we may not
