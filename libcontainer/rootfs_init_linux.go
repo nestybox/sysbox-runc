@@ -322,7 +322,7 @@ func (l *linuxRootfsInit) Init() error {
 
 			// The overlayfs upper layer can't be ID-mapped, so it needs to be chowned.
 			if err := idShiftUtils.ShiftIdsWithChown(ovfsUpperLayer, int32(uid), int32(gid)); err != nil {
-				return newSystemErrorWithCausef(err, "chown overlayfs upper layet at %s")
+				return newSystemErrorWithCausef(err, "chown overlayfs upper layet at %s", ovfsUpperLayer)
 			}
 
 			// Recreate the rootfs overlayfs mount (using the ID-mapped lower layers)
