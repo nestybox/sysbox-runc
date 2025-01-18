@@ -31,6 +31,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/devices"
 	"github.com/opencontainers/runc/libcontainer/system"
 	"github.com/opencontainers/runc/libcontainer/utils"
+	"github.com/opencontainers/runc/libsysbox/syscont"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/opencontainers/selinux/go-selinux/label"
 	"github.com/sirupsen/logrus"
@@ -66,7 +67,7 @@ func prepareRootfs(pipe io.ReadWriter, iConfig *initConfig) (err error) {
 		return newSystemErrorWithCause(err, "effecting rootfs mount")
 	}
 
-	if err := doMounts(config, pipe); err != nil {
+	if err := doMounts(config, pipe, false); err != nil {
 		return newSystemErrorWithCause(err, "setting up rootfs mounts")
 	}
 
@@ -219,6 +220,7 @@ func prepareBindDest(m *configs.Mount, absDestPath bool, config *configs.Config,
 
 	// update the mount with the correct dest after symlinks are resolved.
 	m.Destination = dest
+
 	if err = createIfNotExists(dest, m.BindSrcInfo.IsDir, config, pipe); err != nil {
 		return err
 	}
@@ -501,7 +503,7 @@ func mountToRootfs(m *configs.Mount, config *configs.Config, enableCgroupns bool
 	}
 }
 
-func doBindMounts(config *configs.Config, pipe io.ReadWriter) error {
+func doBindMounts(config *configs.Config, pipe io.ReadWriter, doSysboxfsOvermountsOnly bool) error {
 
 	// sysbox-runc: the sys container's init process is in a dedicated
 	// user-ns, so it may not have search permission to the bind mount
@@ -524,6 +526,13 @@ func doBindMounts(config *configs.Config, pipe io.ReadWriter) error {
 	for _, m := range config.Mounts {
 
 		if m.Device != "bind" {
+			continue
+		}
+
+		isSysboxfsOvermount := isSysboxfsOvermount(m)
+
+		if doSysboxfsOvermountsOnly && !isSysboxfsOvermount ||
+			!doSysboxfsOvermountsOnly && isSysboxfsOvermount {
 			continue
 		}
 
@@ -582,6 +591,17 @@ func doBindMounts(config *configs.Config, pipe io.ReadWriter) error {
 	}
 
 	return nil
+}
+
+// isSysboxfsOvermount returns true if the given mount destination is under a
+// sysbox-fs managed mountpoint.
+func isSysboxfsOvermount(m *configs.Mount) bool {
+	for _, sysboxfsMount := range syscont.SysboxfsMounts {
+		if strings.HasPrefix(m.Destination, sysboxfsMount.Destination+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 func chownMounts(config *configs.Config, pipe io.ReadWriter, chownList []string) error {
@@ -985,6 +1005,7 @@ func chroot() error {
 
 // createIfNotExists creates a file or a directory only if it does not already exist.
 func createIfNotExists(path string, isDir bool, config *configs.Config, pipe io.ReadWriter) error {
+
 	if _, err := os.Stat(path); err != nil {
 		if os.IsNotExist(err) {
 			if isDir {
@@ -1179,13 +1200,23 @@ func doRootfsIDMapping(config *configs.Config, pipe io.ReadWriter) error {
 	return nil
 }
 
-// sysbox-runc: doMounts sets up all of the container's mounts as specified in the given config.
-func doMounts(config *configs.Config, pipe io.ReadWriter) error {
+// sysbox-runc: doMounts sets up the container's mounts as specified in the given config.
+// If sysboxfsOvermounts is true, then only mounts on top of sysbox-fs emulated paths are
+// mounted (e.g., mounts under /proc/sys/". Otherwise such mounts are skipped.
+func doMounts(config *configs.Config, pipe io.ReadWriter, doSysboxfsOvermountsOnly bool) error {
 
 	chownList := []string{}
 
 	// Do non-bind mounts
 	for _, m := range config.Mounts {
+
+		isSysboxfsOvermount := isSysboxfsOvermount(m)
+
+		if doSysboxfsOvermountsOnly && !isSysboxfsOvermount ||
+			!doSysboxfsOvermountsOnly && isSysboxfsOvermount {
+			continue
+		}
+
 		if m.Device != "bind" {
 			if err := mountToRootfs(m, config, true, pipe); err != nil {
 				return newSystemErrorWithCausef(err, "mounting %q to rootfs %q at %q", m.Source, config.Rootfs, m.Destination)
@@ -1207,7 +1238,7 @@ func doMounts(config *configs.Config, pipe io.ReadWriter) error {
 		}
 	}
 
-	if err := doBindMounts(config, pipe); err != nil {
+	if err := doBindMounts(config, pipe, doSysboxfsOvermountsOnly); err != nil {
 		return err
 	}
 
