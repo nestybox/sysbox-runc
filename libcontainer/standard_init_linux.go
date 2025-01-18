@@ -96,6 +96,7 @@ func (l *linuxStandardInit) Init() error {
 
 	// initialises the labeling system
 	selinux.GetEnabled()
+
 	if err := prepareRootfs(l.pipe, l.config); err != nil {
 		return err
 	}
@@ -193,6 +194,13 @@ func (l *linuxStandardInit) Init() error {
 				return errors.Wrapf(err, "readonly path %s", path)
 			}
 		}
+	}
+
+	// Do mounts on top of sysbox-fs emulated paths (e.g., mount binfmt_misc on
+	// /proc/sys/fs/binfmt_misc). This has to be done after we've registered with
+	// sysbox-fs since the mountpoint is under a sysbox-fs emulated path.
+	if err := doMounts(l.config.Config, l.pipe, true); err != nil {
+		return errors.Wrap(err, "doing mounts on top of sysbox-fs")
 	}
 
 	// Handle masked paths
