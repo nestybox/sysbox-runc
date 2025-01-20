@@ -71,6 +71,18 @@ func prepareRootfs(pipe io.ReadWriter, iConfig *initConfig) (err error) {
 		return newSystemErrorWithCause(err, "setting up rootfs mounts")
 	}
 
+	pipeFile := pipe.(*os.File)
+	if err := syncParentRegisterSysboxfs(pipeFile); err != nil {
+		return newSystemErrorWithCause(err, "sync parent to register with sysbox-fs")
+	}
+
+	// Do mounts on top of sysbox-fs emulated paths (e.g., mount binfmt_misc on
+	// /proc/sys/fs/binfmt_misc). This has to be done after we've registered with
+	// sysbox-fs since the mountpoint is on top of a sysbox-fs emulated path.
+	if err := doMounts(config, pipe, true); err != nil {
+		return newSystemErrorWithCause(err, "doing mounts on top of sysbox-fs")
+	}
+
 	setupDev := needsSetupDev(config)
 	if setupDev {
 		if err := createDevices(config, pipe); err != nil {
@@ -539,7 +551,6 @@ func doBindMounts(config *configs.Config, pipe io.ReadWriter, doSysboxfsOvermoun
 		// Determine if the current mount is dependent on a prior one.
 		mntDependsOnPrior := false
 		for _, mr := range mntReqs {
-
 			// Mount destinations in mntReqs are relative to the rootfs
 			// (see prepareBindDest()); thus we need to prepend "/" for a
 			// proper comparison.
@@ -593,8 +604,8 @@ func doBindMounts(config *configs.Config, pipe io.ReadWriter, doSysboxfsOvermoun
 	return nil
 }
 
-// isSysboxfsOvermount returns true if the given mount destination is under a
-// sysbox-fs managed mountpoint.
+// isSysboxfsOvermount returns true if the given mount destination is on top of
+// a sysbox-fs managed mountpoint.
 func isSysboxfsOvermount(m *configs.Mount) bool {
 	for _, sysboxfsMount := range syscont.SysboxfsMounts {
 		if strings.HasPrefix(m.Destination, sysboxfsMount.Destination+"/") {

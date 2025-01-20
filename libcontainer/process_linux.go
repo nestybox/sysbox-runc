@@ -519,6 +519,16 @@ func (p *initProcess) start() (retErr error) {
 			}
 			sentRun = true
 
+		case registerSysboxfs:
+			// Register container with sysbox-fs.
+			if err = p.registerWithSysboxfs(childPid); err != nil {
+				return err
+			}
+			// Sync with child.
+			if err := writeSync(p.messageSockPair.parent, registerSysboxfsAck); err != nil {
+				return newSystemErrorWithCause(err, "writing syncT 'registerSysboxfsAck'")
+			}
+
 		case rootfsReady:
 			// Setup cgroup v2 child cgroup
 			if cgType == cgroups.Cgroup_v2_fs || cgType == cgroups.Cgroup_v2_systemd {
@@ -528,10 +538,6 @@ func (p *initProcess) start() (retErr error) {
 				if err := p.manager.ApplyChildCgroup(childPid); err != nil {
 					return newSystemErrorWithCause(err, "applying cgroup configuration for process")
 				}
-			}
-			// Register container with sysbox-fs.
-			if err = p.registerWithSysboxfs(childPid); err != nil {
-				return err
 			}
 			// Sync with child.
 			if err := writeSync(p.messageSockPair.parent, rootfsReadyAck); err != nil {

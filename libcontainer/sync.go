@@ -25,6 +25,9 @@ type syncType string
 // procHooks    --> [run hooks]
 //              <-- procResume
 //
+// registerSysboxfs  --> [register with sysbox-fs]
+//                   <-- registerSysboxfsAck
+//
 // rootfsReady  --> [complete container registration]
 //              <-- rootfsReadyAck
 //
@@ -51,6 +54,9 @@ const (
 	procFd     syncType = "procFd"
 	sendFd     syncType = "sendFd"
 	procFdDone syncType = "procFdDone"
+
+	registerSysboxfs    syncType = "registerSysboxfs"
+	registerSysboxfsAck syncType = "registerSysboxfsAck"
 
 	rootfsReady    syncType = "rootfsReady"
 	rootfsReadyAck syncType = "rootfsReadyAck"

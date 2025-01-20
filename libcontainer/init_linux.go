@@ -339,14 +339,25 @@ func syncParentSeccompFd(fi *os.File, pipe *os.File) error {
 
 // sysbox-runc:
 // syncParentRootfsReady sends a notification to parent to indicate that the
-// container's rootfs is fully initialized, and that it's time for the parent
-// to register the container with sysbox-fs component.
+// it's time for the parent to register the container with sysbox-fs component.
+func syncParentRegisterSysboxfs(pipe *os.File) error {
+	if err := writeSync(pipe, registerSysboxfs); err != nil {
+		return err
+	}
+
+	// Wait for parent to acknowledge.
+	return readSync(pipe, registerSysboxfsAck)
+}
+
+// sysbox-runc:
+// syncParentRootfsReady sends a notification to parent to indicate that the
+// container's rootfs is fully initialized.
 func syncParentRootfsReady(pipe *os.File) error {
 	if err := writeSync(pipe, rootfsReady); err != nil {
 		return err
 	}
 
-	// Wait for parent to acknowledge rootfsReady msg.
+	// Wait for parent to acknowledge.
 	return readSync(pipe, rootfsReadyAck)
 }
 
