@@ -92,7 +92,7 @@ var syscontMounts = []specs.Mount{
 // Container mounts virtualized by sysbox-fs
 //
 // TODO: in the future get these from sysbox-fs via grpc
-var sysboxFsMounts = []specs.Mount{
+var SysboxfsMounts = []specs.Mount{
 	//
 	// procfs mounts
 	//
@@ -532,7 +532,7 @@ func cfgMounts(spec *specs.Spec, sysbox *sysbox.Sysbox) error {
 	}
 
 	if sysFs.Enabled() {
-		cfgSysboxFsMounts(spec, sysFs)
+		cfgSysboxfsMounts(spec, sysFs)
 	}
 
 	if sysMgr.Enabled() {
@@ -644,20 +644,20 @@ func cfgSyscontMountsReadOnly(sysMgr *sysbox.Mgr, spec *specs.Spec) {
 	spec.Mounts = append(spec.Mounts, tmpMounts...)
 }
 
-// cfgSysboxFsMounts adds the sysbox-fs mounts to the container's config.
-func cfgSysboxFsMounts(spec *specs.Spec, sysFs *sysbox.Fs) {
+// cfgSysboxfsMounts adds the sysbox-fs mounts to the container's config.
+func cfgSysboxfsMounts(spec *specs.Spec, sysFs *sysbox.Fs) {
 
-	spec.Mounts = utils.MountSliceRemove(spec.Mounts, sysboxFsMounts, func(m1, m2 specs.Mount) bool {
+	spec.Mounts = utils.MountSliceRemove(spec.Mounts, SysboxfsMounts, func(m1, m2 specs.Mount) bool {
 		return m1.Destination == m2.Destination
 	})
 
-	// Adjust sysboxFsMounts path attending to container-id value.
+	// Adjust SysboxfsMounts path attending to container-id value.
 	cntrMountpoint := filepath.Join(sysFs.Mountpoint, sysFs.Id)
 
-	for i := range sysboxFsMounts {
-		sysboxFsMounts[i].Source =
+	for i := range SysboxfsMounts {
+		SysboxfsMounts[i].Source =
 			strings.Replace(
-				sysboxFsMounts[i].Source,
+				SysboxfsMounts[i].Source,
 				SysboxFsDir,
 				cntrMountpoint,
 				1,
@@ -675,12 +675,12 @@ func cfgSysboxFsMounts(spec *specs.Spec, sysFs *sysbox.Fs) {
 	// remounted to read-only after the container setup completes, right before
 	// starting the container's init process.
 	if spec.Root.Readonly {
-		for _, m := range sysboxFsMounts {
+		for _, m := range SysboxfsMounts {
 			spec.Linux.ReadonlyPaths = append(spec.Linux.ReadonlyPaths, m.Destination)
 		}
 	}
 
-	spec.Mounts = append(spec.Mounts, sysboxFsMounts...)
+	spec.Mounts = append(spec.Mounts, SysboxfsMounts...)
 }
 
 // cfgSystemdMounts adds systemd related mounts to the spec
