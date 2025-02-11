@@ -305,13 +305,65 @@ func (l *linuxRootfsInit) Init() error {
 			ovfsUpperLayer := overlayUtils.GetUpperLayer(ovfsMntOpts)
 			ovfsLowerLayers := overlayUtils.GetLowerLayers(ovfsMntOpts)
 
+			// If the ovfs lower layer paths are relative, then find the ovfs dir path
+			// and chdir to it so that the ovfs mount works. Then chdir back after
+			// the mount.
+			//
+			// To find out the ovfs dir path we look at the ovfs upperdir option, since that usually
+			// is an absolute path. For example, if upperdir=/var/lib/docker/containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/55/fs
+			// and lowerdir=54/fs:44/fs, then we can infer those lowerdir options have base path
+			// "/var/lib/docker/containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots".
+			//
+			// This assumes of course that upperdir and lowerdir always have the same
+			// common path, and while this is not a requirement of overlayfs, it is
+			// always the case for the container runtimes.
+
+			lowerdirPathsAreAbsolute := true
+			lowerDirSuffixComponents := 0
+			for _, p := range ovfsLowerLayers {
+				if filepath.IsAbs(p) {
+					// If one lowerdir path is absolute, assume all are
+					break
+				} else {
+					// If one lowerdir path is relative, assume all are
+					lowerdirPathsAreAbsolute = false
+					lowerDirSuffixComponents = len(strings.Split(p, "/"))
+					break
+				}
+			}
+
+			currDir, err := os.Getwd()
+			if err != nil {
+				return fmt.Errorf("failed to get curr dir: %s", err)
+			}
+
+			ovfsDirPath := ""
+			if !lowerdirPathsAreAbsolute {
+				// remove the last X components of the upperdir path, where X is the
+				// number of path components in the relative lowerdir.
+				ovfsDirPath = ovfsUpperLayer
+				for i := 0; i < lowerDirSuffixComponents; i++ {
+					ovfsDirPath = filepath.Dir(ovfsDirPath)
+				}
+
+				// chdir to that path so that the overlayfs mount below works with the
+				// relative lowerdir paths.
+				if err := os.Chdir(ovfsDirPath); err != nil {
+					return fmt.Errorf("failed to chdir: %s", err)
+				}
+			}
+
 			// Remove the current overlayfs mount
 			if err := unix.Unmount(rootfs, unix.MNT_DETACH); err != nil {
 				return err
 			}
 
-			// ID-map each of the ovfs lower layers
+			// ID-map each of the ovfs lower layers. Note that this requires
+			// absolute paths in the lower layers.
 			for _, layer := range ovfsLowerLayers {
+				if !lowerdirPathsAreAbsolute {
+					layer = filepath.Join(ovfsDirPath, layer)
+				}
 				if err := idMap.IDMapMount(usernsPath, layer, false); err != nil {
 					fsName, _ := utils.GetFsName(layer)
 					return newSystemErrorWithCausef(err,
@@ -331,6 +383,12 @@ func (l *linuxRootfsInit) Init() error {
 			}
 			if err := unix.Mount("", rootfs, "", uintptr(ovfsMntOpts.PropFlags), ""); err != nil {
 				return fmt.Errorf("failed to set mount prop flags %s: %s", rootfs, err)
+			}
+
+			if !lowerdirPathsAreAbsolute {
+				if err := os.Chdir(currDir); err != nil {
+					return fmt.Errorf("failed to chdir: %s", err)
+				}
 			}
 
 		} else {
