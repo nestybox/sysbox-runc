@@ -6,6 +6,7 @@ package libcontainer
 import (
 	"bufio"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -21,11 +22,14 @@ import (
 
 	securejoin "github.com/cyphar/filepath-securejoin"
 	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
-	"github.com/nestybox/sysbox-libs/mount"
+	sysboxmount "github.com/nestybox/sysbox-libs/mount"
 
 	"github.com/moby/sys/mountinfo"
 
 	"github.com/mrunalp/fileutils"
+
+	"github.com/opencontainers/runc/internals/linux"
+	"github.com/opencontainers/runc/internals/sys"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/devices"
@@ -33,6 +37,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/utils"
 	"github.com/opencontainers/runc/libsysbox/syscont"
 	"github.com/opencontainers/runtime-spec/specs-go"
+
 	"github.com/opencontainers/selinux/go-selinux/label"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
@@ -691,22 +696,22 @@ func setupDevSymlinks(rootfs string) error {
 // needs to be called after we chroot/pivot into the container's rootfs so that any
 // symlinks are resolved locally.
 func reOpenDevNull() error {
-	var stat, devNullStat unix.Stat_t
 	file, err := os.OpenFile("/dev/null", os.O_RDWR, 0)
 	if err != nil {
-		return fmt.Errorf("Failed to open /dev/null - %s", err)
-	}
-	defer file.Close()
-	if err := unix.Fstat(int(file.Fd()), &devNullStat); err != nil {
 		return err
 	}
-	for fd := 0; fd < 3; fd++ {
+	defer file.Close()
+	if err := verifyDevNull(file); err != nil {
+		return fmt.Errorf("can't reopen /dev/null: %w", err)
+	}
+	for fd := range 3 {
+		var stat unix.Stat_t
 		if err := unix.Fstat(fd, &stat); err != nil {
-			return err
+			return &os.PathError{Op: "fstat", Path: "fd " + strconv.Itoa(fd), Err: err}
 		}
-		if stat.Rdev == devNullStat.Rdev {
+		if isDevNull(&stat) {
 			// Close and re-open the fd.
-			if err := unix.Dup3(int(file.Fd()), fd, 0); err != nil {
+			if err := linux.Dup3(int(file.Fd()), fd, 0); err != nil {
 				return err
 			}
 		}
@@ -1024,8 +1029,8 @@ func createIfNotExists(path string, isDir bool, config *configs.Config, pipe io.
 }
 
 // readonlyPath will make a path read only.
-func readonlyPath(path string, mounts []*mount.Info) error {
-	isMountpoint := mount.FindMount(path, mounts)
+func readonlyPath(path string, mounts []*sysboxmount.Info) error {
+	isMountpoint := sysboxmount.FindMount(path, mounts)
 
 	if !isMountpoint {
 		if err := unix.Mount(path, path, "", unix.MS_BIND|unix.MS_REC, ""); err != nil {
@@ -1103,18 +1108,69 @@ func remountReadwrite(m *configs.Mount) error {
 	return fmt.Errorf("unable to mount %s as readwrite max retries reached", dest)
 }
 
-// maskPath masks the top of the specified path inside a container to avoid
+func isDevNull(st *unix.Stat_t) bool {
+	//nolint:unconvert // Rdev is uint32 on MIPS.
+	return st.Mode&unix.S_IFMT == unix.S_IFCHR && uint64(st.Rdev) == unix.Mkdev(1, 3)
+}
+
+func verifyDevNull(f *os.File) error {
+	return sys.VerifyInode(f, func(st *unix.Stat_t, _ *unix.Statfs_t) error {
+		if !isDevNull(st) {
+			return errors.New("container's /dev/null is invalid")
+		}
+		return nil
+	})
+}
+
+// maskPaths masks the top of the specified paths inside a container to avoid
 // security issues from processes reading information from non-namespace aware
 // mounts ( proc/kcore ).
 // For files, maskPath bind mounts /dev/null over the top of the specified path.
 // For directories, maskPath mounts read-only tmpfs over the top of the specified path.
-func maskPath(path string, mountLabel string) error {
-	if err := unix.Mount("/dev/null", path, "", unix.MS_BIND, ""); err != nil && !os.IsNotExist(err) {
-		if err == unix.ENOTDIR {
-			return unix.Mount("tmpfs", path, "tmpfs", unix.MS_RDONLY, label.FormatMountLabel("", mountLabel))
-		}
-		return err
+func maskPaths(paths []string, mountLabel string) error {
+	devNull, err := os.OpenFile("/dev/null", unix.O_PATH, 0)
+	if err != nil {
+		return fmt.Errorf("can't mask paths: %w", err)
 	}
+	defer devNull.Close()
+	if err := verifyDevNull(devNull); err != nil {
+		return fmt.Errorf("can't mask paths: %w", err)
+	}
+	devNullSrc := &mountSource{Type: mountSourcePlain, file: devNull}
+	procSelfFd, closer := utils.ProcThreadSelf("fd/")
+	defer closer()
+
+	for _, path := range paths {
+		// Open the target path; skip if it doesn't exist.
+		dstFh, err := os.OpenFile(path, unix.O_PATH|unix.O_CLOEXEC, 0)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			return fmt.Errorf("can't mask path %q: %w", path, err)
+		}
+		st, err := dstFh.Stat()
+		if err != nil {
+			dstFh.Close()
+			return fmt.Errorf("can't mask path %q: %w", path, err)
+		}
+		var dstType string
+		if st.IsDir() {
+			// Destination is a directory: bind mount a ro tmpfs over it.
+			dstType = "dir"
+			err = mount("tmpfs", path, "tmpfs", unix.MS_RDONLY, label.FormatMountLabel("", mountLabel))
+		} else {
+			// Destination is a file: mount it to /dev/null.
+			dstType = "path"
+			dstFd := filepath.Join(procSelfFd, strconv.Itoa(int(dstFh.Fd())))
+			err = mountViaFds("", devNullSrc, path, dstFd, "", unix.MS_BIND, "")
+		}
+		dstFh.Close()
+		if err != nil {
+			return fmt.Errorf("can't mask %s %q: %w", dstType, path, err)
+		}
+	}
+
 	return nil
 }
 

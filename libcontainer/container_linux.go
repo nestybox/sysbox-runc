@@ -23,7 +23,7 @@ import (
 
 	securejoin "github.com/cyphar/filepath-securejoin"
 
-	"github.com/nestybox/sysbox-libs/mount"
+	sysboxmount "github.com/nestybox/sysbox-libs/mount"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/intelrdt"
@@ -798,7 +798,7 @@ func (c *linuxContainer) Destroy() error {
 	} else {
 		// If sysbox-mgr is not present (i.e., unit testing), then we teardown
 		// shiftfs marks here.
-		mounts, err := mount.GetMounts()
+		mounts, err := sysboxmount.GetMounts()
 		if err != nil {
 			return fmt.Errorf("failed to read mountinfo: %s", err)
 		}
@@ -2579,7 +2579,7 @@ func (c *linuxContainer) procSeccompInit(pid int, fd int32) error {
 // sysbox-runc: sets up the shiftfs marks for the container
 func (c *linuxContainer) setupShiftfsMarks() error {
 
-	mi, err := mount.GetMounts()
+	mi, err := sysboxmount.GetMounts()
 	if err != nil {
 		return fmt.Errorf("failed to read mountinfo: %s", err)
 	}
@@ -2729,10 +2729,10 @@ func (c *linuxContainer) setupShiftfsMarks() error {
 }
 
 // Setup shiftfs marks; meant for testing only
-func (c *linuxContainer) setupShiftfsMarkLocal(mi []*mount.Info) error {
+func (c *linuxContainer) setupShiftfsMarkLocal(mi []*sysboxmount.Info) error {
 
 	for _, m := range c.config.ShiftfsMounts {
-		mounted, err := mount.MountedWithFs(m.Source, "shiftfs", mi)
+		mounted, err := sysboxmount.MountedWithFs(m.Source, "shiftfs", mi)
 		if err != nil {
 			return newSystemErrorWithCausef(err, "checking for shiftfs mount at %s", m.Source)
 		}
@@ -2747,10 +2747,10 @@ func (c *linuxContainer) setupShiftfsMarkLocal(mi []*mount.Info) error {
 }
 
 // Teardown shiftfs marks; meant for testing only
-func (c *linuxContainer) teardownShiftfsMarkLocal(mi []*mount.Info) error {
+func (c *linuxContainer) teardownShiftfsMarkLocal(mi []*sysboxmount.Info) error {
 
 	for _, m := range c.config.ShiftfsMounts {
-		mounted, err := mount.MountedWithFs(m.Source, "shiftfs", mi)
+		mounted, err := sysboxmount.MountedWithFs(m.Source, "shiftfs", mi)
 		if err != nil {
 			return newSystemErrorWithCausef(err, "checking for shiftfs mount at %s", m.Source)
 		}
@@ -2924,8 +2924,8 @@ func needUidShiftOnBindSrc(mount *configs.Mount, config *configs.Config) (bool, 
 
 // Checks if the file at the given path is a bind-mount; if so, returns true and
 // the path to the bind-mount's source.
-func fileIsBindMount(mounts []*mount.Info, fpath string) (bool, string, error) {
-	var fpathMi *mount.Info
+func fileIsBindMount(mounts []*sysboxmount.Info, fpath string) (bool, string, error) {
+	var fpathMi *sysboxmount.Info
 
 	// Since path corresponds to a file (not a directory), if it's a mountpoint
 	// then it must be a bind-mount (i.e., file mountpoints are only allowed for

@@ -19,7 +19,7 @@ import (
 
 	"github.com/nestybox/sysbox-libs/idMap"
 	"github.com/nestybox/sysbox-libs/idShiftUtils"
-	mount "github.com/nestybox/sysbox-libs/mount"
+	sysboxmount "github.com/nestybox/sysbox-libs/mount"
 	overlayUtils "github.com/nestybox/sysbox-libs/overlayUtils"
 	utils "github.com/nestybox/sysbox-libs/utils"
 	libcontainerUtils "github.com/opencontainers/runc/libcontainer/utils"
@@ -291,12 +291,12 @@ func (l *linuxRootfsInit) Init() error {
 		if fsName == "overlayfs" {
 
 			// Get info about the ovfs mount (layers, mount opts, propagation, etc.)
-			mounts, err := mount.GetMountsPid(uint32(os.Getpid()))
+			mounts, err := sysboxmount.GetMountsPid(uint32(os.Getpid()))
 			if err != nil {
 				return err
 			}
 
-			mi, err := mount.GetMountAt(rootfs, mounts)
+			mi, err := sysboxmount.GetMountAt(rootfs, mounts)
 			if err != nil {
 				return err
 			}

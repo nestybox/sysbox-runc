@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"strconv"
 
-	"github.com/nestybox/sysbox-libs/mount"
+	sysboxmount "github.com/nestybox/sysbox-libs/mount"
 	"github.com/opencontainers/runc/libcontainer/apparmor"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/keys"
@@ -184,7 +184,7 @@ func (l *linuxStandardInit) Init() error {
 
 	// Handle read-only paths
 	if len(l.config.Config.ReadonlyPaths) > 0 {
-		mounts, err := mount.GetMounts()
+		mounts, err := sysboxmount.GetMounts()
 		if err != nil {
 			return errors.Wrap(err, "getting mounts")
 		}
@@ -204,10 +204,8 @@ func (l *linuxStandardInit) Init() error {
 	}
 
 	// Handle masked paths
-	for _, path := range l.config.Config.MaskPaths {
-		if err := maskPath(path, l.config.Config.MountLabel); err != nil {
-			return errors.Wrapf(err, "mask path %s", path)
-		}
+	if err := maskPaths(l.config.Config.MaskPaths, l.config.Config.MountLabel); err != nil {
+		return err
 	}
 
 	pdeath, err := system.GetParentDeathSignal()
