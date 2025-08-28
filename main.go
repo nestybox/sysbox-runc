@@ -122,6 +122,7 @@ func main() {
 		startCommand,
 		stateCommand,
 		updateCommand,
+		featuresCommand,
 	}
 
 	app.Before = func(context *cli.Context) error {
