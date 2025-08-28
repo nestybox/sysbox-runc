@@ -295,6 +295,19 @@ type Capabilities struct {
 	Ambient []string
 }
 
+// KnownHookNames returns the known hook names.
+// Used by `runc features`.
+func KnownHookNames() []string {
+	return []string{
+		string(Prestart), // deprecated
+		string(CreateRuntime),
+		string(CreateContainer),
+		string(StartContainer),
+		string(Poststart),
+		string(Poststop),
+	}
+}
+
 func (hooks HookList) RunHooks(state *specs.State) error {
 	for i, h := range hooks {
 		if err := h.Run(state); err != nil {
