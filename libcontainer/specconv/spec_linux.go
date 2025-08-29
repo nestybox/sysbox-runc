@@ -405,7 +405,6 @@ func CreateLibcontainerConfig(opts *CreateOpts) (*configs.Config, error) {
 		var exists bool
 		if config.RootPropagation, exists = mountPropagationMapping[spec.Linux.RootfsPropagation]; !exists {
 			return nil, fmt.Errorf("rootfsPropagation=%v is not supported", spec.Linux.RootfsPropagation)
-
 		}
 		if config.NoPivotRoot && (config.RootPropagation&unix.MS_PRIVATE != 0) {
 			return nil, fmt.Errorf("rootfsPropagation of [r]private is not safe without pivot_root")
