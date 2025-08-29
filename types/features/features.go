@@ -2,11 +2,6 @@
 package features
 
 const (
-	// AnnotationRuncVersion represents the version of runc, e.g., "1.2.3", "1.2.3+dev", "1.2.3-rc.4.", "1.2.3-rc.4+dev".
-	// Third party implementations such as crun and runsc MAY use this annotation to report the most compatible runc version,
-	// however, parsing this annotation value is discouraged.
-	AnnotationRuncVersion = "org.opencontainers.runc.version"
-
 	// AnnotationRuncCommit corresponds to the output of `git describe --dirty --long --always` in the runc repo.
 	// Third party implementations such as crun and runsc SHOULD NOT use this annotation, as their repo is different from the runc repo.
 	// Parsing this annotation value is discouraged.
