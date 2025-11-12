@@ -15,21 +15,10 @@ import (
 	_ "unsafe" // for go:linkname
 
 	securejoin "github.com/cyphar/filepath-securejoin"
+	"github.com/nestybox/sysbox-runc/internals/pathrs"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )
-
-// EnsureProcHandle returns whether or not the given file handle is on procfs.
-func EnsureProcHandle(fh *os.File) error {
-	var buf unix.Statfs_t
-	if err := unix.Fstatfs(int(fh.Fd()), &buf); err != nil {
-		return fmt.Errorf("ensure %s is on procfs: %w", fh.Name(), err)
-	}
-	if buf.Type != unix.PROC_SUPER_MAGIC {
-		return fmt.Errorf("%s is not on procfs", fh.Name())
-	}
-	return nil
-}
 
 var (
 	haveCloseRangeCloexecBool bool
@@ -60,18 +49,12 @@ type fdFunc func(fd int)
 // fdRangeFrom calls the passed fdFunc for each file descriptor that is open in
 // the current process.
 func fdRangeFrom(minFd int, fn fdFunc) error {
-	procSelfFd, closer := ProcThreadSelf("fd")
-	defer closer()
-
-	fdDir, err := os.Open(procSelfFd)
+	fdDir, closer, err := pathrs.ProcThreadSelfOpen("fd/", unix.O_DIRECTORY|unix.O_CLOEXEC)
 	if err != nil {
-		return err
+		return fmt.Errorf("get handle to /proc/thread-self/fd: %w", err)
 	}
+	defer closer()
 	defer fdDir.Close()
-
-	if err := EnsureProcHandle(fdDir); err != nil {
-		return err
-	}
 
 	fdList, err := fdDir.Readdirnames(-1)
 	if err != nil {

@@ -2,10 +2,11 @@ package system
 
 import (
 	"fmt"
-	"io/ioutil"
-	"path/filepath"
-	"strconv"
+	"io"
+	"os"
 	"strings"
+
+	"github.com/nestybox/sysbox-runc/internals/pathrs"
 )
 
 // State is the status of a process.
@@ -63,8 +64,16 @@ type Stat_t struct {
 }
 
 // Stat returns a Stat_t instance for the specified process.
-func Stat(pid int) (stat Stat_t, err error) {
-	bytes, err := ioutil.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "stat"))
+func Stat(pid int) (Stat_t, error) {
+	var stat Stat_t
+
+	statFile, err := pathrs.ProcPidOpen(pid, "stat", os.O_RDONLY)
+	if err != nil {
+		return stat, err
+	}
+	defer statFile.Close()
+
+	bytes, err := io.ReadAll(statFile)
 	if err != nil {
 		return stat, err
 	}

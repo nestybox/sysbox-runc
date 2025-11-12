@@ -374,14 +374,15 @@ func (l *LinuxFactory) StartInitialization() (err error) {
 	defer pipe.Close()
 
 	// Only init processes have FIFOFD.
-	fifofd := -1
+	var fifoFile *os.File
 	envInitType := os.Getenv("_LIBCONTAINER_INITTYPE")
 	it := initType(envInitType)
 	if it == initStandard {
-		envFifoFd := os.Getenv("_LIBCONTAINER_FIFOFD")
-		if fifofd, err = strconv.Atoi(envFifoFd); err != nil {
-			return fmt.Errorf("unable to convert _LIBCONTAINER_FIFOFD=%s to int: %s", envFifoFd, err)
+		fifoFd, err := strconv.Atoi(os.Getenv("_LIBCONTAINER_FIFOFD"))
+		if err != nil {
+			return fmt.Errorf("unable to convert _LIBCONTAINER_FIFOFD: %w", err)
 		}
+		fifoFile = os.NewFile(uintptr(fifoFd), "initfifo")
 	}
 
 	var consoleSocket *os.File
@@ -416,7 +417,7 @@ func (l *LinuxFactory) StartInitialization() (err error) {
 		}
 	}()
 
-	i, err := newContainerInit(it, pipe, consoleSocket, fifofd)
+	i, err := newContainerInit(it, pipe, consoleSocket, fifoFile)
 	if err != nil {
 		return err
 	}

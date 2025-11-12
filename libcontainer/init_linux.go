@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -19,6 +18,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/containerd/console"
+	"github.com/nestybox/sysbox-runc/internals/pathrs"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/seccomp"
@@ -81,7 +81,7 @@ type initer interface {
 	Init() error
 }
 
-func newContainerInit(t initType, pipe *os.File, consoleSocket *os.File, fifoFd int) (initer, error) {
+func newContainerInit(t initType, pipe *os.File, consoleSocket, fifoFile *os.File) (initer, error) {
 	if t == initStandard || t == initSetns {
 		var config *initConfig
 		if err := json.NewDecoder(pipe).Decode(&config); err != nil {
@@ -103,7 +103,7 @@ func newContainerInit(t initType, pipe *os.File, consoleSocket *os.File, fifoFd 
 				consoleSocket: consoleSocket,
 				parentPid:     unix.Getppid(),
 				config:        config,
-				fifoFd:        fifoFd,
+				fifoFile:      fifoFile,
 			}, nil
 		}
 	} else if t == initMount {
@@ -407,7 +407,15 @@ func setupUser(config *initConfig) error {
 		return err
 	}
 
-	setgroups, err := ioutil.ReadFile("/proc/self/setgroups")
+	// We don't need to use /proc/thread-self here because setgroups is a
+	// per-userns file and thus is global to all threads in a thread-group.
+	// This lets us avoid having to do runtime.LockOSThread.
+	var setgroups []byte
+	setgroupsFile, err := pathrs.ProcSelfOpen("setgroups", unix.O_RDONLY)
+	if err == nil {
+		setgroups, err = io.ReadAll(setgroupsFile)
+		_ = setgroupsFile.Close()
+	}
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}

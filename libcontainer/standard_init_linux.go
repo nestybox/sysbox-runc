@@ -4,9 +4,9 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
-	"strconv"
 
 	sysboxmount "github.com/nestybox/sysbox-libs/mount"
+	"github.com/opencontainers/runc/internals/pathrs"
 	"github.com/opencontainers/runc/libcontainer/apparmor"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/keys"
@@ -23,7 +23,7 @@ type linuxStandardInit struct {
 	pipe          *os.File
 	consoleSocket *os.File
 	parentPid     int
-	fifoFd        int
+	fifoFile      *os.File
 	config        *initConfig
 }
 
@@ -301,12 +301,13 @@ func (l *linuxStandardInit) Init() error {
 	// user process. We open it through /proc/self/fd/$fd, because the fd that
 	// was given to us was an O_PATH fd to the fifo itself. Linux allows us to
 	// re-open an O_PATH fd through /proc.
-	fd, err := unix.Open("/proc/self/fd/"+strconv.Itoa(l.fifoFd), unix.O_WRONLY|unix.O_CLOEXEC, 0)
+	fifoFile, err := pathrs.Reopen(l.fifoFile, unix.O_WRONLY|unix.O_CLOEXEC)
 	if err != nil {
-		return newSystemErrorWithCause(err, "open exec fifo")
+		return newSystemErrorWithCause(err, "reopen exec fifo")
 	}
-	if _, err := unix.Write(fd, []byte("0")); err != nil {
-		return newSystemErrorWithCause(err, "write 0 exec fifo")
+	defer fifoFile.Close()
+	if _, err := fifoFile.Write([]byte("0")); err != nil {
+		return newSystemErrorWithCausef(err, "write exec fifo %s", fifoFile.Name())
 	}
 
 	// Close the O_PATH fifofd fd before exec because the kernel resets
@@ -315,7 +316,8 @@ func (l *linuxStandardInit) Init() error {
 	// N.B. the core issue itself (passing dirfds to the host filesystem) has
 	// since been resolved.
 	// https://github.com/torvalds/linux/blob/v4.9/fs/exec.c#L1290-L1318
-	unix.Close(l.fifoFd)
+	_ = fifoFile.Close()
+	_ = l.fifoFile.Close()
 
 	// Load the seccomp syscall whitelist as close to execve as possible, so as few
 	// syscalls take place afterward (reducing the amount of syscalls that users need to
