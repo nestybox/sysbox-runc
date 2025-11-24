@@ -1209,6 +1209,11 @@ func cfgSeccomp(seccomp *specs.LinuxSeccomp) error {
 // Configures which syscalls are trapped by Sysbox inside a system container
 func cfgSyscontSyscallTraps(sysMgr *sysbox.Mgr) {
 
+	// Need to trap 'openat2' syscall to handle the case where runc inside a Sysbox container
+	// uses openat2 with the RESOLVE_NO_XDEV flag on procfs paths, which would otherwise fail
+	// due to sysbox-fs emulation of resources under proc.
+	syscallTrapList = append(syscallTrapList, []string{"openat2"}...)
+
 	if sysMgr.Config.IgnoreSysfsChown {
 		chownSyscalls := []string{
 			"chown", "fchown", "fchownat",
