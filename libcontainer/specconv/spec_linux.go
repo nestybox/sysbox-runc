@@ -55,7 +55,6 @@ func initMaps() {
 			specs.IPCNamespace:     configs.NEWIPC,
 			specs.UTSNamespace:     configs.NEWUTS,
 			specs.CgroupNamespace:  configs.NEWCGROUP,
-			specs.TimeNamespace:    configs.NEWTIME,
 		}
 
 		mountPropagationMapping = map[string]int{
@@ -67,7 +66,6 @@ func initMaps() {
 			"shared":      unix.MS_SHARED,
 			"runbindable": unix.MS_UNBINDABLE | unix.MS_REC,
 			"unbindable":  unix.MS_UNBINDABLE,
-			"":            0,
 		}
 
 		mountFlags = map[string]struct {
@@ -110,29 +108,31 @@ func initMaps() {
 			"symfollow":     {true, unix.MS_NOSYMFOLLOW}, // since kernel 5.10
 		}
 
-		recAttrFlags = map[string]struct {
-			clear bool
-			flag  uint64
-		}{
-			"rro":            {false, unix.MOUNT_ATTR_RDONLY},
-			"rrw":            {true, unix.MOUNT_ATTR_RDONLY},
-			"rnosuid":        {false, unix.MOUNT_ATTR_NOSUID},
-			"rsuid":          {true, unix.MOUNT_ATTR_NOSUID},
-			"rnodev":         {false, unix.MOUNT_ATTR_NODEV},
-			"rdev":           {true, unix.MOUNT_ATTR_NODEV},
-			"rnoexec":        {false, unix.MOUNT_ATTR_NOEXEC},
-			"rexec":          {true, unix.MOUNT_ATTR_NOEXEC},
-			"rnodiratime":    {false, unix.MOUNT_ATTR_NODIRATIME},
-			"rdiratime":      {true, unix.MOUNT_ATTR_NODIRATIME},
-			"rrelatime":      {false, unix.MOUNT_ATTR_RELATIME},
-			"rnorelatime":    {true, unix.MOUNT_ATTR_RELATIME},
-			"rnoatime":       {false, unix.MOUNT_ATTR_NOATIME},
-			"ratime":         {true, unix.MOUNT_ATTR_NOATIME},
-			"rstrictatime":   {false, unix.MOUNT_ATTR_STRICTATIME},
-			"rnostrictatime": {true, unix.MOUNT_ATTR_STRICTATIME},
-			"rnosymfollow":   {false, unix.MOUNT_ATTR_NOSYMFOLLOW}, // since kernel 5.14
-			"rsymfollow":     {true, unix.MOUNT_ATTR_NOSYMFOLLOW},  // since kernel 5.14
-		}
+		// TODO: add support for these in sysbox-runc
+
+		// recAttrFlags = map[string]struct {
+		// 	clear bool
+		// 	flag  uint64
+		// }{
+		// 	"rro":            {false, unix.MOUNT_ATTR_RDONLY},
+		// 	"rrw":            {true, unix.MOUNT_ATTR_RDONLY},
+		// 	"rnosuid":        {false, unix.MOUNT_ATTR_NOSUID},
+		// 	"rsuid":          {true, unix.MOUNT_ATTR_NOSUID},
+		// 	"rnodev":         {false, unix.MOUNT_ATTR_NODEV},
+		// 	"rdev":           {true, unix.MOUNT_ATTR_NODEV},
+		// 	"rnoexec":        {false, unix.MOUNT_ATTR_NOEXEC},
+		// 	"rexec":          {true, unix.MOUNT_ATTR_NOEXEC},
+		// 	"rnodiratime":    {false, unix.MOUNT_ATTR_NODIRATIME},
+		// 	"rdiratime":      {true, unix.MOUNT_ATTR_NODIRATIME},
+		// 	"rrelatime":      {false, unix.MOUNT_ATTR_RELATIME},
+		// 	"rnorelatime":    {true, unix.MOUNT_ATTR_RELATIME},
+		// 	"rnoatime":       {false, unix.MOUNT_ATTR_NOATIME},
+		// 	"ratime":         {true, unix.MOUNT_ATTR_NOATIME},
+		// 	"rstrictatime":   {false, unix.MOUNT_ATTR_STRICTATIME},
+		// 	"rnostrictatime": {true, unix.MOUNT_ATTR_STRICTATIME},
+		// 	"rnosymfollow":   {false, unix.MOUNT_ATTR_NOSYMFOLLOW}, // since kernel 5.14
+		// 	"rsymfollow":     {true, unix.MOUNT_ATTR_NOSYMFOLLOW},  // since kernel 5.14
+		// }
 
 		extensionFlags = map[string]struct {
 			clear bool
@@ -214,7 +214,7 @@ var AllowedDevices = []*devices.Device{
 	},
 	{
 		Path:     "/dev/null",
-		FileMode: 0666,
+		FileMode: 0o666,
 		Uid:      0,
 		Gid:      0,
 		Rule: devices.Rule{
@@ -227,7 +227,7 @@ var AllowedDevices = []*devices.Device{
 	},
 	{
 		Path:     "/dev/random",
-		FileMode: 0666,
+		FileMode: 0o666,
 		Uid:      0,
 		Gid:      0,
 		Rule: devices.Rule{
@@ -240,7 +240,7 @@ var AllowedDevices = []*devices.Device{
 	},
 	{
 		Path:     "/dev/full",
-		FileMode: 0666,
+		FileMode: 0o666,
 		Uid:      0,
 		Gid:      0,
 		Rule: devices.Rule{
@@ -253,7 +253,7 @@ var AllowedDevices = []*devices.Device{
 	},
 	{
 		Path:     "/dev/tty",
-		FileMode: 0666,
+		FileMode: 0o666,
 		Uid:      0,
 		Gid:      0,
 		Rule: devices.Rule{
@@ -266,7 +266,7 @@ var AllowedDevices = []*devices.Device{
 	},
 	{
 		Path:     "/dev/zero",
-		FileMode: 0666,
+		FileMode: 0o666,
 		Uid:      0,
 		Gid:      0,
 		Rule: devices.Rule{
@@ -279,7 +279,7 @@ var AllowedDevices = []*devices.Device{
 	},
 	{
 		Path:     "/dev/urandom",
-		FileMode: 0666,
+		FileMode: 0o666,
 		Uid:      0,
 		Gid:      0,
 		Rule: devices.Rule{
@@ -397,17 +397,18 @@ func CreateLibcontainerConfig(opts *CreateOpts) (*configs.Config, error) {
 	}
 
 	config.Cgroups = c
-
 	// set linux-specific config
 	if spec.Linux != nil {
 		initMaps()
 
-		var exists bool
-		if config.RootPropagation, exists = mountPropagationMapping[spec.Linux.RootfsPropagation]; !exists {
-			return nil, fmt.Errorf("rootfsPropagation=%v is not supported", spec.Linux.RootfsPropagation)
-		}
-		if config.NoPivotRoot && (config.RootPropagation&unix.MS_PRIVATE != 0) {
-			return nil, fmt.Errorf("rootfsPropagation of [r]private is not safe without pivot_root")
+		if spec.Linux.RootfsPropagation != "" {
+			var exists bool
+			if config.RootPropagation, exists = mountPropagationMapping[spec.Linux.RootfsPropagation]; !exists {
+				return nil, fmt.Errorf("rootfsPropagation=%v is not supported", spec.Linux.RootfsPropagation)
+			}
+			if config.NoPivotRoot && (config.RootPropagation&unix.MS_PRIVATE != 0) {
+				return nil, fmt.Errorf("rootfsPropagation of [r]private is not safe without pivot_root")
+			}
 		}
 
 		for _, ns := range spec.Linux.Namespaces {
@@ -1092,7 +1093,6 @@ func SetupSeccomp(config *specs.LinuxSeccomp) (*configs.Seccomp, error) {
 			}
 			// Loop through all the arguments of the syscall and convert them
 			for _, arg := range call.Args {
-
 				newOp, err := seccomp.ConvertStringToOperator(string(arg.Op))
 				if err != nil {
 					return nil, err
