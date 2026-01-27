@@ -2,9 +2,11 @@ package libcontainer
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -377,6 +379,14 @@ func (l *linuxRootfsInit) Init() error {
 				return newSystemErrorWithCausef(err, "chown overlayfs upper layet at %s", ovfsUpperLayer)
 			}
 
+			if overlayUtils.GetVolatile(ovfsMntOpts) {
+				// overlay has a check in place to prevent mounting "volatile" system twice
+				workDir := overlayUtils.GetWorkLayer(ovfsMntOpts)
+				volatileIncompatFile := path.Join(workDir, "work", "incompat", "volatile")
+				if err := os.RemoveAll(volatileIncompatFile); err != nil && !errors.Is(err, os.ErrNotExist) {
+					return fmt.Errorf("error removing volatile incompat file %s: %v", volatileIncompatFile, err)
+				}
+			}
 			// Recreate the rootfs overlayfs mount (using the ID-mapped lower layers)
 			if err := unix.Mount("overlay", rootfs, "overlay", uintptr(ovfsMntOpts.Flags), ovfsMntOpts.Opts); err != nil {
 				return fmt.Errorf("failed to mount %s: %s", rootfs, err)
