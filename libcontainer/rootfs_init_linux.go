@@ -306,6 +306,7 @@ func (l *linuxRootfsInit) Init() error {
 			ovfsMntOpts := overlayUtils.GetMountOpt(mi)
 			ovfsUpperLayer := overlayUtils.GetUpperLayer(ovfsMntOpts)
 			ovfsLowerLayers := overlayUtils.GetLowerLayers(ovfsMntOpts)
+			ovfsWorkDir := overlayUtils.GetWorkLayer(ovfsMntOpts)
 
 			// If the ovfs lower layer paths are relative, then find the ovfs dir path
 			// and chdir to it so that the ovfs mount works. Then chdir back after
@@ -378,6 +379,25 @@ func (l *linuxRootfsInit) Init() error {
 			if err := idShiftUtils.ShiftIdsWithChown(ovfsUpperLayer, int32(uid), int32(gid)); err != nil {
 				return newSystemErrorWithCausef(err, "chown overlayfs upper layet at %s", ovfsUpperLayer)
 			}
+
+			// Create a new overlayfs workdir with the same path as the original but
+			// with a "-sysbox" suffix. We can't reuse the original workdir since it's
+			// owned by the entity that set up the rootfs mount (e.g., Docker). Each
+			// overlayfs mount needs a dedicated workdir.
+			newWorkDir := ovfsWorkDir + "-sysbox"
+			if err := os.MkdirAll(newWorkDir, 0700); err != nil {
+				return fmt.Errorf("failed to create overlayfs workdir %s: %s", newWorkDir, err)
+			}
+
+			// Replace the workdir overlayfs mount option with the new workdir.
+			opts := strings.Split(ovfsMntOpts.Opts, ",")
+			for i, opt := range opts {
+				if strings.HasPrefix(opt, "workdir=") {
+					opts[i] = "workdir=" + newWorkDir
+					break
+				}
+			}
+			ovfsMntOpts.Opts = strings.Join(opts, ",")
 
 			if overlayUtils.GetVolatile(ovfsMntOpts) {
 				// overlay has a check in place to prevent mounting "volatile" system twice
