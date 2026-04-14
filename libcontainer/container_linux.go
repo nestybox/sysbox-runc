@@ -2431,11 +2431,12 @@ func (c *linuxContainer) handleReqOp(childPid int, reqs []opReq) error {
 	// of the same type.
 	op := reqs[0].Op
 
-	if op != bind && op != switchDockerDns && op != chown && op != mkdir && op != rootfsIDMap {
+	switch op {
+	case bind, chown, mkdir, overlay, rootfsIDMap, switchDockerDns:
+		return c.handleOp(op, childPid, reqs)
+	default:
 		return newSystemError(fmt.Errorf("invalid opReq type %d", int(op)))
 	}
-
-	return c.handleOp(op, childPid, reqs)
 }
 
 // sysbox-runc: handleOp dispatches a helpter process that enters one or more of
@@ -2477,7 +2478,7 @@ func (c *linuxContainer) handleOp(op opReqType, childPid int, reqs []opReq) erro
 	namespaces := []string{}
 
 	switch op {
-	case bind, chown, mkdir, rootfsIDMap:
+	case bind, chown, mkdir, overlay, rootfsIDMap:
 		namespaces = append(namespaces,
 			fmt.Sprintf("mnt:/proc/%d/ns/mnt", childPid),
 			fmt.Sprintf("pid:/proc/%d/ns/pid", childPid),

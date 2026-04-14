@@ -496,6 +496,25 @@ func mountToRootfs(m *configs.Mount, config *configs.Config, enableCgroupns bool
 			return mountCgroupV2(m, enableCgroupns, config, pipe)
 		}
 		return mountCgroupV1(m, enableCgroupns, config, pipe)
+	case "overlay":
+		// Overlay mounts may require access to paths that the container's init
+		// process may not have permissions to access. We ask the parent runc
+		// process to perform the mount from within the container's mount namespace.
+		if err := mkdirall(dest, 0755, config, pipe); err != nil {
+			return err
+		}
+
+		req := opReq{
+			Op:     overlay,
+			Mount:  *m,
+			Label:  config.MountLabel,
+			Rootfs: config.Rootfs,
+		}
+
+		if err := syncParentDoOp([]opReq{req}, pipe); err != nil {
+			return newSystemErrorWithCause(err, "syncing with parent runc to perform overlay mount")
+		}
+		return nil
 	default:
 		// ensure that the destination of the mount is resolved of symlinks at mount time because
 		// any previous mounts can invalidate the next mount's destination.
@@ -1273,7 +1292,8 @@ func doMounts(config *configs.Config, pipe io.ReadWriter, doSysboxfsOvermountsOn
 
 		if m.Device != "bind" {
 			if err := mountToRootfs(m, config, true, pipe); err != nil {
-				return newSystemErrorWithCausef(err, "mounting %q to rootfs %q at %q", m.Source, config.Rootfs, m.Destination)
+				return newSystemErrorWithCausef(err, "mounting %q to rootfs %q at %q; mount = %+v",
+					m.Source, config.Rootfs, m.Destination, m)
 			}
 
 			// Change ownership of the container's /proc to match the container's

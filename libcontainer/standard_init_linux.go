@@ -32,11 +32,12 @@ type linuxStandardInit struct {
 type opReqType int
 
 const (
-	bind = iota
+	bind opReqType = iota
 	switchDockerDns
 	chown
 	mkdir
 	rootfsIDMap
+	overlay
 )
 
 type opReq struct {

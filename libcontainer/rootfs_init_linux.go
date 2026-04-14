@@ -133,6 +133,44 @@ func doBindMount(rootfs string, m *configs.Mount) error {
 	return nil
 }
 
+func doOverlayMount(rootfs string, m *configs.Mount, mountLabel string) error {
+	// Delay mounting the filesystem read-only if we need to do further
+	// operations on it (similar to bind mounts)
+	flags := m.Flags
+	flags &^= unix.MS_RDONLY
+
+	// Mount with procfd to mitigate symlink exchange attacks
+	if err := libcontainerUtils.WithProcfd(rootfs, m.Destination, func(procfd string) error {
+		data := label.FormatMountLabel(m.Data, mountLabel)
+		return unix.Mount(m.Source, procfd, m.Device, uintptr(flags), data)
+	}); err != nil {
+		return fmt.Errorf("overlay mount through procfd of %s -> %s: %w", m.Source, m.Destination, err)
+	}
+
+	// Apply mount propagation flags in a separate WithProcfd() call
+	if err := libcontainerUtils.WithProcfd(rootfs, m.Destination, func(procfd string) error {
+		for _, pflag := range m.PropagationFlags {
+			if err := unix.Mount("", procfd, "", uintptr(pflag), ""); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		return fmt.Errorf("change overlay mount propagation through procfd: %w", err)
+	}
+
+	// Remount read-only if necessary
+	if m.Flags&unix.MS_RDONLY != 0 {
+		if err := libcontainerUtils.WithProcfd(rootfs, m.Destination, func(procfd string) error {
+			return unix.Mount("", procfd, "", uintptr(m.Flags|unix.MS_REMOUNT), "")
+		}); err != nil {
+			return fmt.Errorf("remount overlay read-only through procfd: %w", err)
+		}
+	}
+
+	return nil
+}
+
 // Creates an alias for the Docker DNS via iptables.
 func doDockerDnsSwitch(oldDns, newDns string) error {
 	var (
@@ -513,6 +551,31 @@ func (l *linuxRootfsInit) Init() error {
 
 		if err := doDockerDnsSwitch(oldDns, newDns); err != nil {
 			return newSystemErrorWithCausef(err, "Docker DNS switch from %s to %s", oldDns, newDns)
+		}
+
+	case overlay:
+		// The mount requests assume that the process cwd is the rootfs directory
+		rootfs := l.reqs[0].Rootfs
+		if err := unix.Chdir(rootfs); err != nil {
+			return newSystemErrorWithCausef(err, "chdir to rootfs %s", rootfs)
+		}
+
+		// We are in the pid and mount ns of the container's init process; remount
+		// /proc so that it picks up this fact.
+		os.Lstat("/proc")
+		if err := unix.Mount("proc", "/proc", "proc", 0, ""); err != nil {
+			return newSystemErrorWithCause(err, "re-mounting procfs")
+		}
+		defer unix.Unmount("/proc", unix.MNT_DETACH)
+
+		for _, req := range l.reqs {
+			m := &req.Mount
+			mountLabel := req.Label
+
+			// Perform the overlay mount
+			if err := doOverlayMount(rootfs, m, mountLabel); err != nil {
+				return newSystemErrorWithCausef(err, "overlay mounting %s", m.Destination)
+			}
 		}
 
 	case chown:
