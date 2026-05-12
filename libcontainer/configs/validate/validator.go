@@ -44,6 +44,9 @@ func (v *ConfigValidator) Validate(config *configs.Config) error {
 	if err := v.cgroupnamespace(config); err != nil {
 		return err
 	}
+	if err := v.timenamespace(config); err != nil {
+		return err
+	}
 	if err := v.sysctl(config); err != nil {
 		return err
 	}
@@ -126,6 +129,17 @@ func (v *ConfigValidator) cgroupnamespace(config *configs.Config) error {
 	if config.Namespaces.Contains(configs.NEWCGROUP) {
 		if _, err := os.Stat("/proc/self/ns/cgroup"); os.IsNotExist(err) {
 			return errors.New("cgroup namespaces aren't enabled in the kernel")
+		}
+	}
+	return nil
+}
+
+// timenamespace validates that the kernel supports time namespaces when one
+// is requested.
+func (v *ConfigValidator) timenamespace(config *configs.Config) error {
+	if config.Namespaces.Contains(configs.NEWTIME) {
+		if _, err := os.Stat("/proc/self/timens_offsets"); os.IsNotExist(err) {
+			return errors.New("time namespaces aren't enabled in the kernel")
 		}
 	}
 	return nil

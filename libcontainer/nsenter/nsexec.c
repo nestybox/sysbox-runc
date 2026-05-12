@@ -99,6 +99,10 @@ struct nlconfig_t {
 	size_t parent_mount_len;
 	char *shiftfs_mounts;
 	size_t shiftfs_mounts_len;
+
+	/* Time namespace offsets. */
+	char *timensoffset;
+	size_t timensoffset_len;
 };
 
 #define PANIC   "panic"
@@ -130,6 +134,7 @@ static int logfd = -1;
 #define ROOTFS_ATTR        27293
 #define PARENT_MOUNT_ATTR  27294
 #define SHIFTFS_MOUNTS_ATTR 27295
+#define TIMENSOFFSET_ATTR   27296
 
 /*
  * Use the raw syscall for versions of glibc which don't include a function for
@@ -353,6 +358,40 @@ static void update_oom_score_adj(char *data, size_t len)
 		bail("failed to update /proc/self/oom_score_adj");
 }
 
+/*
+ * Write time namespace clock offsets to /proc/self/timens_offsets.
+ * Must be called after unshare(CLONE_NEWTIME) and before any thread is
+ * created in the new namespace.
+ *
+ * When the calling task is in a new user namespace whose uid_map does
+ * not include kernel-global uid 0, the kernel makes /proc/self files
+ * appear owned by global root unless the task is user-dumpable. Without
+ * PR_SET_DUMPABLE=1 the open(O_RDWR) below fails with EACCES, since
+ * fsuid (kernel-global 0) and the file's mapped uid (overflow uid in
+ * our user-ns) don't match for the owner-permission check. Set the
+ * dumpable bit across the write and restore the previous value.
+ */
+static void update_timens(char *map, size_t map_len)
+{
+	if (map == NULL || map_len == 0)
+		return;
+
+	int prev_dump = prctl(PR_GET_DUMPABLE);
+	if (prev_dump != 1)
+		(void)prctl(PR_SET_DUMPABLE, 1, 0, 0, 0);
+
+	int ret = write_file(map, map_len, "/proc/self/timens_offsets");
+	int werr = errno;
+
+	if (prev_dump != 1)
+		(void)prctl(PR_SET_DUMPABLE, prev_dump, 0, 0, 0);
+
+	if (ret < 0) {
+		errno = werr;
+		bail("failed to update /proc/self/timens_offsets");
+	}
+}
+
 /* A dummy function that just jumps to the given jumpval. */
 static int child_func(void *arg) __attribute__ ((noinline));
 static int child_func(void *arg)
@@ -427,6 +466,8 @@ static int nsflag(char *name)
 		return CLONE_NEWUSER;
 	else if (!strcmp(name, "uts"))
 		return CLONE_NEWUTS;
+	else if (!strcmp(name, "time"))
+		return CLONE_NEWTIME;
 
 	/* If we don't recognise a name, fallback to 0. */
 	return 0;
@@ -535,6 +576,10 @@ static void nl_parse(int fd, struct nlconfig_t *config)
 		case SHIFTFS_MOUNTS_ATTR:
 			config->shiftfs_mounts = current;
 			config->shiftfs_mounts_len = payload_len;
+			break;
+		case TIMENSOFFSET_ATTR:
+			config->timensoffset = current;
+			config->timensoffset_len = payload_len;
 			break;
 		default:
 			bail("unknown netlink message type %d", nlattr->nla_type);
@@ -1070,8 +1115,20 @@ void nsexec(void)
 			 * some old kernel versions where clone(CLONE_PARENT | CLONE_NEWPID)
 			 * was broken, so we'll just do it the long way anyway.
 			 */
+			int unshared_timens = config.cloneflags & CLONE_NEWTIME;
 			if (unshare(config.cloneflags & ~CLONE_NEWCGROUP) < 0)
 			  bail("failed to unshare namespaces");
+
+			/*
+			 * Set time namespace clock offsets only if we just unshared
+			 * CLONE_NEWTIME (i.e. created a new time namespace). For exec
+			 * paths the time ns is joined via setns, not unshared, so the
+			 * offsets are already set and writing them again would fail.
+			 * Must happen before clone_parent() forks JUMP_INIT so that no
+			 * thread exists yet in the new timens.
+			 */
+			if (unshared_timens)
+				update_timens(config.timensoffset, config.timensoffset_len);
 
 			/*
 			 * TODO: What about non-namespace clone flags that we're dropping here?

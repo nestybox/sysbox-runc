@@ -55,6 +55,7 @@ func initMaps() {
 			specs.IPCNamespace:     configs.NEWIPC,
 			specs.UTSNamespace:     configs.NEWUTS,
 			specs.CgroupNamespace:  configs.NEWCGROUP,
+			specs.TimeNamespace:    configs.NEWTIME,
 		}
 
 		mountPropagationMapping = map[string]int{
@@ -453,6 +454,9 @@ func CreateLibcontainerConfig(opts *CreateOpts) (*configs.Config, error) {
 				config.IntelRdt.MemBwSchema = spec.Linux.IntelRdt.MemBwSchema
 			}
 		}
+
+		// Propagate time namespace clock offsets.
+		config.TimeOffsets = spec.Linux.TimeOffsets
 	}
 	if spec.Process != nil {
 		config.OomScoreAdj = spec.Process.OOMScoreAdj

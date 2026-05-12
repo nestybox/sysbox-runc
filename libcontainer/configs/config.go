@@ -227,6 +227,10 @@ type Config struct {
 	// ShiftfsMounts is a list of directories on which shiftfs needs to be mounted
 	ShiftfsMounts []shiftfs.MountPoint `json:"shiftfs_mounts,omitempty"`
 
+	// TimeOffsets specifies the boot and monotonic clock offsets for a time
+	// namespace. Requires Linux 5.6+ and NEWTIME in Namespaces.
+	TimeOffsets map[string]specs.LinuxTimeOffset `json:"time_offsets,omitempty"`
+
 	// SwitchDockerDns indicates if the containers should change the IP address
 	// of Docker DNS hosts with localhost addresses.
 	SwitchDockerDns bool `json:"switch_docker_dns,omitempty"`
