@@ -526,7 +526,7 @@ function setup_busybox() {
 		BUSYBOX_IMAGE="/testdata/busybox.tar"
 	fi
 	if [ ! -e $BUSYBOX_IMAGE ]; then
-		curl -o $BUSYBOX_IMAGE -sSL $(get_busybox)
+		curl -o $BUSYBOX_IMAGE -fsSL $(get_busybox)
 	fi
 	tar --exclude './dev/*' -C "$BUSYBOX_BUNDLE"/rootfs -xf "$BUSYBOX_IMAGE"
 
