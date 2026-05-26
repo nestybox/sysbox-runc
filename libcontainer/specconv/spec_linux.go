@@ -336,6 +336,7 @@ type CreateOpts struct {
 	RootfsCloned        bool
 	FsuidMapFailOnErr   bool
 	IDshiftIgnoreList   []string
+	OverlayfsUpperIDMap bool
 }
 
 // CreateLibcontainerConfig creates a new libcontainer configuration from a
@@ -377,6 +378,7 @@ func CreateLibcontainerConfig(opts *CreateOpts) (*configs.Config, error) {
 		RootfsCloned:        opts.RootfsCloned,
 		FsuidMapFailOnErr:   opts.FsuidMapFailOnErr,
 		IDshiftIgnoreList:   opts.IDshiftIgnoreList,
+		OverlayfsUpperIDMap: opts.OverlayfsUpperIDMap,
 	}
 
 	for _, m := range spec.Mounts {

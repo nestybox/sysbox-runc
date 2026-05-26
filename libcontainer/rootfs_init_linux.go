@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/Masterminds/semver"
@@ -288,7 +289,61 @@ func doDockerDnsSwitch(oldDns, newDns string) error {
 	return nil
 }
 
-// sysbox-runc: Init performs container's rootfs initialization actions from
+// upperHasOutOfRangeUids returns true if the overlayfs upper layer contains
+// any child entry whose uid is outside the expected mapped range [hostUID, hostUID+size).
+//
+// This guards against applying id-mapping to an upper layer that already has
+// host-range uids on disk (e.g. written by an older sysbox version that used
+// ShiftIdsWithChown, or by a fresh container that hasn't been touched). For the
+// common case of an empty upper layer this returns false immediately.
+//
+// The upper directory itself (path == upper) is always uid=0 when Docker's
+// overlayfs snapshotter creates it — this is expected and is NOT a sign of
+// previously-chowned content. The check is scoped to child entries only.
+//
+// The walk is capped at maxEntries to keep the probe cheap on large layers.
+func upperHasOutOfRangeUids(upper string, hostUID, uidSize int) bool {
+	const maxEntries = 64
+
+	count := 0
+	outOfRange := false
+
+	_ = filepath.WalkDir(upper, func(path string, d os.DirEntry, err error) error {
+		if err != nil || count >= maxEntries {
+			return filepath.SkipAll
+		}
+		count++
+
+		// The upper dir's own root entry is always uid=0 — skip it.
+		// Only child entries reflect whether the upper has been previously
+		// chown-shifted and thus must not be id-mapped a second time.
+		if path == upper {
+			return nil
+		}
+
+		fi, err := d.Info()
+		if err != nil {
+			return nil
+		}
+		st, ok := fi.Sys().(*syscall.Stat_t)
+		if !ok {
+			return nil
+		}
+
+		// Flag any child uid outside [hostUID, hostUID+size).
+		uid := int(st.Uid)
+		if uid < hostUID || uid >= hostUID+uidSize {
+			outOfRange = true
+			return filepath.SkipAll
+		}
+
+		return nil
+	})
+
+	return outOfRange
+}
+
+// Init performs container's rootfs initialization actions from
 // within specific container namespaces. By virtue of entering to an individual
 // namespace (e.g.  'mount' or 'network' ns), Init has true root-level access to
 // the host and thus can perform operations that the container's init process
@@ -307,6 +362,7 @@ func (l *linuxRootfsInit) Init() error {
 		rootfs := l.reqs[0].Rootfs
 		uid := l.reqs[0].Uid
 		gid := l.reqs[0].Gid
+		uidSize := l.reqs[0].UidSize
 
 		usernsPath := "/proc/1/ns/user"
 
@@ -413,11 +469,6 @@ func (l *linuxRootfsInit) Init() error {
 				}
 			}
 
-			// The overlayfs upper layer can't be ID-mapped, so it needs to be chowned.
-			if err := idShiftUtils.ShiftIdsWithChown(ovfsUpperLayer, int32(uid), int32(gid)); err != nil {
-				return newSystemErrorWithCausef(err, "chown overlayfs upper layet at %s", ovfsUpperLayer)
-			}
-
 			// Create a new overlayfs workdir with the same path as the original but
 			// with a "-sysbox" suffix. We can't reuse the original workdir since it's
 			// owned by the entity that set up the rootfs mount (e.g., Docker). Each
@@ -436,6 +487,53 @@ func (l *linuxRootfsInit) Init() error {
 				}
 			}
 			ovfsMntOpts.Opts = strings.Join(opts, ",")
+
+			// Choose the upper layer strategy: id-map (kernel >= 5.19, probe passed)
+			// or chown (fallback for older kernels or unsupported filesystems).
+			//
+			// When id-mapping is used:
+			//   - writes through the merged overlayfs mount from outside the
+			//     container's userns (e.g. "docker cp") are translated by the
+			//     kernel: host uid 0 → stored as uid X on disk.
+			//   - container processes in userns (0→X) read uid X as uid 0. ✓
+			//   - this eliminates the nobody:nogroup bug seen with "docker cp".
+			//
+			// Both strategies produce the same on-disk uid range (the mapped
+			// range, e.g. 100000+). A container previously started under the
+			// chown strategy can be restarted under the id-map strategy without
+			// migration because ShiftIdsWithChown and MOUNT_ATTR_IDMAP both use
+			// the same HostID offset.
+			useIDMap := l.reqs[0].OverlayfsUpperIDMap && !upperHasOutOfRangeUids(ovfsUpperLayer, uid, uidSize)
+
+			if useIDMap {
+				// Id-map upperdir in place: open_tree(CLONE) + mount_setattr(MOUNT_ATTR_IDMAP)
+				// + move_mount. unmountFirst=false because the upper is a plain directory,
+				// not its own mountpoint; the idmapped clone stacks on top of it.
+				if err := idMap.IDMapMount(usernsPath, ovfsUpperLayer, false); err != nil {
+					return newSystemErrorWithCausef(err, "id-mapping overlayfs upper layer at %s", ovfsUpperLayer)
+				}
+				// Guard: clean up the upper idmap mount if the workdir idmap fails.
+				// (Both run inside the container's private mount namespace so cleanup
+				// is not strictly required, but it avoids confusing diagnostics.)
+				upperMounted := true
+				defer func() {
+					if upperMounted {
+						unix.Unmount(ovfsUpperLayer, unix.MNT_DETACH)
+					}
+				}()
+				// The kernel enforces that upperdir and workdir use the same userns
+				// mapping. Id-map the new workdir with the same usernsPath.
+				if err := idMap.IDMapMount(usernsPath, newWorkDir, false); err != nil {
+					return newSystemErrorWithCausef(err, "id-mapping overlayfs workdir at %s", newWorkDir)
+				}
+				upperMounted = false // both succeeded — don't clean up
+			} else {
+				// Fallback: chown the upper layer recursively (existing behavior).
+				// The workdir is brand-new and empty, so no chown is needed for it.
+				if err := idShiftUtils.ShiftIdsWithChown(ovfsUpperLayer, int32(uid), int32(gid)); err != nil {
+					return newSystemErrorWithCausef(err, "chown overlayfs upper layer at %s", ovfsUpperLayer)
+				}
+			}
 
 			if overlayUtils.GetVolatile(ovfsMntOpts) {
 				// overlay has a check in place to prevent mounting "volatile" system twice

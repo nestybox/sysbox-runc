@@ -45,9 +45,10 @@ type opReq struct {
 	// all and therefore only set in the first one (opReq[0]). Not all request
 	// types use all these fields necessarily (most use Rootfs but only
 	// bind-mount requests use the other ones).
-	Op                opReqType `json:"type"`
-	Rootfs            string    `json:"rootfs"`
-	FsuidMapFailOnErr bool      `json:"fsuid_map_fail_on_err"`
+	Op                  opReqType `json:"type"`
+	Rootfs              string    `json:"rootfs"`
+	FsuidMapFailOnErr   bool      `json:"fsuid_map_fail_on_err"`
+	OverlayfsUpperIDMap bool      `json:"overlayfs_upper_id_map"`
 
 	// bind
 	Mount configs.Mount `json:"mount"`
@@ -58,10 +59,11 @@ type opReq struct {
 	NewDns string `json:"newdns"`
 
 	// chown & mkdir
-	Path string      `json:"path"`
-	Uid  int         `json:"uid"`
-	Gid  int         `json:"gid"`
-	Mode os.FileMode `json:"mode"`
+	Path    string      `json:"path"`
+	Uid     int         `json:"uid"`
+	Gid     int         `json:"gid"`
+	UidSize int         `json:"uid_size"`
+	Mode    os.FileMode `json:"mode"`
 }
 
 func (l *linuxStandardInit) getSessionRingParams() (string, uint32, uint32) {

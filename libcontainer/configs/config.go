@@ -248,6 +248,14 @@ type Config struct {
 	// IDShiftIgnoreList is a list of container paths over which no UID/GID shifting mechanism must
 	// be applied.
 	IDshiftIgnoreList []string `json:"idshift_ignore_list,omitempty"`
+
+	// OverlayfsUpperIDMap indicates the host kernel supports id-mapping the
+	// overlayfs upperdir and workdir (requires Linux >= 5.19 and a functional
+	// probe confirming the backing filesystem accepts MOUNT_ATTR_IDMAP on the
+	// upper layer). When true, sysbox-runc id-maps the upper layer instead of
+	// chown'ing it, which fixes the "docker cp" nobody:nogroup bug caused by
+	// writes through the merged overlayfs mount landing with uid=0 on disk.
+	OverlayfsUpperIDMap bool `json:"overlayfs_upper_id_map,omitempty"`
 }
 
 type HookName string

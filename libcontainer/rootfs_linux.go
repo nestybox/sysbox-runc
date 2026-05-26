@@ -1260,10 +1260,12 @@ func mountPropagate(m *configs.Mount, rootfs string, mountLabel string) error {
 func doRootfsIDMapping(config *configs.Config, pipe io.ReadWriter) error {
 	reqs := []opReq{
 		{
-			Op:     rootfsIDMap,
-			Rootfs: config.Rootfs,
-			Uid:    config.UidMappings[0].HostID,
-			Gid:    config.GidMappings[0].HostID,
+			Op:                  rootfsIDMap,
+			Rootfs:              config.Rootfs,
+			Uid:                 config.UidMappings[0].HostID,
+			Gid:                 config.GidMappings[0].HostID,
+			UidSize:             config.UidMappings[0].Size,
+			OverlayfsUpperIDMap: config.OverlayfsUpperIDMap,
 		},
 	}
 

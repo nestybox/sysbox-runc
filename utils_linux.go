@@ -319,6 +319,7 @@ func createContainer(context *cli.Context,
 		RootfsCloned:        sysbox.RootfsCloned,
 		FsuidMapFailOnErr:   sysMgr.Config.FsuidMapFailOnErr,
 		IDshiftIgnoreList:   sysbox.IDshiftIgnoreList,
+		OverlayfsUpperIDMap: sysMgr.Config.OverlayfsUpperIDMap,
 	})
 	if err != nil {
 		return nil, err
