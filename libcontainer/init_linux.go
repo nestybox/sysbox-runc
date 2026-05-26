@@ -87,6 +87,9 @@ func newContainerInit(t initType, pipe *os.File, consoleSocket, fifoFile *os.Fil
 		if err := json.NewDecoder(pipe).Decode(&config); err != nil {
 			return nil, err
 		}
+		// Clean the RLIMIT_NOFILE cache in go runtime.
+		// Issue: https://github.com/opencontainers/runc/issues/4195
+		maybeClearRlimitNofileCache(config.Rlimits)
 		if err := populateProcessEnvironment(config.Env); err != nil {
 			return nil, err
 		}
@@ -536,6 +539,18 @@ func setupRoute(config *configs.Config) error {
 		}
 	}
 	return nil
+}
+
+func maybeClearRlimitNofileCache(limits []configs.Rlimit) {
+	for _, rlimit := range limits {
+		if rlimit.Type == syscall.RLIMIT_NOFILE {
+			system.ClearRlimitNofileCache(&syscall.Rlimit{
+				Cur: rlimit.Soft,
+				Max: rlimit.Hard,
+			})
+			return
+		}
+	}
 }
 
 func setupRlimits(limits []configs.Rlimit, pid int) error {
