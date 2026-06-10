@@ -402,6 +402,12 @@ func (l *LinuxFactory) StartInitialization() (err error) {
 	defer func() {
 		// We have an error during the initialization of the container's init,
 		// send it back to the parent process in the form of an initError.
+		// For initMount helpers, Init() returns nil without exec'ing;
+		// sending procError with a nil payload would cause the parent's
+		// parseSync to panic ("No error following JSON procError payload").
+		if err == nil {
+			return
+		}
 		if werr := utils.WriteJSON(pipe, syncT{procError}); werr != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return
