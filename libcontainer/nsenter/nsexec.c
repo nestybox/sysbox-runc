@@ -642,11 +642,21 @@ void join_namespaces(char *nslist)
 	} while ((namespace = strtok_r(NULL, ",", &saveptr)) != NULL);
 
 	/*
-	 * The ordering in which we join namespaces is important. We should
-	 * always join the user namespace *first*. This is all guaranteed
-	 * from the container_linux.go side of this, so we're just going to
-	 * follow the order given to us.
+	 * Ordering matters here. Per setns(2), joining the netns requires
+	 * CAP_SYS_ADMIN in the user namespace that owns it, which is the
+	 * host's, not the container's. Once we setns(2)/unshare(2) into the
+	 * container's user namespace, that host capability is gone for good
+	 * (user_namespaces(7)), so the netns join would then fail. Hence we
+	 * join the netns first and the user namespace last.
 	 */
+	for (i = 0; i < num; i++) {
+		if (namespaces[i].ns == CLONE_NEWNET && i > 0) {
+			struct namespace_t netns = namespaces[i];
+			memmove(&namespaces[1], &namespaces[0], i * sizeof(struct namespace_t));
+			namespaces[0] = netns;
+			break;
+		}
+	}
 
 	for (i = 0; i < num; i++) {
 		struct namespace_t ns = namespaces[i];

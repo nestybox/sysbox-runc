@@ -545,6 +545,31 @@ func (l *linuxRootfsInit) Init() error {
 			}
 		}
 
+	case sysfs:
+		rootfs := l.reqs[0].Rootfs
+		m := &l.reqs[0].Mount
+
+		if err := unix.Chdir(rootfs); err != nil {
+			return newSystemErrorWithCausef(err, "chdir to rootfs %s", rootfs)
+		}
+
+		if err := libcontainerUtils.WithProcfd(".", m.Destination, func(procfd string) error {
+			return unix.Mount(m.Source, procfd, m.Device, uintptr(m.Flags), m.Data)
+		}); err != nil {
+			return newSystemErrorWithCausef(err, "sysfs mount through procfd to %s", m.Destination)
+		}
+
+		if err := libcontainerUtils.WithProcfd(".", m.Destination, func(procfd string) error {
+			for _, pflag := range m.PropagationFlags {
+				if err := unix.Mount("", procfd, "", uintptr(pflag), ""); err != nil {
+					return err
+				}
+			}
+			return nil
+		}); err != nil {
+			return newSystemErrorWithCausef(err, "change sysfs mount propagation through procfd to %s", m.Destination)
+		}
+
 	case switchDockerDns:
 		oldDns := l.reqs[0].OldDns
 		newDns := l.reqs[0].NewDns
