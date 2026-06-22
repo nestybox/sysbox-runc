@@ -454,6 +454,17 @@ func mountToRootfs(m *configs.Mount, config *configs.Config, enableCgroupns bool
 		if err := mkdirall(dest, 0755, config, pipe); err != nil {
 			return fmt.Errorf("failed to created dir for %s mount: %v", m.Device, err)
 		}
+		if m.Device == "sysfs" {
+			req := opReq{
+				Op:     sysfs,
+				Rootfs: config.Rootfs,
+				Mount:  *m,
+			}
+			if err := syncParentDoOp([]opReq{req}, pipe); err != nil {
+				return newSystemErrorWithCause(err, "syncing with parent runc to perform sysfs mount")
+			}
+			return nil
+		}
 		// Selinux kernels do not support labeling of /proc or /sys
 		return mountPropagate(m, ".", "")
 	case "mqueue":
