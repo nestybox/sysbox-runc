@@ -371,7 +371,7 @@ static void update_oom_score_adj(char *data, size_t len)
  * our user-ns) don't match for the owner-permission check. Set the
  * dumpable bit across the write and restore the previous value.
  */
-static void update_timens(char *map, size_t map_len)
+static void update_timens_offsets(char *map, size_t map_len)
 {
 	if (map == NULL || map_len == 0)
 		return;
@@ -642,11 +642,20 @@ void join_namespaces(char *nslist)
 	} while ((namespace = strtok_r(NULL, ",", &saveptr)) != NULL);
 
 	/*
-	 * The ordering in which we join namespaces is important. We should
-	 * always join the user namespace *first*. This is all guaranteed
-	 * from the container_linux.go side of this, so we're just going to
-	 * follow the order given to us.
+	 * The ordering in which we join namespaces is important. Upstream runc
+	 * normally joins the user namespace first. Sysbox containers have a uid
+	 * map that does not include host uid 0 though, so doing that first turns
+	 * this process into overflow uid 65534 and drops the privilege needed to
+	 * join the sandbox's network namespace on newer kernels.
 	 */
+	for (i = 0; i < num; i++) {
+		if (namespaces[i].ns == CLONE_NEWNET && i > 0) {
+			struct namespace_t netns = namespaces[i];
+			memmove(&namespaces[1], &namespaces[0], i * sizeof(struct namespace_t));
+			namespaces[0] = netns;
+			break;
+		}
+	}
 
 	for (i = 0; i < num; i++) {
 		struct namespace_t ns = namespaces[i];
@@ -1128,7 +1137,7 @@ void nsexec(void)
 			 * thread exists yet in the new timens.
 			 */
 			if (unshared_timens)
-				update_timens(config.timensoffset, config.timensoffset_len);
+				update_timens_offsets(config.timensoffset, config.timensoffset_len);
 
 			/*
 			 * TODO: What about non-namespace clone flags that we're dropping here?

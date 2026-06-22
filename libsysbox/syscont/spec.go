@@ -287,7 +287,14 @@ func cfgNamespaces(sysMgr *sysbox.Mgr, spec *specs.Spec) error {
 
 	// user-ns and cgroup-ns are not required per the OCI spec, but we will add
 	// them to the system container spec.
-	var allNs = []string{"pid", "ipc", "uts", "mount", "network", "user", "cgroup"}
+	//
+	// time-ns is also added by default (with no offsets relative to the host)
+	// so that the container gets its own time namespace owned by the
+	// container's user-ns. Without this, tools inside the container that
+	// setns() into the host time-ns (e.g. `nsenter -a` from newer util-linux)
+	// fail with EPERM, since the host time-ns is owned by init_user_ns. If
+	// the OCI spec already specifies a time namespace, it is honored as-is.
+	var allNs = []string{"pid", "ipc", "uts", "mount", "network", "user", "cgroup", "time"}
 	var reqNs = []string{"pid", "ipc", "uts", "mount", "network"}
 
 	allNsSet := mapset.NewSet[string]()

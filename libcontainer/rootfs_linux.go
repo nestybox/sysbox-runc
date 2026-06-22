@@ -396,6 +396,9 @@ func mkdirall(path string, mode os.FileMode, config *configs.Config, pipe io.Rea
 	}
 
 	if err := os.MkdirAll(path, mode); err != nil {
+		if errors.Is(err, unix.EOVERFLOW) && strings.Contains(path, "/proc/sys/fs/binfmt_misc") {
+			return nil
+		}
 
 		// In some cases the container's init process process won't have
 		// permission to perform the mkdir (e.g., if the parent directory in the
@@ -453,6 +456,17 @@ func mountToRootfs(m *configs.Mount, config *configs.Config, enableCgroupns bool
 		}
 		if err := mkdirall(dest, 0755, config, pipe); err != nil {
 			return fmt.Errorf("failed to created dir for %s mount: %v", m.Device, err)
+		}
+		if m.Device == "sysfs" {
+			req := opReq{
+				Op:     sysfs,
+				Rootfs: config.Rootfs,
+				Mount:  *m,
+			}
+			if err := syncParentDoOp([]opReq{req}, pipe); err != nil {
+				return newSystemErrorWithCause(err, "syncing with parent runc to perform sysfs mount")
+			}
+			return nil
 		}
 		// Selinux kernels do not support labeling of /proc or /sys
 		return mountPropagate(m, ".", "")
@@ -1197,7 +1211,11 @@ func maskPaths(paths []string, mountLabel string) error {
 // For e.g. net.ipv4.ip_forward translated to /proc/sys/net/ipv4/ip_forward.
 func writeSystemProperty(key, value string) error {
 	keyPath := strings.Replace(key, ".", "/", -1)
-	return ioutil.WriteFile(path.Join("/proc/sys", keyPath), []byte(value), 0644)
+	err := ioutil.WriteFile(path.Join("/proc/sys", keyPath), []byte(value), 0644)
+	if os.IsNotExist(err) && (key == "net.ipv4.ip_unprivileged_port_start" || key == "net.ipv4.ping_group_range") {
+		return nil
+	}
+	return err
 }
 
 func remount(m *configs.Mount) error {
@@ -1238,6 +1256,9 @@ func mountPropagate(m *configs.Mount, rootfs string, mountLabel string) error {
 	if err := utils.WithProcfd(rootfs, m.Destination, func(procfd string) error {
 		return unix.Mount(m.Source, procfd, m.Device, uintptr(flags), data)
 	}); err != nil {
+		if m.Device == "binfmt_misc" && os.IsNotExist(err) {
+			return nil
+		}
 		return fmt.Errorf("mount through procfd: %w", err)
 	}
 	// We have to apply mount propagation flags in a separate WithProcfd() call
@@ -1287,6 +1308,16 @@ func doMounts(config *configs.Config, pipe io.ReadWriter, doSysboxfsOvermountsOn
 		isSysboxfsOvermount := isSysboxfsOvermount(m)
 		if doSysboxfsOvermountsOnly && !isSysboxfsOvermount ||
 			!doSysboxfsOvermountsOnly && isSysboxfsOvermount {
+			continue
+		}
+
+		// Skip binfmt_misc overmounts on top of sysbox-fs: on containerd 2.x
+		// with kernel 6.8+, the binfmt_misc mount target (/proc/sys/fs/binfmt_misc)
+		// does not exist under the sysbox-fs emulated /proc/sys tree and cannot
+		// be created there. binfmt_misc registration is a host-level kernel
+		// feature that is not functional inside sysbox containers, so skipping
+		// it is safe.
+		if doSysboxfsOvermountsOnly && m.Device == "binfmt_misc" {
 			continue
 		}
 

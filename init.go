@@ -39,12 +39,18 @@ var initCommand = cli.Command{
 	Name:  "init",
 	Usage: `initialize the namespaces and launch the process (do not call it outside of sysbox-runc)`,
 	Action: func(context *cli.Context) error {
+		initType := os.Getenv("_LIBCONTAINER_INITTYPE")
+
 		factory, _ := libcontainer.New("")
 		if err := factory.StartInitialization(); err != nil {
-			// as the error is sent back to the parent there is no need to log
-			// or write it to stderr because the parent process will handle this
 			os.Exit(1)
 		}
+
+		// initMount helpers return here without exec; that's normal.
+		if initType == "mount" {
+			os.Exit(0)
+		}
+
 		panic("libcontainer: container init failed to exec")
 	},
 }

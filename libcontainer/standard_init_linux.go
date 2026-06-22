@@ -38,6 +38,7 @@ const (
 	mkdir
 	rootfsIDMap
 	overlay
+	sysfs
 )
 
 type opReq struct {

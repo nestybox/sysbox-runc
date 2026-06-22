@@ -2374,7 +2374,7 @@ func (c *linuxContainer) bootstrapData(cloneFlags uintptr, nsMaps map[configs.Na
 	}
 
 	// Write boottime and monotonic time namespace offsets.
-	if c.config.Namespaces.Contains(configs.NEWTIME) && c.config.TimeOffsets != nil {
+	if c.config.TimeOffsets != nil {
 		var offsetSpec bytes.Buffer
 		for clock, offset := range c.config.TimeOffsets {
 			fmt.Fprintf(&offsetSpec, "%s %d %d\n", clock, offset.Secs, offset.Nanosecs)
@@ -2444,7 +2444,7 @@ func (c *linuxContainer) handleReqOp(childPid int, reqs []opReq) error {
 	op := reqs[0].Op
 
 	switch op {
-	case bind, chown, mkdir, overlay, rootfsIDMap, switchDockerDns:
+	case bind, chown, mkdir, overlay, rootfsIDMap, switchDockerDns, sysfs:
 		return c.handleOp(op, childPid, reqs)
 	default:
 		return newSystemError(fmt.Errorf("invalid opReq type %d", int(op)))
@@ -2490,7 +2490,7 @@ func (c *linuxContainer) handleOp(op opReqType, childPid int, reqs []opReq) erro
 	namespaces := []string{}
 
 	switch op {
-	case bind, chown, mkdir, overlay, rootfsIDMap:
+	case bind, chown, mkdir, overlay, rootfsIDMap, sysfs:
 		namespaces = append(namespaces,
 			fmt.Sprintf("mnt:/proc/%d/ns/mnt", childPid),
 			fmt.Sprintf("pid:/proc/%d/ns/pid", childPid),
