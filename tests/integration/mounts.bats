@@ -235,6 +235,50 @@ function teardown() {
 	rm -rf /tmp/busyboxtest
 }
 
+@test "runc run [bind mount dest inside prior mount via symlink under it]" {
+	# Mirror image of the previous test: here the symlink is *inside* the
+	# prior mount's destination (image symlink /run/shm -> /dev/shm, as
+	# shipped by older Ubuntu images). The mount at /run/shm/foo must land
+	# on top of the /run mount (matching inline, in-order mounting), not at
+	# /dev/shm/foo where the image symlink (about to be shadowed by the
+	# /run mount) points before the mounts are performed.
+
+	mkdir -p /tmp/busyboxtest/emptydir
+	mkdir -p /tmp/busyboxtest/vol
+	touch /tmp/busyboxtest/vol/vol-file
+
+	# in container image, /run/shm -> /dev/shm
+	mkdir -p rootfs/run
+	rm -rf rootfs/run/shm
+	ln -s /dev/shm rootfs/run/shm
+
+	if [ -z "$SHIFT_ROOTFS_UIDS" ]; then
+		chown "$UID_MAP":"$GID_MAP" rootfs/run
+		chown -h "$UID_MAP":"$GID_MAP" rootfs/run/shm
+	fi
+
+	update_config ' .mounts |= . + [{
+												 source: "/tmp/busyboxtest/emptydir",
+												 destination: "/run",
+												 options: ["bind", "rw"]
+											 },
+											 {
+												 source: "/tmp/busyboxtest/vol",
+												 destination: "/run/shm/foo",
+												 options: ["bind", "rw"]
+											 }]
+						 | .process.args = ["sh", "-c", "ls /run/shm/foo && ls /dev/shm/"]'
+
+	runc run test_busybox
+	[ "$status" -eq 0 ]
+	[[ "${lines[0]}" =~ 'vol-file' ]]
+
+	# The mount must not have leaked to where the image symlink pointed.
+	[[ "$output" != *'foo'* ]]
+
+	rm -rf /tmp/busyboxtest
+}
+
 @test "runc run [tmpfs mount with absolute symlink]" {
 	# in container, /conf -> /real/conf
 	mkdir -p rootfs/real/conf

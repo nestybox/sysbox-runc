@@ -581,11 +581,28 @@ func doBindMounts(config *configs.Config, pipe io.ReadWriter, doSysboxfsOvermoun
 		}
 
 		// Determine if the current mount is nested under a still-pending prior
-		// mount's destination. Resolve symlinks first (e.g. image symlink
-		// "/var/run" -> "/run"), since a literal comparison would miss the
-		// dependency and later fail with ENOENT. mntReqs destinations are
-		// already resolved by prepareBindDest(), so resolving here the same
-		// way keeps the comparison apples-to-apples.
+		// mount's destination. The true condition is "would the destination
+		// resolve into the pending mount once that mount is performed", which
+		// can't be computed before actually performing it, so we approximate
+		// it from both sides and flush if either check matches (a false
+		// positive just costs one extra request to the parent):
+		//
+		// - The resolved check catches symlinks *outside* the pending
+		//   mountpoint, which survive the flush. E.g., image symlink
+		//   "/var/run" -> "/run" with a pending mount at "/run": a mount at
+		//   "/var/run/foo" must flush, but a literal comparison misses the
+		//   dependency and the mount later fails with ENOENT. mntReqs
+		//   destinations are already resolved by prepareBindDest(), so
+		//   resolving here the same way keeps the comparison apples-to-apples.
+		//
+		// - The literal check catches paths that enter the pending mountpoint
+		//   through image symlinks *underneath* it, which the flush shadows.
+		//   E.g., image symlink "/run/shm" -> "/dev/shm" with a pending mount
+		//   at "/run": a mount at "/run/shm/foo" must flush so that it lands
+		//   at run/shm/foo on top of the pending mount (matching inline,
+		//   in-order mounting), but pre-flush resolution follows the image
+		//   symlink to "dev/shm/foo" and would silently place the mount at
+		//   the wrong location.
 
 		resolvedDest, err := securejoin.SecureJoin(".", m.Destination)
 		if err != nil {
@@ -595,7 +612,8 @@ func doBindMounts(config *configs.Config, pipe io.ReadWriter, doSysboxfsOvermoun
 		mntDependsOnPrior := false
 		for _, mr := range mntReqs {
 			priorDest := filepath.Join("/", mr.Mount.Destination)
-			if mntDestDependsOn(filepath.Join("/", resolvedDest), priorDest) {
+			if mntDestDependsOn(filepath.Join("/", m.Destination), priorDest) ||
+				mntDestDependsOn(filepath.Join("/", resolvedDest), priorDest) {
 				mntDependsOnPrior = true
 				break
 			}
