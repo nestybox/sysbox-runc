@@ -538,6 +538,16 @@ func mountToRootfs(m *configs.Mount, config *configs.Config, enableCgroupns bool
 	}
 }
 
+// mntDestDependsOn returns true if mount destination dest is equal to, or
+// nested inside, mount destination prior. Both paths must be absolute and
+// clean (e.g., as returned by filepath.Join("/", path)).
+func mntDestDependsOn(dest, prior string) bool {
+	if prior == "/" {
+		return true
+	}
+	return dest == prior || strings.HasPrefix(dest, prior+"/")
+}
+
 func doBindMounts(config *configs.Config, pipe io.ReadWriter, doSysboxfsOvermountsOnly bool) error {
 
 	// sysbox-runc: the sys container's init process is in a dedicated
@@ -570,15 +580,41 @@ func doBindMounts(config *configs.Config, pipe io.ReadWriter, doSysboxfsOvermoun
 			continue
 		}
 
-		// Determine if the current mount is dependent on a prior one.
+		// Determine if the current mount is dependent on a prior one (i.e., its
+		// destination path is equal to, or nested inside, the destination of a
+		// prior mount that is still pending in mntReqs).
+		//
+		// The comparison must be done with the mount destination resolved of
+		// symlinks within the container's rootfs, since the image may contain
+		// symlinks along the destination path. E.g., if the image has symlink
+		// "/var/run" -> "/run", a mount with destination "/var/run/foo" lands
+		// inside a prior mount with destination "/run", even though a literal
+		// string comparison won't detect this. Missing the dependency means
+		// prepareBindDest() would create the destination dir underneath the
+		// path that the prior mount will cover once it's performed, so the
+		// current mount would then fail with ENOENT (this is how K8s mounts
+		// the service-account token at /var/run/secrets/... on images where
+		// /var/run is a symlink and a K8s volume is mounted at /run).
+		//
+		// Mount destinations in mntReqs are already resolved and relative to
+		// the rootfs (see prepareBindDest()); thus we prepend "/" for a proper
+		// comparison. The current mount's destination is resolved here against
+		// the rootfs (i.e., the process' cwd). We check both the unresolved
+		// and resolved destinations to be on the safe side (a spurious flush
+		// of the pending mount requests is harmless).
+
+		resolvedDest, err := securejoin.SecureJoin(".", m.Destination)
+		if err != nil {
+			return err
+		}
+
 		mntDependsOnPrior := false
 		for _, mr := range mntReqs {
-
-			// Mount destinations in mntReqs are relative to the rootfs
-			// (see prepareBindDest()); thus we need to prepend "/" for a
-			// proper comparison.
-			if strings.HasPrefix(m.Destination, filepath.Join("/", mr.Mount.Destination)) {
+			priorDest := filepath.Join("/", mr.Mount.Destination)
+			if mntDestDependsOn(filepath.Join("/", m.Destination), priorDest) ||
+				mntDestDependsOn(filepath.Join("/", resolvedDest), priorDest) {
 				mntDependsOnPrior = true
+				break
 			}
 		}
 
