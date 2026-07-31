@@ -67,3 +67,24 @@ func TestNeedsSetupDevStrangeSourceDest(t *testing.T) {
 		t.Fatal("expected needsSetupDev to be true, got false")
 	}
 }
+
+func TestMntDestDependsOn(t *testing.T) {
+	tests := []struct {
+		dest  string
+		prior string
+		want  bool
+	}{
+		{"/run", "/run", true},
+		{"/run/secrets/kubernetes.io/serviceaccount", "/run", true},
+		{"/run/foo", "/run/foo/bar", false},
+		{"/runfoo", "/run", false},
+		{"/var/run", "/run", false},
+		{"/run", "/", true},
+		{"/", "/", true},
+	}
+	for _, tc := range tests {
+		if got := mntDestDependsOn(tc.dest, tc.prior); got != tc.want {
+			t.Errorf("mntDestDependsOn(%q, %q) = %v, want %v", tc.dest, tc.prior, got, tc.want)
+		}
+	}
+}
