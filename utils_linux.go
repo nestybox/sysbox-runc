@@ -324,6 +324,11 @@ func createContainer(context *cli.Context,
 		return nil, err
 	}
 
+	// sysbox-runc: transfer the lib symlink pairs collected during spec processing
+	// (from the scrubbed NVIDIA CDI "create-symlinks" hook) into the runc config so
+	// that they are recreated inside the container rootfs.
+	config.LibLinks = sysbox.LibLinks
+
 	// sysbox-runc: For container's proper operation, collect from sysbox-mgr
 	// fsState to be added to container's rootfs.
 	if sysMgr.Enabled() {

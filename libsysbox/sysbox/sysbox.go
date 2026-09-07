@@ -26,6 +26,7 @@ import (
 	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
 	linuxUtils "github.com/nestybox/sysbox-libs/linuxUtils"
 	libutils "github.com/nestybox/sysbox-libs/utils"
+	"github.com/opencontainers/runc/libcontainer/configs"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"
 )
@@ -42,6 +43,12 @@ type Sysbox struct {
 	OrigRootfs          string
 	OrigMounts          []specs.Mount
 	IDshiftIgnoreList   []string
+
+	// LibLinks holds the symlink pairs (target -> source) that must be created
+	// in the container rootfs, normally created by the NVIDIA CDI
+	// "create-symlinks" hook which sysbox scrubs. Populated during
+	// ConvertSpec / cfgDevices and transferred into configs.Config.LibLinks.
+	LibLinks []configs.LibLink
 }
 
 func NewSysbox(id string, withMgr, withFs bool) *Sysbox {

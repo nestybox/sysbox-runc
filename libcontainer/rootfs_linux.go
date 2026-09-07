@@ -805,6 +805,43 @@ func createDevices(config *configs.Config, pipe io.ReadWriter) error {
 		}
 	}
 	unix.Umask(oldMask)
+
+	// sysbox-runc: recreate the soname symlinks (e.g. libnvidia-ml.so.1 ->
+	// libnvidia-ml.so.580.159.03) that are normally created by the NVIDIA CDI
+	// "create-symlinks" hook, which sysbox scrubs. This runs inside the
+	// container rootfs (cwd is the rootfs), where the versioned library files
+	// have already been bind-mounted by the device manager.
+	if err := createLibSymlinks(config.LibLinks); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// createLibSymlinks creates the symlinks described by libLinks inside the
+// container's rootfs (assumes cwd is the container rootfs). Each link has a
+// Target which is an absolute path within the rootfs and a Source which is the
+// (generally relative) path the symlink points to. This mirrors the behavior of
+// the nvidia-cdi-hook "create-symlinks" hook (os.Symlink(src, dst)).
+func createLibSymlinks(libLinks []configs.LibLink) error {
+	for _, l := range libLinks {
+		if l.Target == "" || l.Source == "" {
+			continue
+		}
+		dst, err := securejoin.SecureJoin(".", l.Target)
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+			return err
+		}
+		if err := os.Symlink(l.Source, dst); err != nil {
+			if os.IsExist(err) {
+				continue
+			}
+			return err
+		}
+	}
 	return nil
 }
 

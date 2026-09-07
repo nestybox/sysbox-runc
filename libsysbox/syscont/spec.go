@@ -32,6 +32,7 @@ import (
 	"github.com/nestybox/sysbox-libs/capability"
 	sh "github.com/nestybox/sysbox-libs/idShiftUtils"
 	utils "github.com/nestybox/sysbox-libs/utils"
+	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libsysbox/sysbox"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
@@ -526,7 +527,7 @@ func cfgReadonlyPaths(spec *specs.Spec) {
 }
 
 // cfgDevices creates implicit container devices and assists any container hook that
-// may require special device configuration.
+// may require special device configuration (e.g., NVIDIA GPU devices).
 func cfgDevices(spec *specs.Spec, sysbox *sysbox.Sysbox) error {
 
 	sysMgr := sysbox.Mgr
@@ -545,16 +546,26 @@ func cfgDevices(spec *specs.Spec, sysbox *sysbox.Sysbox) error {
 		return nil
 	}
 
+	// The nvidia-cdi-hook (invoked by the nvidia container toolkit in CDI mode) performs
+	// device-node creation and bind-mounts that are already handled by sysbox-runc via the
+	// sysbox-mgr device manager. Moreover, this hook is a createContainer hook that runs
+	// inside the container's (user-mapped) namespace, where it cannot be executed due to
+	// insufficient privileges. As such, we scrub it from the spec to avoid the container
+	// failing to start.
+	if err := scrubCdiHooks(spec, sysbox); err != nil {
+		return err
+	}
+
 	// Ideally, we want devices that rely on hooks for their creation, to display
 	// the proper UID/GID ownership values. For this purpose, we iterate through
 	// the following hooks to append the UID/GID values for those hooks that
-	// support this functionality (e.g., nvidia-runtime-hook).
-	//
-	// TODO: For some reason, the nvidia-hook is not honoring these mappings, so we need
-	// to investigate why this is happening (likely a bug in the hook).
+	// support this functionality (e.g., nvidia-container-runtime-hook).
 	uid := spec.Linux.UIDMappings[0].HostID
 	gid := spec.Linux.GIDMappings[0].HostID
 	user := fmt.Sprintf("--user=%d:%d", uid, gid)
+	// TODO(known-left-as-is): the nvidia hook historically doesn't honor these
+	// --user mappings (upstream bug, deferred). Device-node ownership is instead
+	// handled by the sysbox-mgr device manager.
 
 	// Since the 'prestart' hook is deprecated in favor of the 'createruntime' one,
 	// here we iterate through both hooks to avoid any sudden change in the config
@@ -579,6 +590,84 @@ func cfgDevices(spec *specs.Spec, sysbox *sysbox.Sysbox) error {
 			hook.Args = []string{"nvidia-container-runtime-hook", "create_runtime", user}
 			break
 		}
+	}
+
+	return nil
+}
+
+// scrubCdiHooks removes any OCI hook that would invoke the nvidia-cdi-hook. In CDI
+// (Container Device Interface) mode the nvidia container toolkit injects this hook to set
+// up device nodes and bind-mounts at container creation time. Sysbox handles the device
+// setup itself through the sysbox-mgr device manager, and these hooks run inside the
+// container's user-mapped namespace where the host-owned hook binary cannot be executed.
+// Leaving them in place causes the container to fail with a "permission denied" error.
+//
+// Before scrubbing, it captures the symlink pairs from any "create-symlinks" hook and
+// records them on the sysbox object, so that sysbox-runc can recreate the soname symlinks
+// (e.g. libnvidia-ml.so.1 -> libnvidia-ml.so.580.159.03) inside the container rootfs, since
+// scrubbing the hook would otherwise leave them missing.
+func scrubCdiHooks(spec *specs.Spec, sysbox *sysbox.Sysbox) error {
+	// Extract symlink pairs from any "create-symlinks" hook that we are about to scrub.
+	// The create-symlinks hook is a createContainer hook; Poststart is scanned too for
+	// robustness.
+	if spec.Hooks != nil {
+		var cdiHooks []specs.Hook
+		cdiHooks = append(cdiHooks, spec.Hooks.CreateContainer...)
+		cdiHooks = append(cdiHooks, spec.Hooks.Poststart...)
+		for _, h := range cdiHooks {
+			if !strings.Contains(h.Path, "nvidia-cdi-hook") {
+				continue
+			}
+			for i, a := range h.Args {
+				if a != "create-symlinks" {
+					continue
+				}
+				// Args: <binary> create-symlinks --link <src>::<dst> ...
+				for _, arg := range h.Args[i+1:] {
+					if arg == "--link" {
+						continue
+					}
+					if !strings.Contains(arg, "::") {
+						continue
+					}
+					parts := strings.SplitN(arg, "::", 2)
+					sysbox.LibLinks = append(sysbox.LibLinks, configs.LibLink{
+						Source: parts[0],
+						Target: parts[1],
+					})
+				}
+			}
+		}
+	}
+
+	filter := func(hooks []specs.Hook) []specs.Hook {
+		out := hooks[:0]
+		for _, h := range hooks {
+			if strings.Contains(h.Path, "nvidia-cdi-hook") {
+				continue
+			}
+			out = append(out, h)
+		}
+		return out
+	}
+
+	if h := spec.Hooks.Prestart; h != nil {
+		spec.Hooks.Prestart = filter(h)
+	}
+	if h := spec.Hooks.CreateRuntime; h != nil {
+		spec.Hooks.CreateRuntime = filter(h)
+	}
+	if h := spec.Hooks.CreateContainer; h != nil {
+		spec.Hooks.CreateContainer = filter(h)
+	}
+	if h := spec.Hooks.StartContainer; h != nil {
+		spec.Hooks.StartContainer = filter(h)
+	}
+	if h := spec.Hooks.Poststart; h != nil {
+		spec.Hooks.Poststart = filter(h)
+	}
+	if h := spec.Hooks.Poststop; h != nil {
+		spec.Hooks.Poststop = filter(h)
 	}
 
 	return nil

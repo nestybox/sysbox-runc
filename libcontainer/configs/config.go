@@ -21,6 +21,14 @@ type Rlimit struct {
 	Soft uint64 `json:"soft"`
 }
 
+// LibLink represents a symlink to create inside the container rootfs. Target is
+// the symlink path (absolute, within the container), Source is the file it
+// points to (relative or absolute, within the container rootfs).
+type LibLink struct {
+	Target string `json:"target"`
+	Source string `json:"source"`
+}
+
 // IDMap represents UID/GID Mappings for User Namespaces.
 type IDMap struct {
 	ContainerID int `json:"container_id"`
@@ -118,6 +126,14 @@ type Config struct {
 
 	// The device nodes that should be automatically created within the container upon container start.  Note, make sure that the node is marked as allowed in the cgroup as well!
 	Devices []*devices.Device `json:"devices"`
+
+	// LibLinks are the "target->source" symlink pairs that must be created
+	// inside the container's rootfs (e.g. libnvidia-ml.so.1 ->
+	// libnvidia-ml.so.580.159.03). They are normally created by the NVIDIA
+	// CDI "create-symlinks" hook, which sysbox scrubs (it cannot execute from
+	// within the container's user-mapped namespace), so sysbox creates them
+	// itself during rootfs setup.
+	LibLinks []LibLink `json:"lib_links"`
 
 	MountLabel string `json:"mount_label"`
 
@@ -412,7 +428,6 @@ func (c Command) Run(s *specs.State) error {
 	if err != nil {
 		return err
 	}
-
 	var stdout, stderr bytes.Buffer
 	cmd := exec.Cmd{
 		Path:   c.Path,
