@@ -32,7 +32,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/profile v1.5.0
 	github.com/seccomp/libseccomp-golang v0.10.0
-	github.com/sirupsen/logrus v1.9.4
+	github.com/sirupsen/logrus v1.10.2
 	github.com/urfave/cli v1.22.14
 	github.com/vishvananda/netlink v1.1.0
 	github.com/willf/bitset v1.1.11
