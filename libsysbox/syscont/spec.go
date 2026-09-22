@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	mapset "github.com/deckarep/golang-set/v2"
@@ -810,6 +811,55 @@ func getFileAttrValue(file, attr string) (string, error) {
 	return "", nil
 }
 
+// anchorReadOnlyMounts requests that sysbox-mgr anchor each read-only bind
+// mount in spec.Mounts (see setupRoAnchor() in sysbox-mgr), and rewrites
+// each such mount's Source to point at the returned anchor instead of the
+// real host path.
+//
+// This closes, for plain user "-v host:container:ro" mounts, the same
+// mount_setattr(2)/open_tree(2) gap that setupImmutableMounts() already
+// closes for sysbox's own kernel-header and kernel-module mounts (see that
+// function's comment in sysbox-mgr for the full mechanism): applied the
+// ordinary way, from within the container's own already-unshared mount
+// namespace, these binds miss the one moment (this container's own
+// unshare()) when the kernel would otherwise lock them automatically.
+func anchorReadOnlyMounts(spec *specs.Spec, sysbox *sysbox.Sysbox) error {
+	reqList := make([]ipcLib.MountReqInfo, 0, len(spec.Mounts))
+	indices := make([]int, 0, len(spec.Mounts))
+
+	for i, m := range spec.Mounts {
+		if m.Type != "bind" || !slices.Contains(m.Options, "ro") {
+			continue
+		}
+
+		reqList = append(reqList, ipcLib.MountReqInfo{
+			Kind:   ipcLib.MntRoAnchor,
+			Dest:   m.Destination,
+			Source: m.Source,
+		})
+		indices = append(indices, i)
+	}
+
+	if len(reqList) == 0 {
+		return nil
+	}
+
+	anchored, err := sysbox.Mgr.ReqMounts(sysbox.RootfsUidShiftType, reqList)
+	if err != nil {
+		return fmt.Errorf("failed to anchor read-only mounts: %w", err)
+	}
+
+	if len(anchored) != len(indices) {
+		return fmt.Errorf("sysbox-mgr returned %d ro-anchors for %d requests", len(anchored), len(indices))
+	}
+
+	for i, m := range anchored {
+		spec.Mounts[indices[i]].Source = m.Source
+	}
+
+	return nil
+}
+
 // Obtains the docker data-root path utilized by the inner docker process to store its
 // data. This is used to define the container mountpoint on which the host's docker
 // volume (backing this resource) will be mounted on.
@@ -1458,6 +1508,13 @@ func ConvertSpec(context *cli.Context, spec *specs.Spec, sbox *sysbox.Sysbox) er
 
 	if err := cfgMounts(spec, sbox); err != nil {
 		return fmt.Errorf("invalid mount config: %v", err)
+	}
+
+	// Anchor every read-only bind mount so it can't be made read-write from
+	// inside the container via mount_setattr(2) or other mount-modifying
+	// syscalls sysbox-fs doesn't mediate; see anchorReadOnlyMounts().
+	if err := anchorReadOnlyMounts(spec, sbox); err != nil {
+		return err
 	}
 
 	if sysMgr.Config.SyscontMode {
