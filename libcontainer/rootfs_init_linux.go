@@ -32,6 +32,42 @@ type linuxRootfsInit struct {
 	reqs []opReq
 }
 
+// overlayMountBase returns the directory against which relative overlayfs
+// lowerdir paths are resolved. Containerd keeps upperdir absolute when it
+// shortens lowerdir paths, so the common base can be derived from upperdir.
+// Docker's overlay2 driver shortens upperdir and workdir too. It mounts rootfs
+// at <base>/<id>/merged and uses <id>/diff as upperdir, so the common base can
+// be derived from the rootfs mountpoint. Changing to the returned directory
+// makes all of those relative paths resolve correctly.
+func overlayMountBase(rootfs, upperLayer string, lowerLayers []string) (string, bool) {
+	if len(lowerLayers) == 0 || filepath.IsAbs(lowerLayers[0]) {
+		return "", false
+	}
+
+	anchor := upperLayer
+	relativePath := lowerLayers[0]
+	if !filepath.IsAbs(upperLayer) {
+		anchor = rootfs
+		relativePath = upperLayer
+	}
+
+	relativePath = filepath.Clean(relativePath)
+	base := anchor
+	for range strings.Split(relativePath, string(os.PathSeparator)) {
+		base = filepath.Dir(base)
+	}
+
+	return base, true
+}
+
+func validateOverlayMountBase(base, lowerLayer string) error {
+	resolvedLayer := filepath.Join(base, lowerLayer)
+	if _, err := os.Stat(resolvedLayer); err != nil {
+		return fmt.Errorf("cannot resolve relative overlay paths: %s: %w", resolvedLayer, err)
+	}
+	return nil
+}
+
 // getDir returns the path to the directory that contains the file at the given path
 func getDir(file string) (string, error) {
 	fi, err := os.Stat(file)
@@ -346,30 +382,12 @@ func (l *linuxRootfsInit) Init() error {
 			ovfsLowerLayers := overlayUtils.GetLowerLayers(ovfsMntOpts)
 			ovfsWorkDir := overlayUtils.GetWorkLayer(ovfsMntOpts)
 
-			// If the ovfs lower layer paths are relative, then find the ovfs dir path
-			// and chdir to it so that the ovfs mount works. Then chdir back after
-			// the mount.
-			//
-			// To find out the ovfs dir path we look at the ovfs upperdir option, since that usually
-			// is an absolute path. For example, if upperdir=/var/lib/docker/containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/55/fs
-			// and lowerdir=54/fs:44/fs, then we can infer those lowerdir options have base path
-			// "/var/lib/docker/containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots".
-			//
-			// This assumes of course that upperdir and lowerdir always have the same
-			// common path, and while this is not a requirement of overlayfs, it is
-			// always the case for the container runtimes.
-
-			lowerdirPathsAreAbsolute := true
-			lowerDirSuffixComponents := 0
-			for _, p := range ovfsLowerLayers {
-				if filepath.IsAbs(p) {
-					// If one lowerdir path is absolute, assume all are
-					break
-				} else {
-					// If one lowerdir path is relative, assume all are
-					lowerdirPathsAreAbsolute = false
-					lowerDirSuffixComponents = len(strings.Split(p, "/"))
-					break
+			// Relative overlay paths are resolved from a common base. Change to it so
+			// the overlayfs mount below works, then restore the current directory.
+			ovfsDirPath, lowerdirPathsAreRelative := overlayMountBase(rootfs, ovfsUpperLayer, ovfsLowerLayers)
+			if lowerdirPathsAreRelative {
+				if err := validateOverlayMountBase(ovfsDirPath, ovfsLowerLayers[0]); err != nil {
+					return err
 				}
 			}
 
@@ -378,15 +396,7 @@ func (l *linuxRootfsInit) Init() error {
 				return fmt.Errorf("failed to get curr dir: %s", err)
 			}
 
-			ovfsDirPath := ""
-			if !lowerdirPathsAreAbsolute {
-				// remove the last X components of the upperdir path, where X is the
-				// number of path components in the relative lowerdir.
-				ovfsDirPath = ovfsUpperLayer
-				for i := 0; i < lowerDirSuffixComponents; i++ {
-					ovfsDirPath = filepath.Dir(ovfsDirPath)
-				}
-
+			if lowerdirPathsAreRelative {
 				// chdir to that path so that the overlayfs mount below works with the
 				// relative lowerdir paths.
 				if err := os.Chdir(ovfsDirPath); err != nil {
@@ -402,7 +412,7 @@ func (l *linuxRootfsInit) Init() error {
 			// ID-map each of the ovfs lower layers. Note that this requires
 			// absolute paths in the lower layers.
 			for _, layer := range ovfsLowerLayers {
-				if !lowerdirPathsAreAbsolute {
+				if lowerdirPathsAreRelative {
 					layer = filepath.Join(ovfsDirPath, layer)
 				}
 				if err := idMap.IDMapMount(usernsPath, layer, false); err != nil {
@@ -453,7 +463,7 @@ func (l *linuxRootfsInit) Init() error {
 				return fmt.Errorf("failed to set mount prop flags %s: %s", rootfs, err)
 			}
 
-			if !lowerdirPathsAreAbsolute {
+			if lowerdirPathsAreRelative {
 				if err := os.Chdir(currDir); err != nil {
 					return fmt.Errorf("failed to chdir: %s", err)
 				}
