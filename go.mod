@@ -4,6 +4,7 @@ go 1.24.0
 
 require (
 	github.com/Masterminds/semver v1.5.0
+	github.com/bits-and-blooms/bitset v1.25.0
 	github.com/checkpoint-restore/go-criu/v4 v4.1.0
 	github.com/cilium/ebpf v0.3.0
 	github.com/containerd/console v1.0.5
@@ -35,7 +36,6 @@ require (
 	github.com/sirupsen/logrus v1.9.4
 	github.com/urfave/cli v1.22.14
 	github.com/vishvananda/netlink v1.1.0
-	github.com/willf/bitset v1.1.11
 	golang.org/x/net v0.43.0
 	golang.org/x/sys v0.38.0
 )
@@ -63,6 +63,7 @@ require (
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/spf13/afero v1.4.1 // indirect
 	github.com/vishvananda/netns v0.0.0-20191106174202-0a2b9b5464df // indirect
+	github.com/willf/bitset v1.1.11 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.60.0 // indirect
 	go.opentelemetry.io/otel v1.38.0 // indirect
