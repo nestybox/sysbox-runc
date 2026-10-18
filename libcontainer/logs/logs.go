@@ -81,7 +81,7 @@ func ConfigureLogging(config Config) error {
 		}
 		logrus.SetOutput(os.NewFile(uintptr(logPipeFdInt), "logpipe"))
 	} else if config.LogFilePath != "" {
-		f, err := os.OpenFile(config.LogFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND|os.O_SYNC, 0644)
+		f, err := os.OpenFile(config.LogFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if err != nil {
 			return err
 		}
