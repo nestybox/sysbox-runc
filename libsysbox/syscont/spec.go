@@ -114,15 +114,21 @@ var SysboxfsMounts = []specs.Mount{
 		Type:        "bind",
 		Options:     []string{"rbind", "rprivate"},
 	},
+	specs.Mount{
+		Destination: "/proc/meminfo",
+		Source:      filepath.Join(SysboxFsDir, "proc/meminfo"),
+		Type:        "bind",
+		Options:     []string{"rbind", "rprivate"},
+	},
+	specs.Mount{
+		Destination: "/proc/cpuinfo",
+		Source:      filepath.Join(SysboxFsDir, "proc/cpuinfo"),
+		Type:        "bind",
+		Options:     []string{"rbind", "rprivate"},
+	},
 
 	// XXX: In the future sysbox-fs will also virtualize the following
 
-	// specs.Mount{
-	// 	Destination: "/proc/cpuinfo",
-	// 	Source:      filepath.Join(SysboxFsDir, "proc/cpuinfo"),
-	// 	Type:        "bind",
-	// 	Options:     []string{"rbind", "rprivate"},
-	// },
 	// specs.Mount{
 	// 	Destination: "/proc/cgroups",
 	// 	Source:      filepath.Join(SysboxFsDir, "proc/cgroups"),
@@ -144,12 +150,6 @@ var SysboxfsMounts = []specs.Mount{
 	// specs.Mount{
 	// 	Destination: "/proc/loadavg",
 	// 	Source:      filepath.Join(SysboxFsDir, "proc/loadavg"),
-	// 	Type:        "bind",
-	// 	Options:     []string{"rbind", "rprivate"},
-	// },
-	// specs.Mount{
-	// 	Destination: "/proc/meminfo",
-	// 	Source:      filepath.Join(SysboxFsDir, "proc/meminfo"),
 	// 	Type:        "bind",
 	// 	Options:     []string{"rbind", "rprivate"},
 	// },
@@ -184,6 +184,12 @@ var SysboxfsMounts = []specs.Mount{
 	specs.Mount{
 		Destination: "/sys/devices/virtual",
 		Source:      filepath.Join(SysboxFsDir, "sys/devices/virtual"),
+		Type:        "bind",
+		Options:     []string{"rbind", "rprivate"},
+	},
+	specs.Mount{
+		Destination: "/sys/devices/system/cpu/online",
+		Source:      filepath.Join(SysboxFsDir, "sys/devices/system/cpu/online"),
 		Type:        "bind",
 		Options:     []string{"rbind", "rprivate"},
 	},
