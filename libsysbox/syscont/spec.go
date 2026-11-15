@@ -861,6 +861,27 @@ func getFileAttrValue(file, attr string) (string, error) {
 	return "", nil
 }
 
+// sanitizeSpecialDirPath validates a path read from an untrusted container
+// image (e.g., the docker data-root, or the k3s/rke2 data-dir). This value
+// is later joined by sysbox-mgr, running as host root, with host-side
+// directories outside the container's mount namespace, where there is no
+// kernel-enforced boundary (e.g., no pivot_root) to stop a path traversal.
+// A safe value must be absolute and already in its cleaned form (i.e., no
+// ".." or redundant separators); anything else falls back to defaultVal,
+// mirroring the existing behavior when no custom value is set in the image.
+func sanitizeSpecialDirPath(val, defaultVal string) string {
+	if val == "" {
+		return defaultVal
+	}
+
+	if !filepath.IsAbs(val) || filepath.Clean(val) != val {
+		logrus.Warnf("ignoring special dir path %q from container image: not a safe absolute path; using default %q instead", val, defaultVal)
+		return defaultVal
+	}
+
+	return val
+}
+
 // Obtains the docker data-root path utilized by the inner docker process to store its
 // data. This is used to define the container mountpoint on which the host's docker
 // volume (backing this resource) will be mounted on.
@@ -884,7 +905,7 @@ func getInnerDockerDataRootPath(spec *specs.Spec) (string, error) {
 		return defaultDataRoot, nil
 	}
 
-	return val, nil
+	return sanitizeSpecialDirPath(val, defaultDataRoot), nil
 }
 
 // Obtains the data-dir path utilized by the inner rke or k3s server/agents to
@@ -906,7 +927,7 @@ func getInnerK3sDataDirPath(spec *specs.Spec) (string, error) {
 		return defaultDataDir, nil
 	}
 
-	return val, nil
+	return sanitizeSpecialDirPath(val, defaultDataDir), nil
 }
 
 // Obtains the rke2 data-dir path utilized by the inner rke2 server and agent
@@ -928,7 +949,7 @@ func getInnerRke2DataDirPath(spec *specs.Spec) (string, error) {
 		return defaultDataDir, nil
 	}
 
-	return val, nil
+	return sanitizeSpecialDirPath(val, defaultDataDir), nil
 }
 
 func getSpecialDirs(spec *specs.Spec) (map[string]ipcLib.MntKind, error) {
