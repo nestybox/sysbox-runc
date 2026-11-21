@@ -16,7 +16,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -2632,19 +2631,10 @@ func (c *linuxContainer) setupShiftfsMarks() error {
 					continue
 				}
 
-				// If the mount source is a file, it may itself be a bind-mount
-				// from another file; resolve it to that file's real, stable
-				// backing path, since that's what shiftfs needs to mark.
-				//
-				// Skip this for sysbox's own read-only anchors
-				// (anchorReadOnlyMounts() in spec.go): an anchor's directory is
-				// already real and stable, and resolving past it would both
-				// shiftfs-mark and bind-mount the anchor's pre-lock backing
-				// path, discarding the mount_setattr(2) protection it exists
-				// for.
-				isAnchor := slices.Contains(c.sysbox.RoAnchors, m.Source)
-
-				if !m.BindSrcInfo.IsDir && !isAnchor {
+				// If the mount source is a file, it may itself be a bind-mount from
+				// another file. In this case, we need to mount shiftfs over the
+				// orig file (i.e., the source of the bind mount).
+				if !m.BindSrcInfo.IsDir {
 
 					isBindMnt, origSrc, err := fileIsBindMount(mi, m.Source)
 					if err != nil {
