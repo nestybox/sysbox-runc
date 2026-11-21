@@ -629,7 +629,6 @@ func anchorReadOnlyMounts(spec *specs.Spec, sysbox *sysbox.Sysbox) error {
 
 	for i, m := range anchored {
 		spec.Mounts[indices[i]].Source = m.Source
-		sysbox.RoAnchors = append(sysbox.RoAnchors, m.Source)
 	}
 
 	return nil

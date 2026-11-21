@@ -42,7 +42,6 @@ type Sysbox struct {
 	OrigRootfs          string
 	OrigMounts          []specs.Mount
 	IDshiftIgnoreList   []string
-	RoAnchors           []string
 }
 
 func NewSysbox(id string, withMgr, withFs bool) *Sysbox {
